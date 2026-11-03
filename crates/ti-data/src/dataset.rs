@@ -346,6 +346,11 @@ impl Dataset {
         self.assets.resources.get(resource)
     }
 
+    /// Image of an inline text sprite (`<sprite name="control_point">` → `control_point`).
+    pub fn sprite(&self, name: &str) -> Option<&AssetEntry> {
+        self.assets.sprites.exported.get(name)
+    }
+
     /// Absolute path of an asset file, when the build is on disk.
     pub fn asset_path(&self, file: &str) -> Option<PathBuf> {
         self.source.root().map(|r| r.join("assets").join(file))

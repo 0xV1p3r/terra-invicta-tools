@@ -80,6 +80,15 @@ pub(crate) struct RefField {
 pub(crate) struct AssetIndex {
     #[serde(default)]
     pub resources: BTreeMap<String, AssetEntry>,
+    /// Glyphs of the game's inline sprite sheet (`<sprite name="metal">`), by name.
+    #[serde(default)]
+    pub sprites: SpriteIndex,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub(crate) struct SpriteIndex {
+    #[serde(default)]
+    pub exported: BTreeMap<String, AssetEntry>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

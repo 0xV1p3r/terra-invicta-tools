@@ -55,6 +55,189 @@ const SCIENCES: &[(&str, &str)] = &[
     ("Xenology", "Xenology"),
 ];
 
+/// Game icon (file under the build's `assets/`) for effect contexts and instant effects.
+const GAME_ICONS: &[(&str, &str)] = &[
+    // National priorities
+    ("BuildArmyPriority", "icons_2d/ICO_buildArmy_priority.png"),
+    ("BuildNuclearWeaponsPriority", "icons_2d/ICO_buildNuclearWeapons_priority.png"),
+    ("BuildSTOSquadronPriority", "icons_2d/ICO_buildSTOSquadron_priority.png"),
+    ("BuildSpaceDefensesPriority", "icons_2d/ICO_buildSpaceDefenses_priority.png"),
+    ("EconomyPriority", "icons_2d/ICO_economy_priority.png"),
+    ("EnvironmentPriority", "icons_2d/ICO_environment_priority.png"),
+    ("GovernmentPriority", "icons_2d/ICO_government_priority.png"),
+    ("KnowledgePriority", "icons_2d/ICO_knowledge_priority.png"),
+    ("LaunchFacilitiesPriority", "icons_2d/ICO_launchFacilities_Priority.png"),
+    ("MilitaryPriority", "icons_2d/ICO_military_priority.png"),
+    ("MissionControlPriority", "icons_2d/ICO_missionControl_priority.png"),
+    ("OppressionPriority", "icons_2d/ICO_oppression_priority.png"),
+    ("SpaceflightPriority", "icons_2d/ICO_spaceflightProgram_priority.png"),
+    ("SpoilsPriority", "icons_2d/ICO_spoils_priority.png"),
+    ("UnityPriority", "icons_2d/ICO_unity_priority.png"),
+    ("UpgradeArmyPriority", "icons_2d/ICO_buildNavy_priority.png"),
+    ("WelfarePriority", "icons_2d/ICO_welfare_priority.png"),
+    // Resources
+    ("CanAmassAntimatter", "icons_2d/ICO_antimatter.png"),
+    ("CanAmassExotics", "icons_2d/ICO_exotics.png"),
+    ("MiningFissilesBonus", "icons_2d/ICO_fissile.png"),
+    ("MiningMetalsBonus", "icons_2d/ICO_metal.png"),
+    ("MiningNoblesBonus", "icons_2d/ICO_metal_noble.png"),
+    ("MiningVolatilesBonus", "icons_2d/ICO_volatiles.png"),
+    ("MiningWaterBonus", "icons_2d/ICO_water.png"),
+    ("SpaceMiningBonus", "sprite:mining"),
+    ("MineSizeModifier", "sprite:mining"),
+    ("GainExoticsFromSpaceIndustry", "icons_2d/ICO_exotics.png"),
+    ("NationSetCanDecontaminateRegion", "icons_2d/ICO_environment_priority.png"),
+    ("CanCaptureHydra", "councilor_missions/ICO_detain_on.png"),
+    ("GenericTransferEV_kps", "icons_2d/ICO_boost.png"),
+    ("HabMissionControlReduction", "icons_2d/ICO_mission_control.png"),
+    ("ShipMissionControlReduction", "icons_2d/ICO_mission_control.png"),
+    ("MCFreeSpaceMineNetwork", "icons_2d/ICO_mission_control.png"),
+    ("ControlPointResearch", "icons_2d/ICO_research.png"),
+    ("HabResearchProduction", "icons_2d/ICO_research.png"),
+    ("GlobalIPProduction", "icons_2d/ICO_investments.png"),
+    ("ProjectUnlockChance", "icons_2d/ICO_projects.png"),
+    ("MonthlyProjectTriggerChance", "icons_2d/ICO_projects.png"),
+    ("RerollMissingProjects", "icons_2d/ICO_projects.png"),
+    ("DirectInvestGlobalDiscount_Money_PCT", "icons_2d/ICO_currency.png"),
+    ("DirectInvestGlobalDiscount_Influence_PCT", "icons_2d/ICO_influence.png"),
+    ("ResourceMarketSales", "icons_2d/ICO_currency.png"),
+    ("OrgPurchaseCost", "icons_2d/ICO_currency.png"),
+    ("AugmentationMoneyCost", "icons_2d/ICO_currency.png"),
+    ("PublicOpinionInfluence", "icons_2d/ICO_influence.png"),
+    ("SpoilsOutput", "icons_2d/ICO_spoils_priority.png"),
+    ("Corruption", "icons_2d/ICO_spoils_priority.png"),
+    ("Economy_BasePCGDPIncrease", "icons_2d/ICO_economy_priority.png"),
+    ("MapRegionGDPPctChange_StrValue", "icons_2d/ICO_economy_priority.png"),
+    ("Welfare_CO2_ppm", "icons_2d/ICO_environment_priority.png"),
+    ("Welfare_CH4_ppm", "icons_2d/ICO_environment_priority.png"),
+    ("Welfare_N2O_ppm", "icons_2d/ICO_environment_priority.png"),
+    ("Environment_BestSustainabilityValue", "icons_2d/ICO_environment_priority.png"),
+    ("NationSetCanBuildSpaceDefenses", "icons_2d/ICO_buildSpaceDefenses_priority.png"),
+    ("NationSetCanBuildSTOFighters", "icons_2d/ICO_buildSTOSquadron_priority.png"),
+    ("NationMaxMiltechChange", "icons_2d/ICO_military_priority.png"),
+    // Inline text sprites
+    ("ControlPointMaintenance", "sprite:control_point"),
+    ("CouncilSize", "sprite:attribute_administration"),
+    ("NewCouncilorRecruitXP", "sprite:star"),
+    ("MaxMissionSliderSteps", "sprite:ops"),
+    ("ArmyDamageBonustoAllArmies", "sprite:army_battle"),
+    ("ArmyDamageBonustoHumanArmy", "sprite:army_battle"),
+    ("ArmyDamageBonustoInvaderArmy", "sprite:army_battle"),
+    ("ArmyDamageBonustoMegafauna", "sprite:army_battle"),
+    ("ArmyHealRate", "sprite:army"),
+    ("ArmyRuggedWarfare", "sprite:rugged_terrain"),
+    ("ArmyUrbanWarfare", "sprite:eco_region"),
+    ("AdvancedAircraft", "sprite:build_sto"),
+    ("ArmyNuclearHardening", "sprite:nukes"),
+    ("NuclearStrikeDamageReduction", "sprite:nukes"),
+    ("BombardmentArmyDefenseBonus", "sprite:laser_orbit"),
+    ("BombardmentHabDefenseBonus", "sprite:hab_defense"),
+    ("DamageReductionAgainstAllShips", "sprite:armor"),
+    ("DamageReductionAgainstAlienShips", "sprite:armor"),
+    ("LaserDefenseType", "sprite:laser_orbit"),
+    ("LaserDefenseFreq", "sprite:laser_orbit"),
+    ("STOFighterECM", "sprite:build_sto"),
+    ("GenericModuleTransferTime", "sprite:construction_module"),
+    ("GenericTransfer_OffDate_PCT", "sprite:construction_module"),
+    ("HabNuclearFreighters", "sprite:construction_module"),
+    ("HabConstructionSpeed", "sprite:construction_module"),
+    ("ProbeTransferTime", "sprite:probe"),
+    ("DetectAlienSpaceAssetsRange", "sprite:alien_marker"),
+    ("SemiMajorAxisExplorationRange_AU", "sprite:radius_of_orbit"),
+    ("InnerExplorationRange_AU", "sprite:sun"),
+    ("GlobalFissionTechLevel", "sprite:tech_Energy"),
+    ("GlobalFusionTechLevel", "sprite:tech_Energy"),
+    ("BilateralRelationsCooldownMultiplier", "sprite:nation_at_peace"),
+    ("SpaceScan", "sprite:show"),
+    // Councilor missions
+    ("DetectAliensOnEarth", "sprite:attribute_investigation"),
+    ("DetectAlienActivity", "councilor_missions/ICO_investigatealienactivity_on.png"),
+    ("InterrogationBonus", "councilor_missions/ICO_detain_on.png"),
+    ("DefendInterestsValue", "councilor_missions/ICO_defendinterest_on.png"),
+    ("CanContactAliens", "councilor_missions/ICO_contact_on.png"),
+    ("AlienRelationsEstablished", "councilor_missions/ICO_contact_on.png"),
+    ("PublicCampaignStrength", "councilor_missions/ICO_propaganda_on.png"),
+    ("AtrocityMitigation", "councilor_missions/ICO_propaganda_on.png"),
+    ("Propaganda", "councilor_missions/ICO_propaganda_on.png"),
+    ("PherocyteResistance", "councilor_missions/ICO_enthrallpublic_on.png"),
+    ("BreakawayChance", "sprite:nation_unrest"),
+    ("PostRegimeChangeUnrestReduction", "sprite:nation_unrest"),
+    ("PostRegimeLossUnrestIncrease", "sprite:nation_unrest"),
+    ("XenoformingDestructionStrength", "councilor_missions/ICO_Xenoform_on.png"),
+    ("ShipConstructionTime", "sprite:construction_shipyard"),
+    ("CanFoundTier1Station", "habmodules/station_T1_PlatformCore.png"),
+    ("CanFoundTier2Station", "habmodules/station_T2_OrbitalCore.png"),
+    ("CanFoundTier3Station", "habmodules/station_T3_RingCore.png"),
+    ("CanFoundTier1Base", "habmodules/base_T1_OutpostCore.png"),
+    ("CanFoundTier2Base", "habmodules/base_T2_SettlementCore.png"),
+    ("CanFoundTier3Base", "habmodules/base_T3_ColonyCore.png"),
+    ("CanFoundAutomatedT1Station", "habmodules/station_T1_AutomatedPlatformCore.png"),
+    ("CanFoundAutomatedT1Base", "habmodules/base_T1_AutomatedOutpostCore.png"),
+    // Ship officers
+    ("ShipOfficerPromotion", "icons_2d/Ship_Officer_Admiral_1.png"),
+    ("Combat_ShipRepairSpeed", "icons_2d/Ship_Officer_DamageControl_1.png"),
+    ("ShipLaserDamage", "icons_2d/Ship_Officer_DirectedEnergy_1.png"),
+    ("ShipMagDamage", "icons_2d/Ship_Officer_Gunnery_1.png"),
+    ("ShipConvMissileDamage", "icons_2d/Ship_Officer_FireControl_1.png"),
+    ("TargetingComputerBonus", "icons_2d/Ship_Officer_CIC_1.png"),
+    ("Ship_MaxSurvivableCombatAcceleration_Bonus", "icons_2d/Ship_Officer_Propulsion_1.png"),
+    ("Ship_MaxSurvivableCruiseAcceleration_Bonus", "icons_2d/Ship_Officer_Propulsion_1.png"),
+];
+
+/// Icons of single effects whose context is too generic (exploration range → the body opened).
+const EFFECT_ICONS: &[(&str, &str)] = &[
+    ("Effect_ExploreVenus", "icons_2d/ICO_Venus.png"),
+    ("Effect_ExploreInnerPlanets", "icons_2d/ICO_Mercury.png"),
+    ("Effect_ExploreLuna", "icons_2d/ICO_Luna.png"),
+    ("Effect_ExploreMars", "icons_2d/ICO_Mars.png"),
+    ("Effect_ExploreEarthLagrangePoints", "icons_2d/ICO_Earth.png"),
+    ("Effect_ExploreAsteroids", "icons_2d/ICO_Ceres.png"),
+    ("Effect_BSBE_ExploreAsteroids", "icons_2d/ICO_Ceres.png"),
+    ("Effect_ExploreJupiter", "icons_2d/ICO_Jupiter.png"),
+    ("Effect_ExploreSaturn", "icons_2d/ICO_Saturn.png"),
+    ("Effect_ExploreOuterPlanets", "icons_2d/ICO_Uranus.png"),
+    ("Effect_ExploreKuiperBelt", "icons_2d/ICO_Pluto.png"),
+];
+
+/// `Mission_<name>_Att/_Def` → councilor mission icon name, where it differs from the lowercased name.
+const MISSION_ICONS: &[(&str, &str)] = &[
+    ("Assassination", "assassinate"),
+    ("ControlAsset", "controlspaceasset"),
+    ("GainInfluence", "gain_influence"),
+    ("GainControlPoint", "assumecontrol"),
+    ("SabotageHabModule", "sabotagehab"),
+    ("AssaultAlienAsset", "assaultfacility"),
+    ("Xenoform", "Xenoform"),
+];
+
+/// Councilor mission icon files that exist (`councilor_missions/ICO_<name>_on.png`).
+const MISSION_FILES: &[&str] = &[
+    "abductions", "assassinate", "assaultfacility", "assumecontrol", "contact", "controlspaceasset", "coup",
+    "crackdown", "defendinterest", "enthrallelites", "enthrallpublic", "gain_influence", "hostiletakeover",
+    "inspire", "propaganda", "purge", "sabotagefacilities", "sabotagehab", "sabotageproject", "seizespaceasset",
+    "stabilize", "stealproject", "turn", "unrest", "Xenoform",
+];
+
+/// Asset file of an icon table entry: a path under `assets/`, or `sprite:<name>` for an
+/// inline text sprite (None if this build lacks it).
+fn resolve(view: &View<'_>, icon: &str) -> Option<String> {
+    match icon.strip_prefix("sprite:") {
+        Some(name) => view.dataset().sprite(name).map(|a| a.file.clone()),
+        None => Some(icon.to_string()),
+    }
+}
+
+/// Game icon file for an effect context or instant effect name.
+fn game_icon(name: &str) -> Option<String> {
+    if let Some((_, file)) = GAME_ICONS.iter().find(|(n, _)| *n == name) {
+        return Some((*file).to_string());
+    }
+    let rest = name.strip_prefix("Mission_")?;
+    let mission = rest.rsplit_once('_').map_or(rest, |(m, _)| m);
+    let icon = MISSION_ICONS.iter().find(|(m, _)| *m == mission).map_or_else(|| mission.to_lowercase(), |(_, i)| (*i).to_string());
+    MISSION_FILES.contains(&icon.as_str()).then(|| format!("councilor_missions/ICO_{icon}_on.png"))
+}
+
 /// Icon group of an effect context (or of an instant effect's name).
 fn domain(name: &str) -> &'static str {
     let has = |parts: &[&str]| parts.iter().any(|p| name.contains(p));
@@ -147,6 +330,14 @@ pub fn effect_line(view: &View<'_>, texts: &Texts, id: EntityId, entity: EntityR
     });
     let percent = first_value.is_some_and(|v| v.ends_with('%'));
     let (mut label, mut modifier_text, mut sentiment, mut dom, mut category) = (None, None, "neutral", "other", None);
+    let icon = EFFECT_ICONS.iter().find(|(n, _)| *n == effect.data_name).map(|(_, f)| (*f).to_string()).or_else(|| {
+        // Councilor attribute changes name the attribute in strValue.
+        let attribute = effect.str_value.as_ref().and_then(|v| v.as_str()).map(|a| format!("sprite:attribute_{}", a.to_lowercase()));
+        attribute
+            .filter(|a| resolve(view, a).is_some())
+            .or_else(|| effect.contexts.first().or(effect.instant_effect.as_ref()).and_then(|n| game_icon(n)))
+    });
+    let icon = icon.and_then(|i| resolve(view, &i));
     if let Some(context) = effect.contexts.first() {
         let (kind, text) = effect_label(context);
         label = (!text.is_empty()).then(|| capitalize(&text));
@@ -179,6 +370,8 @@ pub fn effect_line(view: &View<'_>, texts: &Texts, id: EntityId, entity: EntityR
     } else if let Some(instant) = &effect.instant_effect {
         dom = domain(instant);
     }
+    let icon = icon.or_else(|| (dom == "alien").then(|| "mapicons/ICO_geoscape_councilor_alien_generic.png".to_string()));
+    let sprite_file = |name: &str| view.dataset().sprite(name).map(|a| a.file.clone());
     let text = (!segments.is_empty()).then(|| effect_text(view, texts, id)).flatten();
     EffectLine {
         entity,
@@ -191,7 +384,8 @@ pub fn effect_line(view: &View<'_>, texts: &Texts, id: EntityId, entity: EntityR
                     Segment::Value(t) => ("value", t),
                     Segment::Sprite(t) => ("sprite", t),
                 };
-                EffectSegment { kind: kind.into(), text }
+                let icon = (kind == "sprite").then(|| sprite_file(&text)).flatten();
+                EffectSegment { kind: kind.into(), text, icon }
             })
             .collect(),
         label,
@@ -200,6 +394,7 @@ pub fn effect_line(view: &View<'_>, texts: &Texts, id: EntityId, entity: EntityR
         domain: dom.into(),
         category,
         target: target_label(&effect.target).map(Into::into),
+        icon,
     }
 }
 
@@ -210,6 +405,23 @@ mod tests {
     use super::*;
     use crate::commands::tests::backend;
     use crate::refs::entity_ref;
+
+    #[test]
+    fn game_icons_exist() {
+        let Some(b) = backend() else { return };
+        let view = b.ds.overview();
+        let missing: Vec<String> = GAME_ICONS
+            .iter()
+            .chain(EFFECT_ICONS)
+            .map(|(_, f)| (*f).to_string())
+            .chain(MISSION_FILES.iter().map(|m| format!("councilor_missions/ICO_{m}_on.png")))
+            .filter(|f| !resolve(&view, f).and_then(|f| b.ds.asset_path(&f)).is_some_and(|p| p.is_file()))
+            .collect();
+        assert!(missing.is_empty(), "{missing:?}");
+        assert_eq!(game_icon("Mission_Purge_Att").as_deref(), Some("councilor_missions/ICO_purge_on.png"));
+        assert_eq!(game_icon("Mission_GainControlPoint").as_deref(), Some("councilor_missions/ICO_assumecontrol_on.png"));
+        assert_eq!(game_icon("Mission_Terrorize_Def"), None);
+    }
 
     #[test]
     fn research_effect_lines() {
@@ -223,9 +435,10 @@ mod tests {
             let text: String = l.segments.iter().map(|s| if s.kind == "value" { format!("[{}]", s.text) } else { s.text.clone() }).collect();
             assert!(!text.starts_with('-'), "{text}");
             dump += &format!(
-                "{:<45} {:<14} {:<8} {:<7} {:<45} {:<9} {}\n",
+                "{:<45} {:<14} {:<55} {:<8} {:<7} {:<45} {:<9} {}\n",
                 l.entity.data_name,
-                l.domain,
+                l.domain.clone() + if l.icon.is_some() { "*" } else { "" },
+                l.icon.as_deref().unwrap_or(""),
                 l.sentiment,
                 l.modifier.as_deref().unwrap_or(""),
                 l.label.as_deref().unwrap_or(""),
@@ -251,6 +464,12 @@ mod tests {
         assert_eq!((armor.modifier.as_deref(), armor.sentiment.as_str()), (Some("−15%"), "good"));
         // Unrest in our nations once an enemy conquers them hurts the conqueror.
         assert_eq!(line("Effect_PostRegimeLossUnrestIncrease").sentiment, "good");
+        assert_eq!(line("Effect_MiningMetalsBonus").icon.as_deref(), Some("icons_2d/ICO_metal.png"));
+        assert_eq!(line("Effect_AllHumanFactionsGainExotics").icon.as_deref(), Some("icons_2d/ICO_exotics.png"));
+        assert_eq!(line("Effect_AllRecruitsInvestigation2").icon.as_deref(), Some("sprites/attribute_investigation.png"));
+        assert_eq!(cp.icon.as_deref(), Some("sprites/control_point.png"));
+        let metal = line("Effect_MiningMetalsBonus");
+        assert!(metal.segments.iter().any(|s| s.kind == "sprite" && s.icon.as_deref() == Some("sprites/metal.png")));
         assert!(line("Effect_MiningMetalsBonus").segments.iter().any(|s| s.kind == "sprite" && s.text == "metal"));
     }
 }

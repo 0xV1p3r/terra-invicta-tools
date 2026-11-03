@@ -220,6 +220,8 @@ export interface EffectSegment {
 	/** `value` = a substituted number; `sprite` = inline game icon by name (`metal`, `water`, …). */
 	kind: 'text' | 'value' | 'sprite';
 	text: string;
+	/** Image of a `sprite` (asset path; turn into a URL with `assetUrl`). */
+	icon: string | null;
 }
 
 export interface EffectLine {
@@ -239,6 +241,8 @@ export interface EffectLine {
 	category: TechCategory | null;
 	/** Who it applies to, if not just the acting faction. */
 	target: string | null;
+	/** Matching game icon (asset path; turn into a URL with `assetUrl`); `domain` is the fallback. */
+	icon: string | null;
 }
 
 export type UnlockKind =

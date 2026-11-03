@@ -12,3 +12,4 @@ __pycache__/
 
 # Extracted icons are large binary blobs; templates/locale JSON is versioned
 /data/*/assets/
+/data

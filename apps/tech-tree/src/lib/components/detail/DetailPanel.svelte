@@ -337,7 +337,7 @@
 						{@render section('Effects')}
 						<ul class="space-y-2 text-sm">
 							{#each detail.effects as effect, i (i)}
-								<li><EffectItem {effect} /></li>
+								<li><EffectItem line={effect} /></li>
 							{/each}
 						</ul>
 					{/if}

@@ -110,6 +110,10 @@ def cmd_extract(args: argparse.Namespace) -> int:
                                 skip_bundles={s.lower() for s in args.skip_bundle}, previous=previous)
         asset_index = {"resources": dict(sorted(result.resources.items())),
                        "bundles": result.bundles, "missing": result.missing}
+        if assets.INLINE_SPRITE_BUNDLE not in {s.lower() for s in args.skip_bundle}:
+            sprites = assets.extract_inline_sprites(bundles, work / "assets", previous=previous)
+            if sprites is not None:
+                asset_index["sprites"] = sprites
         write_json(work / "assets" / "index.json", asset_index)
 
     issues = ts.issues + ls.issues

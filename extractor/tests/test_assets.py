@@ -143,3 +143,25 @@ def test_reuse_copies_only_requested_stems(tmp_path, monkeypatch, missing_unrequ
         'bundles': {'icons': {'sha256': assets.sha256_file(bundle_path), 'exported': exported}}})])
     assert set(result.bundles['icons']['exported']) == {'A'}
     assert [p.name for p in out.rglob('*.png')] == ['A.png']
+
+
+def test_glyph_box_flips_unity_y():
+    # 64×32 glyph at x=10 whose bottom edge is 100 px above the bottom of a 1024 px sheet.
+    rect = {"m_X": 10, "m_Y": 100, "m_Width": 64, "m_Height": 32}
+    assert assets.glyph_box(rect, 1024) == (10, 892, 74, 924)
+
+
+def test_inline_sprites_reuse_by_hash(tmp_path, monkeypatch):
+    bundle_file = tmp_path / "ui"
+    bundle_file.write_bytes(b"bundle")
+    prev_dir = tmp_path / "prev"
+    (prev_dir / "sprites").mkdir(parents=True)
+    (prev_dir / "sprites" / "metal.png").write_bytes(b"png")
+    prev_index = {"sprites": {"sha256": assets.sha256_file(bundle_file),
+                              "exported": {"metal": {"file": "sprites/metal.png", "width": 1, "height": 1}}}}
+    monkeypatch.setattr(assets, "_export_inline_sprites", lambda *a: pytest.fail("should reuse"))
+    out = tmp_path / "out"
+    result = assets.extract_inline_sprites({"ui": Bundle("ui", bundle_file)}, out, previous=[(prev_dir, prev_index)])
+    assert result["exported"]["metal"]["file"] == "sprites/metal.png"
+    assert (out / "sprites" / "metal.png").read_bytes() == b"png"
+    assert assets.extract_inline_sprites({}, out) is None

@@ -264,6 +264,8 @@ pub struct EffectLine {
     pub category: Option<String>,
     /// Who it applies to, if not just the acting faction ("All human factions").
     pub target: Option<String>,
+    /// Matching game icon (asset path, like `EntityRef::icon`); `domain` is the fallback.
+    pub icon: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -272,6 +274,8 @@ pub struct EffectSegment {
     /// `text`, `value` (substituted number) or `sprite` (inline icon name such as `metal`).
     pub kind: String,
     pub text: String,
+    /// Image of a `sprite` (asset path, like `EntityRef::icon`).
+    pub icon: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

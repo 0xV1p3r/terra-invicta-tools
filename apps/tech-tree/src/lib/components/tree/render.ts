@@ -103,16 +103,21 @@ export function render(
 			ctx.stroke(body);
 			ctx.setLineDash([]);
 		}
+		// Bars are narrower than the corner radius, so draw them as plain rects clipped to
+		// the card shapes (a rounded bar can't follow the card's corners and sticks out).
 		const bars = new Map<string, Path2D>();
 		for (const n of group) {
 			let p = bars.get(n.color);
 			if (!p) bars.set(n.color, (p = new Path2D()));
-			p.roundRect(n.x, n.y, bar, h, [RADIUS, 0, 0, RADIUS]);
+			p.rect(n.x, n.y, bar, h);
 		}
+		ctx.save();
+		ctx.clip(body);
 		for (const [color, p] of bars) {
 			ctx.fillStyle = color;
 			ctx.fill(p);
 		}
+		ctx.restore();
 	}
 
 	// --- content --------------------------------------------------------------
@@ -156,11 +161,11 @@ export function render(
 		ctx.setLineDash([]);
 	});
 	outline(state.selected, (n) => {
+		ctx.beginPath();
+		ctx.roundRect(n.x - 3 * px, n.y - 3 * px, w + 6 * px, h + 6 * px, RADIUS + 3 * px);
 		ctx.strokeStyle = n.color;
 		ctx.globalAlpha = 0.35;
 		ctx.lineWidth = 12 * px;
-		ctx.beginPath();
-		ctx.roundRect(n.x - 3 * px, n.y - 3 * px, w + 6 * px, h + 6 * px, RADIUS + 3 * px);
 		ctx.stroke();
 		ctx.globalAlpha = 1;
 		ctx.lineWidth = 3 * px;

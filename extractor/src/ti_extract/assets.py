@@ -32,6 +32,10 @@ EXTRA_RESOURCES = [
 
 _SAFE = re.compile(r"[^A-Za-z0-9._ -]+")
 
+# TextMeshPro sprite asset behind `<sprite name="…">` tags in localized text.
+INLINE_SPRITE_BUNDLE = "ui"
+INLINE_SPRITE_DIR = "sprites"
+
 
 @dataclass
 class Bundle:
@@ -231,3 +235,69 @@ def extract(
             result.resources[res] = entry
     result.missing = sorted(set(result.missing) - set(result.resources))
     return result
+
+
+def glyph_box(rect: dict[str, int], sheet_height: int) -> tuple[int, int, int, int]:
+    """PIL crop box of a TMP glyph rect (Unity measures y from the bottom)."""
+    top = sheet_height - rect["m_Y"] - rect["m_Height"]
+    return rect["m_X"], top, rect["m_X"] + rect["m_Width"], top + rect["m_Height"]
+
+
+def _export_inline_sprites(bundle: Bundle, out_dir: Path) -> dict[str, dict[str, Any]]:
+    import UnityPy
+
+    env = UnityPy.load(str(bundle.path))
+    by_id = {obj.path_id: obj for obj in env.objects}
+    exported: dict[str, dict[str, Any]] = {}
+    for obj in env.objects:
+        if obj.type.name != "MonoBehaviour":
+            continue
+        try:
+            tree = obj.read_typetree()
+        except Exception:
+            continue
+        if "m_SpriteCharacterTable" not in tree or "m_GlyphTable" not in tree:
+            continue
+        sheet_ref = by_id.get(tree.get("spriteSheet", {}).get("m_PathID"))
+        if sheet_ref is None:
+            continue
+        sheet = sheet_ref.read().image
+        glyphs = {g["m_Index"]: g["m_GlyphRect"] for g in tree["m_GlyphTable"]}
+        for char in tree["m_SpriteCharacterTable"]:
+            name, rect = char.get("m_Name"), glyphs.get(char.get("m_GlyphIndex"))
+            if not name or rect is None or name in exported or rect["m_Width"] <= 0 or rect["m_Height"] <= 0:
+                continue
+            image = sheet.crop(glyph_box(rect, sheet.height))
+            rel = f"{INLINE_SPRITE_DIR}/{_file_name(name)}"
+            dest = out_dir / rel
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            image.save(dest, format="PNG", optimize=False)
+            exported[name] = {"file": rel, "width": image.width, "height": image.height}
+    del env
+    gc.collect()
+    return exported
+
+
+def extract_inline_sprites(
+    bundles: dict[str, Bundle],
+    out_dir: Path,
+    *,
+    previous: list[tuple[Path, dict[str, Any]]] = (),
+) -> dict[str, Any] | None:
+    """Export the glyphs of the game's inline sprite sheet (`<sprite name="metal">`) to
+    `sprites/<name>.png`. Returns `{"sha256", "exported": {name: image}}`, or None
+    without the `ui` bundle."""
+    bundle = bundles.get(INLINE_SPRITE_BUNDLE)
+    if bundle is None:
+        return None
+    digest = sha256_file(bundle.path)
+    for prev_dir, prev_index in previous:
+        prev = prev_index.get("sprites") or {}
+        if prev.get("sha256") == digest:
+            exported = _reuse(prev_dir, prev, out_dir, set(prev.get("exported", {})))
+            if exported is not None:
+                print(f"  = inline sprites: reused {len(exported)} images")
+                return {"sha256": digest, "exported": dict(sorted(exported.items()))}
+    print(f"  + inline sprites: exporting from {bundle.path.name}")
+    exported = _export_inline_sprites(bundle, out_dir)
+    return {"sha256": digest, "exported": dict(sorted(exported.items()))}
