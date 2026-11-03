@@ -1,0 +1,19 @@
+[project]
+name = "ti-extract"
+version = "0.1.0"
+description = "Extracts Terra Invicta game data into a stable, build-pinned dataset"
+requires-python = ">=3.12"
+dependencies = ["UnityPy>=1.20", "Pillow>=10"]
+
+[project.scripts]
+ti-extract = "ti_extract.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ti_extract"]

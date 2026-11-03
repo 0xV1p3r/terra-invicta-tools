@@ -1,0 +1,544 @@
+<script lang="ts">
+	// The research tree view: one <canvas> drawn by `render.ts` from a camera, plus DOM
+	// overlays (controls, minimap, hover card, status). Performance-first replacement for
+	// xyflow, whose DOM cards made WebKitGTK (Tauri on Linux) stutter on pan and freeze on zoom.
+	import { onDestroy, onMount, untrack } from 'svelte';
+	import { mode } from 'mode-watcher';
+	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
+	import Maximize from '@lucide/svelte/icons/maximize';
+	import Minus from '@lucide/svelte/icons/minus';
+	import Plus from '@lucide/svelte/icons/plus';
+	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
+	import { api, type EntityKey, type TechCategory, type TreeGraph } from '$lib/api';
+	import { CATEGORIES, CATEGORY_ORDER } from '$lib/categories';
+	import { Button } from '$lib/components/ui/button/index.js';
+	import { app } from '$lib/state.svelte';
+	import { Camera } from './camera';
+	import { FLAGS } from './flags';
+	import HoverCard from './HoverCard.svelte';
+	import MiniMap from './MiniMap.svelte';
+	import { DETAIL_ZOOM, readTheme, render, type Theme } from './render';
+	import { buildScene, nodeAt, type Scene, type SceneNode } from './scene';
+	import SubtreeBar from './SubtreeBar.svelte';
+
+	/** Everything the current view depends on; a loaded graph is only "current" for its key. */
+	const request = $derived(
+		app.mode === 'subtree' && app.subtreeRoot
+			? {
+					kind: 'subtree' as const,
+					scope: $state.snapshot(app.scope),
+					args: {
+						root: app.subtreeRoot,
+						direction: app.subtreeDirection,
+						alternatives: app.subtreeAlternatives,
+						maxDepth: null
+					}
+				}
+			: {
+					kind: 'full' as const,
+					scope: $state.snapshot(app.scope),
+					filter: {
+						techs: app.showTechs,
+						projects: app.showProjects,
+						categories: $state.snapshot(app.categories),
+						properties: $state.snapshot(app.properties)
+					}
+				}
+	);
+	const requestKey = $derived(JSON.stringify(request));
+
+	let loaded = $state.raw<{ key: string; graph: TreeGraph } | null>(null);
+	let loading = $state(false);
+	let error = $state<string | null>(null);
+
+	const graph = $derived(loaded?.graph ?? null);
+	const ready = $derived(loaded?.key === requestKey);
+	const scene = $derived(graph ? buildScene(graph) : null);
+
+	// The full tree is large; keep the last one to make "Back to full tree" instant.
+	let fullCache: { key: string; graph: TreeGraph } | null = null;
+	let latest = 0;
+
+	function show(key: string, g: TreeGraph) {
+		app.treeKeys = new Set(g.nodes.map((n) => n.key));
+		loaded = { key, graph: g };
+	}
+
+	$effect(() => {
+		const key = requestKey;
+		const req = request;
+		if (req.kind === 'full' && fullCache?.key === key) {
+			latest++;
+			loading = false;
+			error = null;
+			show(key, fullCache.graph);
+			return;
+		}
+		const id = ++latest;
+		loading = true;
+		error = null;
+		const promise =
+			req.kind === 'full'
+				? api.getTree(req.scope, req.filter)
+				: api.getSubtree(req.scope, req.args);
+		promise.then(
+			(g) => {
+				if (id !== latest) return;
+				if (req.kind === 'full') fullCache = { key, graph: g };
+				show(key, g);
+				loading = false;
+			},
+			(e) => {
+				if (id !== latest) return;
+				error = String(e);
+				loading = false;
+			}
+		);
+	});
+
+	// --- rendering ----------------------------------------------------------------
+
+	const camera = new Camera();
+	let container = $state<HTMLDivElement>();
+	let canvas = $state<HTMLCanvasElement>();
+	let surface = $state<HTMLDivElement>();
+	let width = $state(0);
+	let height = $state(0);
+	let dpr = $state(typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1);
+	let theme = $state.raw<Theme | null>(null);
+	let hovered = $state<EntityKey | null>(null);
+	/** Bumped when category icons or web fonts finish loading. */
+	let assetVersion = $state(0);
+
+	const icons: Partial<Record<TechCategory, HTMLImageElement>> = {};
+	for (const category of CATEGORY_ORDER) {
+		const img = new Image();
+		img.onload = () => assetVersion++;
+		img.src = CATEGORIES[category].icon;
+		icons[category] = img;
+	}
+	const glyphs = new Map(FLAGS.map((f) => [f.key as string, new Path2D(f.glyph)]));
+
+	let frame = 0;
+	function requestRender() {
+		if (!frame) frame = requestAnimationFrame(draw);
+	}
+
+	function draw() {
+		frame = 0;
+		const ctx = canvas?.getContext('2d');
+		if (!ctx || !canvas || !theme) return;
+		const w = Math.round(width * dpr);
+		const h = Math.round(height * dpr);
+		if (canvas.width !== w || canvas.height !== h) {
+			canvas.width = w;
+			canvas.height = h;
+		}
+		render(ctx, dpr, camera, scene, {
+			selected: app.selected,
+			hovered: dragging ? null : hovered,
+			root: app.mode === 'subtree' ? (graph?.root ?? app.subtreeRoot) : null,
+			theme,
+			icons,
+			glyphs
+		});
+		updateBackground();
+		updateHoverAnchor();
+		const out = camera.zoom < DETAIL_ZOOM;
+		if (zoomedOut !== out) zoomedOut = out;
+	}
+
+	// Dot grid as a CSS background that follows the camera (cheaper than drawing dots).
+	function updateBackground() {
+		if (!container) return;
+		let gap = 20 * camera.zoom;
+		while (gap < 14) gap *= 2;
+		container.style.backgroundSize = `${gap}px ${gap}px`;
+		container.style.backgroundPosition = `${camera.x}px ${camera.y}px`;
+	}
+
+	const unsubscribe = camera.subscribe(requestRender);
+	onDestroy(() => {
+		unsubscribe();
+		camera.stop();
+		cancelAnimationFrame(frame);
+	});
+
+	$effect(() => {
+		camera.resize(width, height);
+	});
+
+	// Redraw on anything the picture depends on (camera changes subscribe directly).
+	$effect(() => {
+		void [scene, app.selected, app.mode, app.subtreeRoot, hovered, theme, dpr, assetVersion];
+		requestRender();
+	});
+
+	// Theme colors follow the light/dark mode.
+	$effect(() => {
+		void mode.current;
+		if (container) theme = readTheme(container);
+	});
+
+	onMount(() => {
+		document.fonts?.ready.then(() => {
+			// Text was measured with fallback metrics until now.
+			for (const n of scene?.nodes ?? []) n.labels.clear();
+			assetVersion++;
+		});
+	});
+
+	// Moving the window to a display with another scale keeps the CSS size: watch the DPR.
+	$effect(() => {
+		const query = matchMedia(`(resolution: ${dpr}dppx)`);
+		const update = () => (dpr = window.devicePixelRatio || 1);
+		query.addEventListener('change', update, { once: true });
+		return () => query.removeEventListener('change', update);
+	});
+
+	// --- fitting and focusing ------------------------------------------------------
+
+	let fitted: Scene | null = null;
+
+	$effect(() => {
+		const s = scene;
+		const focus = app.focus;
+		if (!s || !ready || width <= 0 || height <= 0) return;
+		untrack(() => {
+			const target = focus ? s.byKey.get(focus) : undefined;
+			if (s !== fitted && (!target || focus === s.graph.root)) {
+				const first = fitted === null;
+				fitted = s;
+				if (s.nodes.length) camera.animateTo(camera.fitted(s.bounds), first ? 0 : 300);
+				// A freshly opened subtree is shown whole rather than centered on its root.
+				if (target && focus === s.graph.root) {
+					app.focus = null;
+					return;
+				}
+			}
+			if (!focus) return;
+			if (target) {
+				fitted = s;
+				centerOn(target, Math.max(camera.zoom, 0.9));
+				app.focus = null;
+			} else if (app.mode === 'full' && app.filtersActive) {
+				// Hidden by the filters: show everything, focus once the full tree is loaded.
+				app.clearFilters();
+			} else {
+				app.focus = null;
+			}
+		});
+	});
+
+	function centerOn(n: SceneNode, zoom = camera.zoom, duration = 400) {
+		if (!scene) return;
+		camera.animateTo(
+			camera.centered(n.x + scene.width / 2, n.y + scene.height / 2, zoom),
+			duration
+		);
+	}
+
+	function fitAll() {
+		if (scene?.nodes.length) camera.animateTo(camera.fitted(scene.bounds));
+	}
+
+	function zoomBy(factor: number) {
+		camera.zoomAt(width / 2, height / 2, factor);
+	}
+
+	// --- pointer interaction ----------------------------------------------------------
+
+	let pointer: { id: number; x: number; y: number; moved: boolean } | null = null;
+	/** Last pointer position over the tree (client coordinates), for hover after camera moves. */
+	let lastPointer: { clientX: number; clientY: number } | null = null;
+	let dragging = $state(false);
+
+	function local(e: { clientX: number; clientY: number }) {
+		const r = canvas!.getBoundingClientRect();
+		return { x: e.clientX - r.left, y: e.clientY - r.top };
+	}
+
+	function hit(e: { clientX: number; clientY: number }) {
+		if (!scene) return null;
+		const p = local(e);
+		const w = camera.toWorld(p.x, p.y);
+		return nodeAt(scene, w.x, w.y);
+	}
+
+	function onpointerdown(e: PointerEvent) {
+		if (e.button !== 0 && e.button !== 1) return;
+		surface?.focus({ preventScroll: true });
+		camera.stop();
+		pointer = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false };
+		surface?.setPointerCapture(e.pointerId);
+	}
+
+	function onpointermove(e: PointerEvent) {
+		if (pointer && pointer.id === e.pointerId) {
+			const dx = e.clientX - pointer.x;
+			const dy = e.clientY - pointer.y;
+			if (!pointer.moved && Math.hypot(dx, dy) < 4) return;
+			pointer.moved = true;
+			dragging = true;
+			pointer.x = e.clientX;
+			pointer.y = e.clientY;
+			camera.panBy(dx, dy);
+			return;
+		}
+		lastPointer = { clientX: e.clientX, clientY: e.clientY };
+		hovered = hit(e)?.key ?? null;
+	}
+
+	// Zooming or animating moves cards under a resting pointer: hover what is there now.
+	$effect(() =>
+		camera.subscribe(() => {
+			if (!lastPointer || dragging) return;
+			const key = hit(lastPointer)?.key ?? null;
+			if (key !== hovered) hovered = key;
+		})
+	);
+
+	function onpointerup(e: PointerEvent) {
+		if (!pointer || pointer.id !== e.pointerId) return;
+		const clicked = !pointer.moved && e.button === 0;
+		pointer = null;
+		dragging = false;
+		if (!clicked) return;
+		const n = hit(e);
+		if (n) select(n.key);
+		else app.selected = null;
+	}
+
+	function ondblclick(e: MouseEvent) {
+		const n = hit(e);
+		if (n) app.openSubtree(n.key, 'up');
+	}
+
+	function onwheel(e: WheelEvent) {
+		e.preventDefault();
+		const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 100 : 1;
+		// Pinch gestures arrive as ctrl+wheel with small deltas.
+		const speed = e.ctrlKey ? 0.01 : 0.0015;
+		const factor = Math.min(2, Math.max(0.5, Math.exp(-e.deltaY * unit * speed)));
+		const p = local(e);
+		camera.zoomAt(p.x, p.y, factor);
+	}
+
+	function select(key: EntityKey) {
+		app.selected = key;
+		app.panelOpen = true;
+	}
+
+	// --- keyboard ---------------------------------------------------------------------
+
+	/** Nearest node from `from` in an arrow direction (prefers the same row/column). */
+	function neighbour(from: SceneNode, dx: number, dy: number): SceneNode | null {
+		if (!scene) return null;
+		let best: SceneNode | null = null;
+		let bestScore = Infinity;
+		for (const n of scene.nodes) {
+			const ax = n.x - from.x;
+			const ay = n.y - from.y;
+			const along = ax * dx + ay * dy;
+			if (along <= 0) continue;
+			const across = Math.abs(ax * dy) + Math.abs(ay * dx);
+			const score = along + across * 3;
+			if (score < bestScore) {
+				bestScore = score;
+				best = n;
+			}
+		}
+		return best;
+	}
+
+	function nearestToCenter(): SceneNode | null {
+		if (!scene) return null;
+		const c = camera.toWorld(width / 2, height / 2);
+		let best: SceneNode | null = null;
+		let bestDist = Infinity;
+		for (const n of scene.nodes) {
+			const d = Math.hypot(n.x + scene.width / 2 - c.x, n.y + scene.height / 2 - c.y);
+			if (d < bestDist) {
+				bestDist = d;
+				best = n;
+			}
+		}
+		return best;
+	}
+
+	function ensureVisible(n: SceneNode) {
+		if (!scene) return;
+		const v = camera.visible();
+		const margin = 40 / camera.zoom;
+		const inside =
+			n.x >= v.x + margin &&
+			n.y >= v.y + margin &&
+			n.x + scene.width <= v.x + v.width - margin &&
+			n.y + scene.height <= v.y + v.height - margin;
+		if (!inside) centerOn(n, Math.max(camera.zoom, 0.6), 250);
+	}
+
+	const ARROWS: Record<string, [number, number]> = {
+		ArrowLeft: [-1, 0],
+		ArrowRight: [1, 0],
+		ArrowUp: [0, -1],
+		ArrowDown: [0, 1]
+	};
+
+	function onkeydown(e: KeyboardEvent) {
+		const current = app.selected ? scene?.byKey.get(app.selected) : undefined;
+		const arrow = ARROWS[e.key];
+		if (arrow) {
+			e.preventDefault();
+			const next = current ? neighbour(current, ...arrow) : nearestToCenter();
+			if (next) {
+				app.selected = next.key;
+				ensureVisible(next);
+			}
+		} else if ((e.key === 'Enter' || e.key === ' ') && current) {
+			e.preventDefault();
+			if (e.key === 'Enter' && e.shiftKey) app.openSubtree(current.key, 'up');
+			else select(current.key);
+		} else if (e.key === 'Escape') {
+			app.selected = null;
+		} else if (e.key === '+' || e.key === '=') {
+			zoomBy(1.25);
+		} else if (e.key === '-') {
+			zoomBy(0.8);
+		} else if (e.key === '0') {
+			fitAll();
+		}
+	}
+
+	const announcement = $derived.by(() => {
+		const n = app.selected ? scene?.byKey.get(app.selected) : undefined;
+		if (!n) return '';
+		const category = CATEGORIES[n.item.category]?.label ?? n.item.category;
+		return `${n.item.name}, ${n.kind}, ${category}, cost ${n.cost}`;
+	});
+
+	// --- hover card -------------------------------------------------------------------
+
+	let hoverAnchor = $state<{ x: number; y: number } | null>(null);
+	/** Cards show everything themselves once zoomed in far enough: no hover card then. */
+	let zoomedOut = $state(true);
+	const hoveredNode = $derived(hovered && !dragging ? (scene?.byKey.get(hovered) ?? null) : null);
+
+	function updateHoverAnchor() {
+		const n = hoveredNode;
+		if (!n || !scene) {
+			if (hoverAnchor) hoverAnchor = null;
+			return;
+		}
+		const x = camera.x + (n.x + scene.width) * camera.zoom;
+		const y = camera.y + n.y * camera.zoom;
+		if (hoverAnchor?.x !== x || hoverAnchor?.y !== y) hoverAnchor = { x, y };
+	}
+</script>
+
+<div class="relative flex h-full min-h-0 flex-col">
+	{#if app.mode === 'subtree'}
+		<SubtreeBar graph={ready ? graph : null} />
+	{/if}
+	<div
+		bind:this={container}
+		class="tree-surface relative min-h-0 flex-1 overflow-hidden bg-background"
+		bind:clientWidth={width}
+		bind:clientHeight={height}
+	>
+		<!--
+			Interactive surface (focus, keyboard, pointer); the canvas only paints. `application`
+			is the ARIA role for a widget with its own keyboard model, which Svelte's checks don't
+			treat as interactive.
+		-->
+		<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+		<div
+			bind:this={surface}
+			class="absolute inset-0 touch-none outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+			class:cursor-pointer={hovered && !dragging}
+			class:cursor-grabbing={dragging}
+			tabindex="0"
+			role="application"
+			aria-roledescription="research tree"
+			aria-label="Research tree"
+			aria-describedby="research-tree-keyboard-help"
+			{onpointerdown}
+			{onpointermove}
+			{onpointerup}
+			onpointercancel={onpointerup}
+			onpointerleave={() => {
+				lastPointer = null;
+				hovered = null;
+			}}
+			{ondblclick}
+			{onwheel}
+			{onkeydown}
+		>
+			<canvas bind:this={canvas} class="block size-full" aria-hidden="true"></canvas>
+		</div>
+		<p id="research-tree-keyboard-help" class="sr-only">
+			Arrow keys move the selection. Enter or Space shows details, Shift+Enter opens the
+			requirements subtree. Plus and minus zoom, 0 fits the tree.
+		</p>
+		<p class="sr-only" aria-live="polite">{announcement}</p>
+
+		{#if hoveredNode && hoverAnchor && zoomedOut}
+			<HoverCard node={hoveredNode} x={hoverAnchor.x} y={hoverAnchor.y} {width} {height} />
+		{/if}
+
+		<div class="absolute bottom-3 left-3 flex flex-col gap-1" role="group" aria-label="Zoom">
+			<Button variant="outline" size="icon" aria-label="Zoom in" onclick={() => zoomBy(1.25)}>
+				<Plus />
+			</Button>
+			<Button variant="outline" size="icon" aria-label="Zoom out" onclick={() => zoomBy(0.8)}>
+				<Minus />
+			</Button>
+			<Button variant="outline" size="icon" aria-label="Fit tree" onclick={fitAll}>
+				<Maximize />
+			</Button>
+		</div>
+
+		{#if scene?.nodes.length}
+			<MiniMap {scene} {camera} />
+		{/if}
+
+		{#if loading}
+			<div
+				class="pointer-events-none absolute top-3 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full border bg-card px-3 py-1 text-sm text-muted-foreground shadow"
+				role="status"
+			>
+				<LoaderCircle class="size-4 animate-spin" /> Loading tree…
+			</div>
+		{/if}
+		{#if error}
+			<div class="absolute inset-0 grid place-items-center p-6">
+				<div
+					class="flex max-w-lg items-start gap-3 rounded-xl border border-destructive/50 bg-card p-4 shadow"
+					role="alert"
+				>
+					<TriangleAlert class="mt-0.5 size-5 shrink-0 text-destructive" />
+					<div class="text-sm">
+						<p class="font-medium">Could not load the tree</p>
+						<p class="mt-1 break-words text-muted-foreground">{error}</p>
+					</div>
+				</div>
+			</div>
+		{:else if ready && graph && graph.nodes.length === 0}
+			<div
+				class="pointer-events-none absolute inset-0 grid place-items-center text-muted-foreground"
+			>
+				No research matches the current filters.
+			</div>
+		{/if}
+	</div>
+</div>
+
+<style>
+	.tree-surface {
+		background-image: radial-gradient(
+			circle,
+			color-mix(in oklab, var(--muted-foreground) 35%, transparent) 1px,
+			transparent 1.2px
+		);
+	}
+</style>

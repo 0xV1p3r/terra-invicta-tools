@@ -1,0 +1,14 @@
+# earlier experiment, has its own repository
+/terra-invicta-tech-tree/
+
+# Rust
+/target/
+
+# Python
+__pycache__/
+.venv/
+*.egg-info/
+.pytest_cache/
+
+# Extracted icons are large binary blobs; templates/locale JSON is versioned
+/data/*/assets/
