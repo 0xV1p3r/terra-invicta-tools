@@ -18,6 +18,7 @@
 //! * `focus-<dataName>.json`        – `get_focus`
 //! * `entity-<key with ':' → '__'>.json`        – `get_entity`, e.g. `entity-TITechTemplate__AdAstra.json`
 //! * `search-<query, spaces → '_'>.json`         – `search` (limit 30), e.g. `search-ad_astra.json`
+//! * `solar-system.json`             – `get_solar_system`
 //! * `index.json` – lists every entity/subtree/search fixture written.
 
 use std::collections::BTreeSet;
@@ -98,6 +99,9 @@ fn write_fixtures() {
     let view = b.ds.overview();
     let first = |template: &str, pred: &dyn Fn(EntityId) -> bool| view.entities(template).find(|id| pred(*id));
     let mut keys: BTreeSet<String> = [
+        "TISpaceBodyTemplate:Earth",
+        "TISpaceBodyTemplate:Mars",
+        "TISpaceBodyTemplate:Ceres",
         "TITechTemplate:AdAstra",
         "TIProjectTemplate:Project_ProtiumConverterTorch",
         "TIProjectTemplate:Project_Pherocytes",
@@ -125,6 +129,12 @@ fn write_fixtures() {
         view.effects(view.find(model::TECH, "AdAstra").unwrap()).first().copied(),
         first(model::FACTION, &|_| true),
     ];
+    if let Some(mars) = view.find(ti_data::space::SPACE_BODY, "Mars") {
+        let body: ti_data::space::SpaceBody = model::parse(view.record(mars).unwrap());
+        if let Some(site) = body.hab_sites.first() {
+            keys.insert(format!("TIHabSiteTemplate:{site}"));
+        }
+    }
     keys.extend(wiki_keys);
     keys.extend(picks.into_iter().flatten().map(|id| refs::key(&view, id)));
     // Everything reachable in one click from three roots, so detail navigation works.
@@ -149,6 +159,7 @@ fn write_fixtures() {
         write(&name, &commands::search(&b, &scope, q, 30, false, &[]).unwrap());
         index.searches.push(q.into());
     }
+    write("solar-system.json", &commands::get_solar_system(&b, &scope).unwrap());
     write("index.json", &index);
     // Drop fixtures of earlier runs (renamed or no longer written) so the directory matches `index.json`.
     let written = written.into_inner();
@@ -161,8 +172,8 @@ fn write_fixtures() {
     }
     let total: u64 = written.iter().map(|name| std::fs::metadata(out.join(name)).unwrap().len()).sum();
     eprintln!("total {total} bytes in {}", out.display());
-    // Full wiki entry lists and bidirectional references bring this to about 6 MB.
-    assert!(total < 10_000_000);
+    // Wiki references, the solar system and space detail fixtures total about 10 MB.
+    assert!(total < 11_000_000);
 }
 
 #[derive(Default, Serialize)]

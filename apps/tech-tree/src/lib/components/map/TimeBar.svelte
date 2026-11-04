@@ -1,0 +1,152 @@
+<script lang="ts">
+	// Map date: slider over the campaign years, step buttons, and play/pause.
+	import Pause from '@lucide/svelte/icons/pause';
+	import Play from '@lucide/svelte/icons/play';
+	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
+	import { Button } from '$lib/components/ui/button/index.js';
+	import * as Select from '$lib/components/ui/select/index.js';
+	import { Slider } from '$lib/components/ui/slider/index.js';
+	import { DAY_MS, mapState } from './map-state.svelte';
+
+	/** Slider span after the start date. */
+	const YEARS = 120;
+	const SPAN_DAYS = Math.round(YEARS * 365.25);
+
+	const SPEEDS = [
+		{ value: '1', label: '1 day/s' },
+		{ value: '7', label: '1 week/s' },
+		{ value: '30', label: '1 month/s' },
+		{ value: '365', label: '1 year/s' }
+	];
+
+	const day = $derived(Math.round((mapState.time - mapState.start) / DAY_MS));
+	const label = $derived(
+		Number.isFinite(mapState.time) ? new Date(mapState.time).toISOString().slice(0, 10) : '–'
+	);
+
+	interface Step {
+		unit: 'day' | 'month' | 'year';
+		n: number;
+		short: string;
+		label: string;
+	}
+	const STEPS: Step[] = [
+		{ unit: 'year', n: -1, short: '−Y', label: 'Back one year' },
+		{ unit: 'month', n: -1, short: '−M', label: 'Back one month' },
+		{ unit: 'day', n: -1, short: '−D', label: 'Back one day' },
+		{ unit: 'day', n: 1, short: '+D', label: 'Forward one day' },
+		{ unit: 'month', n: 1, short: '+M', label: 'Forward one month' },
+		{ unit: 'year', n: 1, short: '+Y', label: 'Forward one year' }
+	];
+
+	function setDay(d: number) {
+		mapState.time = mapState.start + Math.min(SPAN_DAYS, Math.max(0, d)) * DAY_MS;
+	}
+
+	function step(unit: Step['unit'], n: number) {
+		mapState.playing = false;
+		const t = new Date(mapState.time);
+		const [y, m, d] = [t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate()];
+		// Months/years keep the day, clamped to the target month's length (Jan 31 + 1 month = Feb 28).
+		const shifted = (ty: number, tm: number) =>
+			Date.UTC(ty, tm, Math.min(d, new Date(Date.UTC(ty, tm + 1, 0)).getUTCDate()));
+		const next =
+			unit === 'day'
+				? Date.UTC(y, m, d + n)
+				: unit === 'month'
+					? shifted(y, m + n)
+					: shifted(y + n, m);
+		setDay(Math.round((next - mapState.start) / DAY_MS));
+	}
+
+	// Playback: advance by `speed` days per real second; stop at the end of the slider.
+	$effect(() => {
+		if (!mapState.playing) return;
+		let last = performance.now();
+		let frame = requestAnimationFrame(function tick(now) {
+			const dt = Math.min(0.25, (now - last) / 1000);
+			last = now;
+			const end = mapState.start + SPAN_DAYS * DAY_MS;
+			mapState.time = Math.min(end, mapState.time + dt * mapState.speed * DAY_MS);
+			if (mapState.time >= end) mapState.playing = false;
+			else frame = requestAnimationFrame(tick);
+		});
+		return () => cancelAnimationFrame(frame);
+	});
+</script>
+
+{#snippet stepButton(s: Step)}
+	<Button
+		variant="ghost"
+		size="sm"
+		class="h-8 px-1.5 font-mono text-xs"
+		aria-label={s.label}
+		title={s.label}
+		onclick={() => step(s.unit, s.n)}>{s.short}</Button
+	>
+{/snippet}
+
+<div
+	class="flex flex-wrap items-center gap-2 rounded-xl border bg-card px-2 py-1.5 shadow"
+	role="group"
+	aria-label="Map date"
+>
+	{#each STEPS.slice(0, 3) as s (s.label)}
+		{@render stepButton(s)}
+	{/each}
+	<Button
+		variant="outline"
+		size="icon"
+		class="size-8"
+		aria-label={mapState.playing ? 'Pause' : 'Play'}
+		title={mapState.playing ? 'Pause' : 'Play'}
+		onclick={() => (mapState.playing = !mapState.playing)}
+	>
+		{#if mapState.playing}<Pause />{:else}<Play />{/if}
+	</Button>
+	{#each STEPS.slice(3) as s (s.label)}
+		{@render stepButton(s)}
+	{/each}
+	<span class="w-24 text-center font-mono text-sm tabular-nums" aria-live="off">{label}</span>
+	<Slider
+		type="single"
+		class="w-40 sm:w-64"
+		min={0}
+		max={SPAN_DAYS}
+		step={1}
+		value={day}
+		onValueChange={(v: number) => {
+			mapState.playing = false;
+			setDay(v);
+		}}
+		thumbLabel="Date"
+		thumbValueText={label}
+	/>
+	<Select.Root
+		type="single"
+		value={String(mapState.speed)}
+		onValueChange={(v) => v && (mapState.speed = Number(v))}
+	>
+		<Select.Trigger size="sm" aria-label="Playback speed" class="w-28">
+			{SPEEDS.find((s) => s.value === String(mapState.speed))?.label ?? `${mapState.speed} d/s`}
+		</Select.Trigger>
+		<Select.Content>
+			{#each SPEEDS as s (s.value)}
+				<Select.Item value={s.value} label={s.label}>{s.label}</Select.Item>
+			{/each}
+		</Select.Content>
+	</Select.Root>
+	<Button
+		variant="ghost"
+		size="icon"
+		class="size-8"
+		aria-label="Back to the start date"
+		title="Start date"
+		onclick={() => {
+			mapState.playing = false;
+			mapState.time = mapState.start;
+		}}
+	>
+		<RotateCcw />
+	</Button>
+</div>

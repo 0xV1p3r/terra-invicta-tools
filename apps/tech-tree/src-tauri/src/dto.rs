@@ -419,3 +419,70 @@ pub struct WikiEntry {
     pub subtitle: Option<String>,
     pub effect: Option<EffectLine>,
 }
+
+// --- Solar system map (`get_solar_system`) ------------------------------------
+
+/// Everything the solar system map draws, in one payload. Positions are not included:
+/// the frontend propagates `OrbitElements` to any date (see `src/lib/components/map/kepler.ts`).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SolarSystem {
+    /// Start date of the scenario (overview: the base campaign's), `YYYY-MM-DD`.
+    pub start_date: String,
+    /// Every space body in scope, parents before children (the Sun first).
+    pub bodies: Vec<SpaceBodyInfo>,
+    pub lagrange_points: Vec<LagrangePointInfo>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SpaceBodyInfo {
+    pub entity: EntityRef,
+    /// `star`, `planet`, `dwarfPlanet`, `planetaryMoon`, `asteroidalMoon`, `asteroid`, `comet`.
+    pub body_type: String,
+    /// Key of the body it orbits (`barycenterName`); None for the Sun.
+    pub parent: Option<String>,
+    /// None for the Sun (and bodies without usable elements).
+    pub orbit: Option<OrbitElements>,
+    /// The game's mean radius in km (mean half-dimension for irregular bodies; 0 without size data).
+    pub radius_km: f64,
+    pub mass_kg: Option<f64>,
+    pub max_hab_size: u32,
+    pub hab_site_count: u32,
+    /// The game's rating of the unprospected body, per resource (keys `water`, `volatiles`,
+    /// `metals`, `nobles`, `fissiles`): averaged over its hab sites; empty without hab sites.
+    pub resources: std::collections::BTreeMap<String, ResourceRating>,
+}
+
+/// Rating the game shows for an unprospected site: `empty`, `possible`, `low`, `medium`, `high`, `max`.
+pub type ResourceRating = String;
+
+/// Keplerian elements as the game uses them (angles in degrees).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OrbitElements {
+    pub semi_major_axis_km: f64,
+    pub eccentricity: f64,
+    pub inclination_deg: f64,
+    pub long_ascending_node_deg: f64,
+    pub arg_periapsis_deg: f64,
+    pub mean_anomaly_at_epoch_deg: f64,
+    /// Epoch as a Julian year (2000.0 = J2000).
+    pub epoch_julian_year: f64,
+    /// Orbital period around the parent, in days (from the game's gravitational parameter).
+    pub period_days: f64,
+    /// Full precession cycles, in years (moons only). The game never applies them.
+    pub nodal_precession_years: Option<f64>,
+    pub apsidal_precession_years: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LagrangePointInfo {
+    pub entity: EntityRef,
+    /// `L1` … `L5`.
+    pub point: String,
+    /// Body the point belongs to (`relatedObject`, e.g. Mercury); its parent is the primary.
+    pub body: String,
+    pub max_hab_size: u32,
+}

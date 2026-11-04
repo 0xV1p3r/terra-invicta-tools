@@ -533,6 +533,7 @@
 
 	/** Alt+←/→ and the mouse back/forward buttons walk the view history. */
 	function onwindowkeydown(e: KeyboardEvent) {
+		if (app.page !== 'tree') return;
 		if (!e.altKey || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
 		const t = e.target as HTMLElement | null;
 		if (t?.closest('input, textarea, [contenteditable="true"]')) return;
@@ -542,6 +543,7 @@
 	}
 
 	function onwindowmouseup(e: MouseEvent) {
+		if (app.page !== 'tree') return;
 		if (e.button === 3) app.goBack();
 		else if (e.button === 4) app.goForward();
 	}

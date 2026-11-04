@@ -494,3 +494,70 @@ fn scenario_meta_membership() {
         }
     }
 }
+
+#[test]
+fn space_bodies_match_known_physics() {
+    use ti_data::space::{BodyType, Resource, System};
+    let ds = data_or_skip!();
+    let system = System::load(&ds.overview());
+    assert_eq!(system.bodies[0].data.object_type, BodyType::Star);
+    let body = |n| system.body(n).unwrap_or_else(|| panic!("{n}"));
+    let near = |value: f64, expected: f64, tolerance: f64| assert!((value - expected).abs() <= tolerance, "{value} vs {expected}");
+
+    let earth = body("Earth");
+    assert_eq!(system.parent(earth).unwrap().data.data_name, "Sol");
+    near(earth.data.surface_gravity_g(), 1.0, 0.01);
+    near(earth.data.escape_velocity_mps() / 1000.0, 11.2, 0.05);
+    near(system.orbital_period_s(earth).unwrap() / 86_400.0, 365.25, 0.2);
+    near(system.orbital_period_s(body("Mars")).unwrap() / 86_400.0, 687.0, 1.0);
+    let luna = body("Luna");
+    // The game uses only the parent's mass (G·M_Earth), so 27.45 d rather than the real 27.32 d.
+    near(system.orbital_period_s(luna).unwrap() / 86_400.0, 27.45, 0.05);
+    // tidally locked: rotation = orbit
+    near(system.rotation_period_hours(luna).unwrap(), system.orbital_period_s(luna).unwrap() / 3600.0, 1e-6);
+    near(body("Ceres").data.surface_gravity_g(), 0.028, 0.002);
+    near(system.solar_multiplier(earth, None), 0.25, 0.01);
+    // moons use their planet's distance from the Sun
+    near(system.solar_multiplier(body("Phobos"), None), 0.6 / 1.5237_f64.powi(2), 0.01);
+
+    for (i, b) in system.bodies.iter().enumerate() {
+        assert_ne!(b.data.object_type, BodyType::Unknown, "{}", b.data.data_name);
+        if b.data.object_type != BodyType::Star {
+            let p = b.parent.unwrap_or_else(|| panic!("{} has no parent", b.data.data_name));
+            assert!(p < i);
+        }
+        for (_, site, profile) in &b.sites {
+            assert_eq!(site.parent_body, b.data.data_name);
+            assert!(profile.is_some(), "{} has no mining profile", site.data_name);
+        }
+    }
+    let sites: usize = system.bodies.iter().map(|b| b.sites.len()).sum();
+    assert!(sites > 600, "{sites}");
+    // every hab site template belongs to a body that lists it
+    assert_eq!(sites, ds.overview().entities(ti_data::space::HAB_SITE).count());
+    for r in Resource::ALL {
+        assert!(system.global_cap_per_day(r) > 0.0);
+    }
+    assert!(Resource::ALL.iter().any(|&r| system.body_rating(luna, r).is_some_and(|x| x > ti_data::space::SiteRating::Possible)));
+    for (_, l) in &system.lagrange_points {
+        assert!(system.body(&l.related_object).is_some(), "{}", l.data_name);
+    }
+}
+
+#[test]
+fn scenario_space_bodies_use_their_variant() {
+    use ti_data::space::System;
+    let ds = data_or_skip!();
+    for s in ds.scenarios() {
+        let system = System::load(&ds.view(Scope::scenario(s.idx)));
+        assert!(system.bodies.len() > 400, "{}", s.data_name);
+        assert!(system.bodies.iter().skip(1).all(|b| b.parent.is_some()), "{}", s.data_name);
+        // Dark Skies scenarios override some bodies (tag `Millennium` in 2003, `PostApoc` in Broken Earth).
+        let phobos = system.body("Phobos").unwrap().data.mass_kg.unwrap();
+        let tagged = |t: &str| s.tags.iter().any(|x| x == t);
+        let expected = if tagged("Millennium") || tagged("PostApoc") { 1.0638e16 } else { 1.06e16 };
+        assert_eq!(phobos, expected, "{}", s.data_name);
+        let devana = &system.body("101742Asteroid").unwrap().data.friendly_name;
+        assert_eq!(devana, if tagged("PostApoc") { "101742 Mokosh" } else { "101742 Devana" }, "{}", s.data_name);
+    }
+}

@@ -20,7 +20,6 @@ export interface View {
 	zoom: number;
 }
 
-const clampZoom = (z: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
 const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
 
 export class Camera {
@@ -32,6 +31,18 @@ export class Camera {
 	height = 0;
 	/** Screen rectangles covered by floating overlays (minimap, controls). */
 	overlays: Rect[] = [];
+	readonly minZoom: number;
+	readonly maxZoom: number;
+
+	/** Zoom limits default to the tree's. */
+	constructor(limits: { minZoom?: number; maxZoom?: number } = {}) {
+		this.minZoom = limits.minZoom ?? MIN_ZOOM;
+		this.maxZoom = limits.maxZoom ?? MAX_ZOOM;
+	}
+
+	private clampZoom(z: number) {
+		return Math.min(this.maxZoom, Math.max(this.minZoom, z));
+	}
 
 	private listeners = new Set<() => void>();
 	private animation = 0;
@@ -55,7 +66,7 @@ export class Camera {
 
 	set(view: View) {
 		this.stop();
-		this.apply(view.x, view.y, clampZoom(view.zoom));
+		this.apply(view.x, view.y, this.clampZoom(view.zoom));
 	}
 
 	stop() {
@@ -98,14 +109,14 @@ export class Camera {
 	/** Zoom by `factor` keeping the screen point (sx, sy) fixed. */
 	zoomAt(sx: number, sy: number, factor: number) {
 		this.stop();
-		const zoom = clampZoom(this.zoom * factor);
+		const zoom = this.clampZoom(this.zoom * factor);
 		const k = zoom / this.zoom;
 		this.apply(sx - (sx - this.x) * k, sy - (sy - this.y) * k, zoom);
 	}
 
 	/** View that centers world point (wx, wy) at `zoom`. */
 	centered(wx: number, wy: number, zoom = this.zoom): View {
-		const z = clampZoom(zoom);
+		const z = this.clampZoom(zoom);
 		return { x: this.width / 2 - wx * z, y: this.height / 2 - wy * z, zoom: z };
 	}
 
@@ -154,7 +165,7 @@ export class Camera {
 		const fit = Math.min(aw / bounds.width, ah / bounds.height) * (1 - 2 * padding);
 		const cy = bounds.y + bounds.height / 2;
 		const at = (wx: number, sx: number, zoom: number): View => {
-			const z = clampZoom(zoom);
+			const z = this.clampZoom(zoom);
 			return { x: sx - wx * z, y: a.y + a.height / 2 - cy * z, zoom: z };
 		};
 		if (fit >= MIN_FIT_ZOOM)
@@ -172,7 +183,7 @@ export class Camera {
 	animateTo(target: View, duration = 300): Promise<boolean> {
 		this.stop();
 		const from: View = { x: this.x, y: this.y, zoom: this.zoom };
-		const to: View = { ...target, zoom: clampZoom(target.zoom) };
+		const to: View = { ...target, zoom: this.clampZoom(target.zoom) };
 		if (duration <= 0) {
 			this.apply(to.x, to.y, to.zoom);
 			return Promise.resolve(true);
