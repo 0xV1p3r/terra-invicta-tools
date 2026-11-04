@@ -3,7 +3,6 @@
 	// overlays (controls, minimap, hover card, status). Performance-first replacement for
 	// xyflow, whose DOM cards made WebKitGTK (Tauri on Linux) stutter on pan and freeze on zoom.
 	import { onDestroy, onMount, untrack } from 'svelte';
-	import { mode } from 'mode-watcher';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import Maximize from '@lucide/svelte/icons/maximize';
 	import ScanSearch from '@lucide/svelte/icons/scan-search';
@@ -210,10 +209,18 @@
 		requestRender();
 	});
 
-	// Theme colors follow the light/dark mode.
+	// Theme colors follow the light/dark mode. `mode.current` flips before
+	// mode-watcher toggles the root class, so re-read on the class change itself.
 	$effect(() => {
-		void mode.current;
-		if (container) theme = readTheme(container);
+		const el = container;
+		if (!el) return;
+		theme = readTheme(el);
+		const observer = new MutationObserver(() => (theme = readTheme(el)));
+		observer.observe(document.documentElement, {
+			attributes: true,
+			attributeFilter: ['class', 'style']
+		});
+		return () => observer.disconnect();
 	});
 
 	onMount(() => {
