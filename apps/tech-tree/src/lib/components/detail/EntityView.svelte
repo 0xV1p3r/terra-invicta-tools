@@ -21,27 +21,13 @@
 
 	import { Skeleton } from '$lib/components/ui/skeleton/index.js';
 	import { categoryInfo } from '$lib/categories';
-	import { formatCost, formatCostFull, isResearch, KIND_LABELS } from '$lib/format';
+	import { formatCost, formatCostFull, isResearch, KIND_LABELS, UNLOCK_LABELS } from '$lib/format';
 	import { app } from '$lib/state.svelte';
 	import EffectItem from './EffectItem.svelte';
 	import EntityIcon from './EntityIcon.svelte';
 	import EntityLink from './EntityLink.svelte';
 	import StatBlock from './StatBlock.svelte';
 	import UnlockCard from './UnlockCard.svelte';
-
-	const UNLOCK_LABELS: Record<UnlockKind, string> = {
-		research: 'Research',
-		researchAlternative: 'Research (alternative prerequisite)',
-		shipPart: 'Ship parts',
-		habModule: 'Hab modules',
-		org: 'Orgs',
-		grantedOrg: 'Granted orgs',
-		claim: 'Claims',
-		trait: 'Traits',
-		codex: 'Codex entries',
-		mission: 'Missions',
-		objective: 'Objectives'
-	};
 
 	let detail = $state.raw<EntityDetail | null>(null);
 	let loading = $state(false);
