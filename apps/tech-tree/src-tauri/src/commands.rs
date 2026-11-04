@@ -64,12 +64,7 @@ pub fn get_tree(b: &Backend, scope: &ScopeArgs, filter: &TreeFilter, layout: Ful
         .nodes()
         .iter()
         .copied()
-        .filter(|&id| match view.kind(id) {
-            model::Kind::Tech => filter.techs,
-            model::Kind::Project => filter.projects,
-            _ => false,
-        })
-        .filter(|&id| filter.categories.is_empty() || refs::category(&view, id).is_some_and(|c| filter.categories.contains(&c)))
+        .filter(|&id| matches_kind_and_category(&view, id, filter))
         .filter(|&id| filter.properties.is_empty() || properties::of(&view, id).iter().any(|p| filter.properties.contains(p)))
         .collect();
     let edges: BTreeSet<Edge> = graph.full().edges.into_iter().filter(|e| nodes.contains(&e.from) && nodes.contains(&e.to)).collect();
@@ -77,6 +72,16 @@ pub fn get_tree(b: &Backend, scope: &ScopeArgs, filter: &TreeFilter, layout: Ful
     let mut tree = build_graph(&view, &texts, &nodes, &edges, None, layout == FullLayout::Bands, unfiltered);
     tree.total_cost = tree.nodes.iter().map(|n| n.cost).filter(|c| *c > 0.0).sum();
     Ok(tree)
+}
+
+/// The full-tree filter without its property part.
+fn matches_kind_and_category(view: &View<'_>, id: EntityId, filter: &TreeFilter) -> bool {
+    let kind = match view.kind(id) {
+        model::Kind::Tech => filter.techs,
+        model::Kind::Project => filter.projects,
+        _ => false,
+    };
+    kind && (filter.categories.is_empty() || refs::category(view, id).is_some_and(|c| filter.categories.contains(&c)))
 }
 
 pub fn get_subtree(b: &Backend, scope: &ScopeArgs, args: &SubtreeArgs) -> CmdResult<TreeGraph> {
@@ -105,10 +110,13 @@ pub fn get_subtree(b: &Backend, scope: &ScopeArgs, args: &SubtreeArgs) -> CmdRes
     Ok(tree)
 }
 
-pub fn get_properties(b: &Backend, scope: &ScopeArgs) -> CmdResult<Vec<PropertyInfo>> {
+/// Properties of the full-tree research that passes `filter`'s other parts (its own
+/// `properties` are ignored, so the options don't shrink to the current selection).
+pub fn get_properties(b: &Backend, scope: &ScopeArgs, filter: &TreeFilter) -> CmdResult<Vec<PropertyInfo>> {
     let texts = b.texts(&scope.lang)?;
     let view = b.ds.view(scope::resolve(&b.ds, scope)?);
-    Ok(properties::catalog(&view, &texts))
+    let nodes = view.research_graph().nodes().iter().copied().filter(|&id| matches_kind_and_category(&view, id, filter));
+    Ok(properties::catalog(&view, &texts, nodes))
 }
 
 /// Research cost of everything that must be researched for `id`, including it (listed prereqs only).
@@ -572,7 +580,8 @@ pub(crate) mod tests {
     #[test]
     fn properties() {
         let Some(b) = backend() else { return };
-        let catalog = get_properties(&b, &en()).unwrap();
+        let all = TreeFilter { techs: true, projects: true, categories: vec![], properties: vec![] };
+        let catalog = get_properties(&b, &en(), &all).unwrap();
         let find = |id: &str| catalog.iter().find(|p| p.id == id).unwrap_or_else(|| panic!("{id} missing"));
         let cp = find("effect:ControlPointMaintenance:up");
         assert_eq!(cp.label, "Increases control point capacity");
@@ -594,6 +603,18 @@ pub(crate) mod tests {
         let mine = find("effect:MCFreeSpaceMineNetwork:up").count;
         assert!(tree.nodes.len() >= cp.count.max(mine) && tree.nodes.len() <= cp.count + mine);
         assert!(tree.nodes.iter().all(|n| n.properties.iter().any(|p| filter.properties.contains(p))));
+
+        // The options follow the other filters but not the selected properties.
+        assert_eq!(cp.sentiment, "good");
+        assert_eq!(cp.icon.as_deref(), Some("sprites/control_point.png"));
+        let energy = TreeFilter { categories: vec!["Energy".into()], ..filter.clone() };
+        let faceted = get_properties(&b, &en(), &energy).unwrap();
+        let energy_tree = get_tree(&b, &en(), &TreeFilter { properties: vec![], ..energy.clone() }, FullLayout::Layered).unwrap();
+        assert!(faceted.len() < catalog.len());
+        for p in &faceted {
+            let on_screen = energy_tree.nodes.iter().filter(|n| n.properties.contains(&p.id)).count();
+            assert_eq!(p.count, on_screen, "{}", p.id);
+        }
     }
 
     #[test]

@@ -15,7 +15,7 @@ use ti_data::model::{Effect, PartKind};
 use ti_data::{EntityId, Texts, UnlockKind, View};
 
 use crate::dto::PropertyInfo;
-use crate::effects::effect_text;
+use crate::effects::{changes, context_style, effect_text};
 use crate::refs;
 
 #[derive(Clone, Copy)]
@@ -225,14 +225,14 @@ pub(crate) fn raises(effect: &Effect) -> bool {
     }
 }
 
-/// Property id and label for one context of an effect.
-fn effect_property(context: &str, effect: &Effect) -> (String, String) {
+/// Property id, label and labelled direction (None for abilities) for one context of an effect.
+fn effect_property(context: &str, effect: &Effect) -> (String, String, Option<bool>) {
     match effect_label(context) {
-        (Ability(_), label) => (format!("effect:{context}"), label.into_owned()),
+        (Ability(_), label) => (format!("effect:{context}"), label.into_owned(), None),
         (kind, noun) => {
             let up = raises(effect) != matches!(kind, Inverted(_));
             let (dir, verb) = if up { ("up", "Increases") } else { ("down", "Decreases") };
-            (format!("effect:{context}:{dir}"), format!("{verb} {noun}"))
+            (format!("effect:{context}:{dir}"), format!("{verb} {noun}"), Some(up))
         }
     }
 }
@@ -275,6 +275,9 @@ struct Found {
     id: String,
     label: String,
     effect: Option<EntityId>,
+    /// Effect context, labelled direction (None for abilities) and whether the effect moves
+    /// the value in that direction (effects only; for display metadata).
+    context: Option<(String, Option<bool>, bool)>,
 }
 
 fn find(view: &View<'_>, id: EntityId) -> Vec<Found> {
@@ -282,13 +285,13 @@ fn find(view: &View<'_>, id: EntityId) -> Vec<Found> {
     for effect_id in view.effects(id) {
         let Some(effect) = view.effect(effect_id) else { continue };
         for context in &effect.contexts {
-            let (id, label) = effect_property(context, &effect);
-            out.push(Found { id, label, effect: Some(effect_id) });
+            let (id, label, up) = effect_property(context, &effect);
+            out.push(Found { id, label, effect: Some(effect_id), context: Some((context.clone(), up, changes(&effect))) });
         }
     }
     for unlock in view.unlocks(id) {
         if let Some((id, label)) = unlock_property(unlock.kind) {
-            out.push(Found { id, label, effect: None });
+            out.push(Found { id, label, effect: None, context: None });
         }
     }
     out
@@ -300,10 +303,10 @@ pub fn of(view: &View<'_>, id: EntityId) -> Vec<String> {
     ids.into_iter().collect()
 }
 
-/// Every property of the research in scope, with counts; effects first, then unlocks, by label.
-pub fn catalog(view: &View<'_>, texts: &Texts) -> Vec<PropertyInfo> {
+/// Every property of `nodes`, with counts; effects first, then unlocks, by label.
+pub fn catalog(view: &View<'_>, texts: &Texts, nodes: impl IntoIterator<Item = EntityId>) -> Vec<PropertyInfo> {
     let mut by_id: BTreeMap<String, (PropertyInfo, BTreeSet<EntityId>)> = BTreeMap::new();
-    for &node in view.research_graph().nodes() {
+    for node in nodes {
         for f in find(view, node) {
             let (info, nodes) = by_id.entry(f.id.clone()).or_insert_with(|| {
                 let group = if f.id.starts_with("unlock:") {
@@ -313,8 +316,26 @@ pub fn catalog(view: &View<'_>, texts: &Texts) -> Vec<PropertyInfo> {
                 } else {
                     "effect"
                 };
-                (PropertyInfo { id: f.id, label: f.label, group: group.into(), count: 0, example: None }, BTreeSet::new())
+                let style = f.context.as_ref().map(|(context, up, moves)| context_style(view, context, up.filter(|_| *moves), up.is_none()));
+                let info = PropertyInfo {
+                    id: f.id,
+                    label: f.label,
+                    group: group.into(),
+                    count: 0,
+                    example: None,
+                    sentiment: style.as_ref().map_or("neutral", |s| s.sentiment).into(),
+                    domain: style.as_ref().map(|s| s.domain.into()),
+                    category: style.as_ref().and_then(|s| s.category.clone()),
+                    icon: style.and_then(|s| s.icon),
+                };
+                (info, BTreeSet::new())
             });
+            // Directional sentiment once any effect moves the value (not just fixes a level).
+            if let Some((context, up @ Some(_), true)) = &f.context
+                && info.sentiment == "neutral"
+            {
+                info.sentiment = context_style(view, context, *up, false).sentiment.into();
+            }
             nodes.insert(node);
             info.count = nodes.len();
             if info.example.is_none() {

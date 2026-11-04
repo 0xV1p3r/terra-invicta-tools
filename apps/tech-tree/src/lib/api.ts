@@ -70,6 +70,14 @@ export interface PropertyInfo {
 	count: number;
 	/** Rendered description of one effect giving it (effects only). */
 	example: string | null;
+	/** For the acting faction, in the labelled direction. */
+	sentiment: EffectSentiment;
+	/** Icon group; null for unlocks. */
+	domain: EffectDomain | null;
+	/** Research category for effects on one science. */
+	category: TechCategory | null;
+	/** Matching game icon (asset path; turn into a URL with `assetUrl`). */
+	icon: string | null;
 }
 
 export type Direction = 'up' | 'down' | 'both';
@@ -309,7 +317,9 @@ const tauriApi = {
 	getSubtree: (scope: ScopeArgs, args: SubtreeArgs) =>
 		invoke<TreeGraph>('get_subtree', { scope, args }),
 	getFocus: (scope: ScopeArgs, root: EntityKey) => invoke<TreeGraph>('get_focus', { scope, root }),
-	getProperties: (scope: ScopeArgs) => invoke<PropertyInfo[]>('get_properties', { scope }),
+	/** Properties of the full-tree research passing `filter` (its `properties` are ignored). */
+	getProperties: (scope: ScopeArgs, filter: TreeFilter) =>
+		invoke<PropertyInfo[]>('get_properties', { scope, filter }),
 	getEntity: (scope: ScopeArgs, key: EntityKey) =>
 		invoke<EntityDetail>('get_entity', { scope, key }),
 	search: (scope: ScopeArgs, query: string, limit = 30) =>
@@ -392,7 +402,18 @@ const mockApi: typeof tauriApi = {
 		fixture<TreeGraph>(`focus-${root.slice(root.indexOf(':') + 1)}`).catch(async () =>
 			focusFromTree(await fixture<TreeGraph>('tree'), root)
 		),
-	getProperties: () => fixture<PropertyInfo[]>('properties'),
+	// Counts are recomputed from the tree fixture when other filters narrow it.
+	getProperties: async (_scope, filter) => {
+		const all = await fixture<PropertyInfo[]>('properties');
+		const base = { ...filter, properties: [] };
+		if (base.techs && base.projects && base.categories.length === 0) return all;
+		const counts = new Map<string, number>();
+		for (const n of (await fixture<TreeGraph>('tree')).nodes) {
+			if (!matchesFilter(n, base)) continue;
+			for (const p of n.properties) counts.set(p, (counts.get(p) ?? 0) + 1);
+		}
+		return all.flatMap((p) => (counts.has(p.id) ? [{ ...p, count: counts.get(p.id)! }] : []));
+	},
 	getEntity: (_scope, key) => fixture<EntityDetail>(`entity-${key.replaceAll(':', '__')}`),
 	search: async (_scope, query, limit = 30) => {
 		const name = query.trim().replace(/\s+/g, '_');

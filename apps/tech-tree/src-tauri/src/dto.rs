@@ -84,6 +84,14 @@ pub struct PropertyInfo {
     pub count: usize,
     /// Rendered description of one effect giving it (effects only).
     pub example: Option<String>,
+    /// `good`/`bad`/`neutral` for the acting faction (see `EffectLine::sentiment`).
+    pub sentiment: String,
+    /// Icon group (see `EffectLine::domain`); None for unlocks.
+    pub domain: Option<String>,
+    /// Research category for effects on one science.
+    pub category: Option<String>,
+    /// Game icon (asset path), if one matches.
+    pub icon: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]

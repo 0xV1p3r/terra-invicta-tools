@@ -66,8 +66,8 @@ async fn get_focus(state: State<'_, AppState>, scope: ScopeArgs, root: String) -
 }
 
 #[tauri::command]
-async fn get_properties(state: State<'_, AppState>, scope: ScopeArgs) -> CmdResult<Vec<PropertyInfo>> {
-    run_blocking(state, move |b| commands::get_properties(b, &scope)).await
+async fn get_properties(state: State<'_, AppState>, scope: ScopeArgs, filter: TreeFilter) -> CmdResult<Vec<PropertyInfo>> {
+    run_blocking(state, move |b| commands::get_properties(b, &scope, &filter)).await
 }
 
 #[tauri::command]

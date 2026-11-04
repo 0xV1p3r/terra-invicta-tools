@@ -1,52 +1,13 @@
 <script lang="ts" module>
 	import type { Component } from 'svelte';
-	import type { EffectDomain, EffectSentiment } from '$lib/api';
 	import Atom from '@lucide/svelte/icons/atom';
-	import Award from '@lucide/svelte/icons/award';
-	import Bug from '@lucide/svelte/icons/bug';
-	import Building2 from '@lucide/svelte/icons/building-2';
-	import Coins from '@lucide/svelte/icons/coins';
-	import Crosshair from '@lucide/svelte/icons/crosshair';
 	import Droplets from '@lucide/svelte/icons/droplets';
-	import Flag from '@lucide/svelte/icons/flag';
-	import FlaskConical from '@lucide/svelte/icons/flask-conical';
 	import Gem from '@lucide/svelte/icons/gem';
-	import Landmark from '@lucide/svelte/icons/landmark';
-	import Leaf from '@lucide/svelte/icons/leaf';
-	import Megaphone from '@lucide/svelte/icons/megaphone';
-	import Orbit from '@lucide/svelte/icons/orbit';
 	import Pickaxe from '@lucide/svelte/icons/pickaxe';
 	import Radiation from '@lucide/svelte/icons/radiation';
-	import Rocket from '@lucide/svelte/icons/rocket';
 	import SatelliteDish from '@lucide/svelte/icons/satellite-dish';
-	import Sparkles from '@lucide/svelte/icons/sparkles';
-	import Swords from '@lucide/svelte/icons/swords';
-	import Telescope from '@lucide/svelte/icons/telescope';
-	import UserRound from '@lucide/svelte/icons/user-round';
 	import Wind from '@lucide/svelte/icons/wind';
 
-	const DOMAIN_ICONS: Record<EffectDomain, Component> = {
-		research: FlaskConical,
-		priority: Landmark,
-		mission: Crosshair,
-		control: Flag,
-		councilor: UserRound,
-		army: Swords,
-		ship: Rocket,
-		mining: Pickaxe,
-		missionControl: SatelliteDish,
-		exploration: Telescope,
-		transfer: Orbit,
-		hab: Building2,
-		alien: Bug,
-		environment: Leaf,
-		economy: Coins,
-		politics: Megaphone,
-		ability: Award,
-		other: Sparkles
-	};
-
-	/** Inline sprites of effect texts (TextMeshPro sprite names), shown in place of a word. */
 	/** Inline sprites of effect texts (TextMeshPro sprite names): readable names and icons
 	 * for when the game image isn't available (mock mode). */
 	const SPRITES: Record<string, { label: string; icon: Component }> = {
@@ -59,38 +20,15 @@
 		exotics: { label: 'Exotics', icon: Atom },
 		mission_control: { label: 'Mission Control', icon: SatelliteDish }
 	};
-
-	// `ring` frames game icons, which are drawn for a dark background.
-	const SENTIMENT: Record<
-		EffectSentiment,
-		{ tile: string; ring: string; badge: string; label: string }
-	> = {
-		good: {
-			tile: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400',
-			ring: 'ring-emerald-500/60',
-			badge: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
-			label: 'Beneficial'
-		},
-		bad: {
-			tile: 'bg-rose-500/15 text-rose-700 dark:text-rose-400',
-			ring: 'ring-rose-500/60',
-			badge: 'border-rose-500/40 bg-rose-500/15 text-rose-700 dark:text-rose-300',
-			label: 'Detrimental'
-		},
-		neutral: {
-			tile: 'bg-muted text-muted-foreground',
-			ring: 'ring-border',
-			badge: 'border-border bg-muted text-foreground',
-			label: ''
-		}
-	};
 </script>
 
 <script lang="ts">
 	import { assetUrl, type EffectLine } from '$lib/api';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import CategoryIcon from '$lib/components/tree/CategoryIcon.svelte';
+	import { DOMAIN_ICONS, SENTIMENT } from '$lib/effect-style';
 	import { app } from '$lib/state.svelte';
+	import Sparkles from '@lucide/svelte/icons/sparkles';
 
 	let { line }: { line: EffectLine } = $props();
 

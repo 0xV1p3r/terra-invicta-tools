@@ -281,6 +281,46 @@ fn domain(name: &str) -> &'static str {
     }
 }
 
+/// Whether an effect moves its value in a known direction (a fixed new level doesn't:
+/// the previous value is unknown).
+pub(crate) fn changes(effect: &Effect) -> bool {
+    match effect.operation.as_deref() {
+        Some("SetToFixedValue") => false,
+        Some("IncreaseToValue" | "DecreaseToValue") => true,
+        Some("Multiplicative") => effect.value != 1.0,
+        _ => effect.value != 0.0,
+    }
+}
+
+/// Display metadata of an effect context, independent of a particular effect.
+pub(crate) struct ContextStyle {
+    pub domain: &'static str,
+    pub sentiment: &'static str,
+    pub category: Option<String>,
+    pub icon: Option<String>,
+}
+
+/// Display metadata of `context` changed in the labelled direction `up` (None for abilities;
+/// pass `Some` only for effects that `changes` the value, else the sentiment is neutral).
+pub(crate) fn context_style(view: &View<'_>, context: &str, up: Option<bool>, ability: bool) -> ContextStyle {
+    let mut dom = domain(context);
+    if ability && dom == "other" {
+        dom = "ability";
+    }
+    let sentiment = match up {
+        _ if NEUTRAL.contains(&context) => "neutral",
+        None if ability => "good",
+        None => "neutral",
+        Some(up) if up != LOWER_IS_BETTER.contains(&context) => "good",
+        Some(_) => "bad",
+    };
+    let icon = game_icon(context)
+        .and_then(|i| resolve(view, &i))
+        .or_else(|| (dom == "alien").then(|| "mapicons/ICO_geoscape_councilor_alien_generic.png".to_string()));
+    let category = SCIENCES.iter().find(|(c, _)| *c == context).map(|(_, cat)| cat.to_string());
+    ContextStyle { domain: dom, sentiment, category, icon }
+}
+
 fn target_label(target: &str) -> Option<&'static str> {
     Some(match target {
         "SourceFaction" | "" => return None,
@@ -355,13 +395,7 @@ pub fn effect_line(view: &View<'_>, texts: &Texts, id: EntityId, entity: EntityR
             Label::Quantity(_) | Label::Inverted(_) => {
                 let inverted = matches!(kind, Label::Inverted(_));
                 modifier_text = modifier(&effect, inverted, percent);
-                let changes = match effect.operation.as_deref() {
-                    Some("SetToFixedValue") => false,
-                    Some("IncreaseToValue" | "DecreaseToValue") => true,
-                    Some("Multiplicative") => effect.value != 1.0,
-                    _ => effect.value != 0.0,
-                };
-                if changes && !NEUTRAL.contains(&context.as_str()) {
+                if changes(&effect) && !NEUTRAL.contains(&context.as_str()) {
                     let up = raises(&effect) != inverted;
                     sentiment = if up != LOWER_IS_BETTER.contains(&context.as_str()) { "good" } else { "bad" };
                 }

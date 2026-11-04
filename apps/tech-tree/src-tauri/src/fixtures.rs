@@ -46,7 +46,7 @@ fn write_fixtures() {
     let techs = TreeFilter { projects: false, ..all.clone() };
     write("tree-techs.json", &commands::get_tree(&b, &scope, &techs, FullLayout::Layered).unwrap());
     write("tree-bands.json", &commands::get_tree(&b, &scope, &all, FullLayout::Bands).unwrap());
-    write("properties.json", &commands::get_properties(&b, &scope).unwrap());
+    write("properties.json", &commands::get_properties(&b, &scope, &all).unwrap());
 
     let mut index = Index::default();
     for (dir, direction, root) in [
