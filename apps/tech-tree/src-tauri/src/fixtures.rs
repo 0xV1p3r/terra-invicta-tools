@@ -10,8 +10,10 @@
 //! File names:
 //! * `meta.json`                     – `get_meta`
 //! * `tree.json`, `tree-techs.json`  – `get_tree` (techs+projects / techs only, all categories)
+//! * `tree-bands.json`               – `get_tree` with the category-band layout (all research)
 //! * `properties.json`               – `get_properties`
 //! * `subtree-<up|down|both>-<dataName>.json` – `get_subtree` (alternatives on, no depth limit)
+//! * `focus-<dataName>.json`        – `get_focus`
 //! * `entity-<key with ':' → '__'>.json`        – `get_entity`, e.g. `entity-TITechTemplate__AdAstra.json`
 //! * `search-<query, spaces → '_'>.json`         – `search` (limit 30), e.g. `search-ad_astra.json`
 //! * `index.json` – lists every entity/subtree/search fixture written.
@@ -40,9 +42,10 @@ fn write_fixtures() {
     let scope = en();
     write("meta.json", &commands::get_meta(&b).unwrap());
     let all = TreeFilter { techs: true, projects: true, categories: vec![], properties: vec![] };
-    write("tree.json", &commands::get_tree(&b, &scope, &all).unwrap());
-    let techs = TreeFilter { projects: false, ..all };
-    write("tree-techs.json", &commands::get_tree(&b, &scope, &techs).unwrap());
+    write("tree.json", &commands::get_tree(&b, &scope, &all, FullLayout::Layered).unwrap());
+    let techs = TreeFilter { projects: false, ..all.clone() };
+    write("tree-techs.json", &commands::get_tree(&b, &scope, &techs, FullLayout::Layered).unwrap());
+    write("tree-bands.json", &commands::get_tree(&b, &scope, &all, FullLayout::Bands).unwrap());
     write("properties.json", &commands::get_properties(&b, &scope).unwrap());
 
     let mut index = Index::default();
@@ -55,6 +58,11 @@ fn write_fixtures() {
         let tree = commands::get_subtree(&b, &scope, &args).unwrap();
         let name = format!("subtree-{dir}-{}.json", root.split_once(':').unwrap().1);
         write(&name, &tree);
+        index.subtrees.push(name);
+    }
+    for root in ["TITechTemplate:AdAstra", "TIProjectTemplate:Project_Pherocytes", "TITechTemplate:OrbitalShipbuilding"] {
+        let name = format!("focus-{}.json", root.split_once(':').unwrap().1);
+        write(&name, &commands::get_focus(&b, &scope, root).unwrap());
         index.subtrees.push(name);
     }
 

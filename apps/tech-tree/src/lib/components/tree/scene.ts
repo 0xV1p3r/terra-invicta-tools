@@ -27,6 +27,23 @@ export interface EdgePaths {
 	dashed: Path2D;
 }
 
+export interface SceneEdge {
+	from: EntityKey;
+	to: EntityKey;
+	alternative: boolean;
+	path: Path2D;
+}
+
+export interface SceneOptions {
+	/** Leave redundant edges out of `edges` (they stay in lineages and direct highlights). */
+	hideRedundant: boolean;
+}
+
+export interface Lineage {
+	nodes: Set<EntityKey>;
+	edges: EdgePaths;
+}
+
 export interface Scene {
 	graph: TreeGraph;
 	nodes: SceneNode[];
@@ -34,7 +51,9 @@ export interface Scene {
 	width: number;
 	height: number;
 	bounds: Rect;
+	/** Edges drawn normally (without hidden redundant ones). */
 	edges: EdgePaths;
+	edgeList: SceneEdge[];
 	/** Edges touching a node (for highlighting the selection). */
 	edgesOf: Map<EntityKey, EdgePaths>;
 	/** Uniform grid of node indices for hit-testing and culling. */
@@ -45,12 +64,26 @@ const CELL = 1000;
 const cellKey = (cx: number, cy: number) => `${cx},${cy}`;
 
 /** Bezier from the right middle of `from` to the left middle of `to` (as xyflow drew them). */
-function edgePath(sx: number, sy: number, tx: number, ty: number) {
+function curve(sx: number, sy: number, tx: number, ty: number) {
 	const offset = tx >= sx ? 0.5 * (tx - sx) : 0.25 * 25 * Math.sqrt(sx - tx);
-	return `M${sx},${sy}C${sx + offset},${sy} ${tx - offset},${ty} ${tx},${ty}`;
+	return `C${sx + offset},${sy} ${tx - offset},${ty} ${tx},${ty}`;
 }
 
-export function buildScene(graph: TreeGraph): Scene {
+/**
+ * Edge from `(sx, sy)` to `(tx, ty)` through the layout's waypoints: straight along each
+ * column it crosses (waypoints come in left/right pairs), curved in the gaps between.
+ */
+function edgePath(sx: number, sy: number, tx: number, ty: number, points: [number, number][]) {
+	let d = `M${sx},${sy}`;
+	let [x, y] = [sx, sy];
+	for (const [px, py] of [...points, [tx, ty] as [number, number]]) {
+		d += py === y ? `L${px},${py}` : curve(x, y, px, py);
+		[x, y] = [px, py];
+	}
+	return new Path2D(d);
+}
+
+export function buildScene(graph: TreeGraph, options: SceneOptions): Scene {
 	const w = graph.nodeWidth;
 	const h = graph.nodeHeight;
 	const nodes: SceneNode[] = graph.nodes.map((item) => ({
@@ -85,19 +118,34 @@ export function buildScene(graph: TreeGraph): Scene {
 			}
 		}
 	});
+	// Routed edges and bands may reach beyond the cards.
+	for (const e of graph.edges) {
+		for (const [, y] of e.points) {
+			minY = Math.min(minY, y);
+			maxY = Math.max(maxY, y);
+		}
+	}
+	for (const b of graph.bands) {
+		minY = Math.min(minY, b.top);
+		maxY = Math.max(maxY, b.bottom);
+	}
+	// "Any of" brackets with their labels (see render.ts).
+	for (const g of graph.anyOf) minX = Math.min(minX, g.x - 14 - 32 * g.level - 20);
 	const bounds = nodes.length
 		? { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
 		: { x: 0, y: 0, width: 1, height: 1 };
 
 	const edges: EdgePaths = { solid: new Path2D(), dashed: new Path2D() };
 	const edgesOf = new Map<EntityKey, EdgePaths>();
+	const edgeList: SceneEdge[] = [];
 	for (const e of graph.edges) {
 		const from = byKey.get(e.from);
 		const to = byKey.get(e.to);
 		if (!from || !to) continue;
-		const path = new Path2D(edgePath(from.x + w, from.y + h / 2, to.x, to.y + h / 2));
+		const path = edgePath(from.x + w, from.y + h / 2, to.x, to.y + h / 2, e.points);
+		edgeList.push({ from: e.from, to: e.to, alternative: e.alternative, path });
 		const kind = e.alternative ? 'dashed' : 'solid';
-		edges[kind].addPath(path);
+		if (!(e.redundant && options.hideRedundant)) edges[kind].addPath(path);
 		for (const key of [e.from, e.to]) {
 			let p = edgesOf.get(key);
 			if (!p) edgesOf.set(key, (p = { solid: new Path2D(), dashed: new Path2D() }));
@@ -105,7 +153,74 @@ export function buildScene(graph: TreeGraph): Scene {
 		}
 	}
 
-	return { graph, nodes, byKey, width: w, height: h, bounds, edges, edgesOf, grid };
+	return { graph, nodes, byKey, width: w, height: h, bounds, edges, edgeList, edgesOf, grid };
+}
+
+/** Walk each direction separately to keep unrelated branches out of the lineage. */
+export function lineageOf(scene: Scene, key: EntityKey): Lineage {
+	const nodes = new Set<EntityKey>();
+	const edges: EdgePaths = { solid: new Path2D(), dashed: new Path2D() };
+	if (!scene.byKey.has(key)) return { nodes, edges };
+	const incoming = new Map<EntityKey, SceneEdge[]>();
+	const outgoing = new Map<EntityKey, SceneEdge[]>();
+	for (const edge of scene.edgeList) {
+		for (const [map, endpoint] of [
+			[incoming, edge.to],
+			[outgoing, edge.from]
+		] as const) {
+			const list = map.get(endpoint);
+			if (list) list.push(edge);
+			else map.set(endpoint, [edge]);
+		}
+	}
+	const traversed = new Set<SceneEdge>();
+	for (const direction of ['from', 'to'] as const) {
+		const adjacency = direction === 'from' ? incoming : outgoing;
+		const seen = new Set<EntityKey>([key]);
+		const pending = [key];
+		while (pending.length) {
+			const current = pending.pop()!;
+			nodes.add(current);
+			for (const edge of adjacency.get(current) ?? []) {
+				traversed.add(edge);
+				const next = edge[direction];
+				if (seen.has(next)) continue;
+				seen.add(next);
+				pending.push(next);
+			}
+		}
+	}
+	for (const edge of traversed) edges[edge.alternative ? 'dashed' : 'solid'].addPath(edge.path);
+	return { nodes, edges };
+}
+
+const importanceCache = new WeakMap<Scene, Map<EntityKey, number>>();
+
+/** Number of nodes depending on each node, directly or not (landmark ranking). */
+export function importanceOf(scene: Scene): Map<EntityKey, number> {
+	const cached = importanceCache.get(scene);
+	if (cached) return cached;
+	const outgoing = new Map<EntityKey, EntityKey[]>();
+	for (const e of scene.edgeList) {
+		const list = outgoing.get(e.from);
+		if (list) list.push(e.to);
+		else outgoing.set(e.from, [e.to]);
+	}
+	const importance = new Map<EntityKey, number>();
+	for (const n of scene.nodes) {
+		const seen = new Set<EntityKey>([n.key]);
+		const pending = [n.key];
+		while (pending.length) {
+			for (const next of outgoing.get(pending.pop()!) ?? []) {
+				if (seen.has(next)) continue;
+				seen.add(next);
+				pending.push(next);
+			}
+		}
+		importance.set(n.key, seen.size - 1);
+	}
+	importanceCache.set(scene, importance);
+	return importance;
 }
 
 /** Nodes intersecting a world rectangle (each once). */

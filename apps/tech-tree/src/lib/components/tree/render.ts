@@ -2,8 +2,17 @@
 // one transform per frame; detail (text, icons, badges) depends on the zoom so a frame
 // costs about the same whether 30 or 900 cards are visible.
 import type { EntityKey, TechCategory } from '$lib/api';
+import { CATEGORIES } from '$lib/categories';
 import type { Camera } from './camera';
-import { nodesIn, type EdgePaths, type Scene, type SceneNode } from './scene';
+import {
+	importanceOf,
+	lineageOf,
+	nodesIn,
+	type EdgePaths,
+	type Lineage,
+	type Scene,
+	type SceneNode
+} from './scene';
 
 export interface Theme {
 	background: string;
@@ -45,15 +54,36 @@ export interface RenderState {
 	icons: Partial<Record<TechCategory, HTMLImageElement>>;
 	/** Flag glyphs as Path2D (24×24 box), by flag key. */
 	glyphs: Map<string, Path2D>;
+	/** Filter matches in highlight mode (others are dimmed); null = no highlighting. */
+	matches: ReadonlySet<EntityKey> | null;
+	/** Draw the far-out overview (category blocks, landmark labels) below `OVERVIEW_ZOOM`. */
+	overview: boolean;
 }
 
 /** Zoom from which cards show icon, name and badges. */
 export const DETAIL_ZOOM = 0.45;
 /** Zoom from which zoomed-out cards show their (large) name. */
 const NAME_ZOOM = 0.18;
+/** Zoom below which the overview (if enabled) replaces cards with category blocks. */
+export const OVERVIEW_ZOOM = 0.1;
+/** Most landmark labels in the overview. */
+const LANDMARKS = 40;
+/** Dim factor of cards outside the selection's lineage or the filter matches. */
+const DIM = 0.25;
 
 const RADIUS = 14;
 const BIG_FONT_PX = 26;
+
+const lineageCache = new WeakMap<Scene, { key: EntityKey; lineage: Lineage }>();
+
+function selectedLineage(scene: Scene, key: EntityKey | null): Lineage | null {
+	if (key === null || !scene.byKey.has(key)) return null;
+	const cached = lineageCache.get(scene);
+	if (cached?.key === key) return cached.lineage;
+	const lineage = lineageOf(scene, key);
+	lineageCache.set(scene, { key, lineage });
+	return lineage;
+}
 
 export function render(
 	ctx: CanvasRenderingContext2D,
@@ -74,13 +104,38 @@ export function render(
 	const detail = z >= DETAIL_ZOOM;
 	const w = scene.width;
 	const h = scene.height;
+	const lineage = selectedLineage(scene, state.selected);
+	const { matches } = state;
+	const unrelated = (n: SceneNode) =>
+		(lineage !== null && !lineage.nodes.has(n.key)) || (matches !== null && !matches.has(n.key));
+	const cardAlpha = (n: SceneNode) =>
+		(n.item.flags.obtainable ? 1 : 0.5) * (unrelated(n) ? DIM : 1);
 	const px = 1 / z; // one screen pixel in world units
+	const overview = state.overview && z < OVERVIEW_ZOOM;
+
+	// --- category bands --------------------------------------------------------
+	const bandPad = 40;
+	for (const b of scene.graph.bands) {
+		ctx.globalAlpha = 0.07;
+		ctx.fillStyle = CATEGORIES[b.category]?.color ?? theme.muted;
+		ctx.fillRect(
+			scene.bounds.x - bandPad,
+			b.top - bandPad,
+			scene.bounds.width + 2 * bandPad,
+			b.bottom - b.top + 2 * bandPad
+		);
+	}
+	ctx.globalAlpha = 1;
 
 	// --- edges ---------------------------------------------------------------
-	const fade = Math.min(1, Math.max(0.2, z * 2));
-	ctx.globalAlpha = state.selected ? 0.15 * fade : fade;
+	const fade = Math.min(1, Math.max(0.2, z * 2)) * (overview ? 0.5 : 1);
+	ctx.globalAlpha = lineage ? 0.15 * fade : matches ? 0.4 * fade : fade;
 	strokeEdges(ctx, scene.edges, theme.muted, Math.max(1.5, 0.5 * px), px);
-	const highlight = state.selected ? scene.edgesOf.get(state.selected) : undefined;
+	if (lineage) {
+		ctx.globalAlpha = 1;
+		strokeEdges(ctx, lineage.edges, theme.foreground, Math.max(2, px), px);
+	}
+	const highlight = lineage && state.selected ? scene.edgesOf.get(state.selected) : undefined;
 	if (highlight) {
 		ctx.globalAlpha = 1;
 		strokeEdges(ctx, highlight, theme.foreground, Math.max(3, 1.5 * px), px);
@@ -89,54 +144,100 @@ export function render(
 	// --- card bodies, borders and category bars (batched per style) -----------
 	const bar = detail ? 4 : 12;
 	for (const dim of [false, true]) {
-		const group = visible.filter((n) => n.item.flags.obtainable === !dim);
-		if (!group.length) continue;
-		ctx.globalAlpha = dim ? 0.5 : 1;
-		const body = new Path2D();
-		for (const n of group) body.roundRect(n.x, n.y, w, h, RADIUS);
-		ctx.fillStyle = theme.card;
-		ctx.fill(body);
-		if (z > 0.12) {
-			ctx.strokeStyle = theme.border;
-			ctx.lineWidth = px;
-			ctx.setLineDash(dim ? [6 * px, 4 * px] : []);
-			ctx.stroke(body);
-			ctx.setLineDash([]);
+		for (const outside of [false, true]) {
+			const group = visible.filter(
+				(n) => n.item.flags.obtainable === !dim && unrelated(n) === outside
+			);
+			if (!group.length) continue;
+			ctx.globalAlpha = (dim ? 0.5 : 1) * (outside ? DIM : 1);
+			if (overview) {
+				// Plain category blocks.
+				const blocks = new Map<string, Path2D>();
+				for (const n of group) {
+					let p = blocks.get(n.color);
+					if (!p) blocks.set(n.color, (p = new Path2D()));
+					p.roundRect(n.x, n.y, w, h, RADIUS);
+				}
+				for (const [color, p] of blocks) {
+					ctx.fillStyle = color;
+					ctx.fill(p);
+				}
+				continue;
+			}
+			const body = new Path2D();
+			for (const n of group) body.roundRect(n.x, n.y, w, h, RADIUS);
+			ctx.fillStyle = theme.card;
+			ctx.fill(body);
+			if (z > 0.12) {
+				ctx.strokeStyle = theme.border;
+				ctx.lineWidth = px;
+				ctx.setLineDash(dim ? [6 * px, 4 * px] : []);
+				ctx.stroke(body);
+				ctx.setLineDash([]);
+			}
+			// Bars are narrower than the corner radius, so draw them as plain rects clipped to
+			// the card shapes (a rounded bar can't follow the card's corners and sticks out).
+			const bars = new Map<string, Path2D>();
+			for (const n of group) {
+				let p = bars.get(n.color);
+				if (!p) bars.set(n.color, (p = new Path2D()));
+				p.rect(n.x, n.y, bar, h);
+			}
+			ctx.save();
+			ctx.clip(body);
+			for (const [color, p] of bars) {
+				ctx.fillStyle = color;
+				ctx.fill(p);
+			}
+			ctx.restore();
 		}
-		// Bars are narrower than the corner radius, so draw them as plain rects clipped to
-		// the card shapes (a rounded bar can't follow the card's corners and sticks out).
-		const bars = new Map<string, Path2D>();
-		for (const n of group) {
-			let p = bars.get(n.color);
-			if (!p) bars.set(n.color, (p = new Path2D()));
-			p.rect(n.x, n.y, bar, h);
-		}
-		ctx.save();
-		ctx.clip(body);
-		for (const [color, p] of bars) {
-			ctx.fillStyle = color;
-			ctx.fill(p);
-		}
-		ctx.restore();
 	}
 
 	// --- content --------------------------------------------------------------
 	if (detail) {
-		for (const n of visible) drawDetail(ctx, n, scene, state);
-	} else if (z >= NAME_ZOOM) {
+		for (const n of visible) {
+			ctx.globalAlpha = cardAlpha(n);
+			drawDetail(ctx, n, scene, state);
+		}
+	} else if (z >= NAME_ZOOM && !overview) {
 		ctx.font = `600 ${BIG_FONT_PX}px ${theme.font}`;
 		ctx.textBaseline = 'middle';
 		ctx.fillStyle = theme.cardForeground;
 		const maxWidth = w - bar - 24;
 		const lineHeight = BIG_FONT_PX * 1.15;
 		for (const n of visible) {
-			ctx.globalAlpha = n.item.flags.obtainable ? 1 : 0.5;
+			ctx.globalAlpha = cardAlpha(n);
 			const lines = wrap(ctx, n, maxWidth, 2);
 			const top = n.y + h / 2 - ((lines.length - 1) * lineHeight) / 2;
 			lines.forEach((line, i) => ctx.fillText(line, n.x + bar + 12, top + i * lineHeight));
 		}
 	}
 	ctx.globalAlpha = 1;
+
+	// --- "any of" requirement groups (focus view) -------------------------------
+	if (scene.graph.anyOf.length) {
+		ctx.strokeStyle = theme.muted;
+		ctx.fillStyle = theme.muted;
+		ctx.lineWidth = Math.max(1.5, px);
+		ctx.font = `500 12px ${theme.font}`;
+		ctx.textAlign = 'center';
+		ctx.textBaseline = 'middle';
+		for (const g of scene.graph.anyOf) {
+			const x = g.x - 14 - 32 * g.level;
+			ctx.beginPath();
+			ctx.moveTo(x + 8, g.top);
+			ctx.lineTo(x, g.top);
+			ctx.lineTo(x, g.bottom);
+			ctx.lineTo(x + 8, g.bottom);
+			ctx.stroke();
+			ctx.save();
+			ctx.translate(x - 10, (g.top + g.bottom) / 2);
+			ctx.rotate(-Math.PI / 2);
+			ctx.fillText('any of', 0, 0);
+			ctx.restore();
+		}
+		ctx.textAlign = 'start';
+	}
 
 	// --- hover, selection, subtree root ----------------------------------------
 	const outline = (key: EntityKey | null, draw: (n: SceneNode) => void) => {
@@ -171,6 +272,107 @@ export function render(
 		ctx.lineWidth = 3 * px;
 		ctx.stroke();
 	});
+
+	// --- screen-space labels (constant size) -------------------------------------
+	ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+	if (overview) drawLandmarks(ctx, camera, scene, visible, state, unrelated);
+	if (scene.graph.bands.length) drawBandLabels(ctx, camera, scene, theme, bandPad);
+	ctx.globalAlpha = 1;
+}
+
+/** Category name at the top left of each band, kept on screen while the band is visible. */
+function drawBandLabels(
+	ctx: CanvasRenderingContext2D,
+	camera: Camera,
+	scene: Scene,
+	theme: Theme,
+	pad: number
+) {
+	const z = camera.zoom;
+	const left = Math.max(12, camera.x + (scene.bounds.x - pad) * z + 12);
+	ctx.font = `600 15px ${theme.font}`;
+	ctx.textBaseline = 'top';
+	for (const b of scene.graph.bands) {
+		const top = camera.y + (b.top - pad) * z;
+		const bottom = camera.y + (b.bottom + pad) * z;
+		if (bottom < 0 || top > camera.height) continue;
+		// Stick to the top of the screen, but stay inside the band.
+		const y = Math.min(Math.max(top + 10, 10), bottom - 28);
+		const info = CATEGORIES[b.category];
+		ctx.globalAlpha = 0.9;
+		ctx.fillStyle = info?.color ?? theme.foreground;
+		ctx.fillText(info?.label ?? b.category, left, y);
+	}
+	ctx.globalAlpha = 1;
+}
+
+const rankingCache = new WeakMap<
+	Scene,
+	{ font: string; ranking: { node: SceneNode; width: number }[] }
+>();
+
+/** Nodes by importance with their label width in the current font (cached per scene). */
+function landmarkRanking(ctx: CanvasRenderingContext2D, scene: Scene) {
+	const cached = rankingCache.get(scene);
+	if (cached?.font === ctx.font) return cached.ranking;
+	const importance = importanceOf(scene);
+	const ranking = [...scene.nodes]
+		.sort((a, b) => (importance.get(b.key) ?? 0) - (importance.get(a.key) ?? 0))
+		.map((node) => ({ node, width: ctx.measureText(node.item.name).width }));
+	rankingCache.set(scene, { font: ctx.font, ranking });
+	return ranking;
+}
+
+/** Labels of the most important visible research, skipping ones that would overlap. */
+function drawLandmarks(
+	ctx: CanvasRenderingContext2D,
+	camera: Camera,
+	scene: Scene,
+	visible: SceneNode[],
+	state: RenderState,
+	dimmed: (n: SceneNode) => boolean
+) {
+	const { theme } = state;
+	const z = camera.zoom;
+	ctx.font = `600 12px ${theme.font}`;
+	ctx.textBaseline = 'middle';
+	const shown = new Set(visible);
+	const taken: { x: number; y: number; w: number; h: number }[] = [];
+	let count = 0;
+	for (const { node: n, width } of landmarkRanking(ctx, scene)) {
+		if (count >= LANDMARKS) break;
+		if (!shown.has(n) || dimmed(n)) continue;
+		const label = n.item.name;
+		const tw = width + 12;
+		const th = 20;
+		const cx = camera.x + (n.x + scene.width / 2) * z;
+		const cy = camera.y + (n.y + scene.height / 2) * z;
+		const r = { x: cx - tw / 2, y: cy - th / 2, w: tw, h: th };
+		const pad = 4;
+		if (
+			taken.some(
+				(t) =>
+					r.x < t.x + t.w + pad &&
+					r.x + r.w + pad > t.x &&
+					r.y < t.y + t.h + pad &&
+					r.y + r.h + pad > t.y
+			)
+		)
+			continue;
+		taken.push(r);
+		count++;
+		ctx.globalAlpha = 0.92;
+		ctx.fillStyle = theme.card;
+		ctx.beginPath();
+		ctx.roundRect(r.x, r.y, r.w, r.h, 6);
+		ctx.fill();
+		ctx.globalAlpha = 1;
+		ctx.strokeStyle = n.color;
+		ctx.lineWidth = 1.5;
+		ctx.stroke();
+		ctx.fillStyle = theme.cardForeground;
+		ctx.fillText(label, r.x + 6, cy);
+	}
 }
 
 function strokeEdges(
@@ -192,7 +394,6 @@ function strokeEdges(
 function drawDetail(ctx: CanvasRenderingContext2D, n: SceneNode, scene: Scene, state: RenderState) {
 	const { theme } = state;
 	const h = scene.height;
-	ctx.globalAlpha = n.item.flags.obtainable ? 1 : 0.5;
 	const icon = state.icons[n.item.category];
 	const iconX = n.x + 4 + 12;
 	if (icon?.complete && icon.naturalWidth) ctx.drawImage(icon, iconX, n.y + h / 2 - 18, 36, 36);

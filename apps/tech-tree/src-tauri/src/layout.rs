@@ -15,6 +15,15 @@
 //!   (backward), then resolve overlaps per column with an order-preserving
 //!   least-squares pack (pool adjacent violators) at min distance `NODE_HEIGHT + GAP_Y`.
 //!   A final forward pass aligns nodes to their prereqs.
+//! * Long edges: an edge spanning several columns gets one dummy node per column it
+//!   passes (standard Sugiyama step). Dummies take part in ordering and coordinates
+//!   with a smaller height (`DUMMY_SIZE` rows), so edges run between cards instead of
+//!   through them; segments touching dummies weigh more in alignment so long edges
+//!   stay straight. Each dummy becomes a pair of waypoints (left/right column edge).
+//! * Optional groups (e.g. research categories): every group becomes a horizontal band
+//!   of its own (components inside), stacked in group order with `GROUP_GAP`. Dummies
+//!   of an edge between groups belong to the source's group for the first half of the
+//!   edge and to the target's for the rest.
 //! * Components are stacked vertically with `COMPONENT_GAP` (isolated nodes as one
 //!   plain column); min y is 0. Positions are top-left corners.
 //!
@@ -26,6 +35,8 @@ pub const NODE_HEIGHT: f64 = 100.0;
 pub const GAP_X: f64 = 180.0;
 pub const GAP_Y: f64 = 24.0;
 pub const COMPONENT_GAP: f64 = 2.0 * NODE_HEIGHT;
+/// Space between group bands.
+pub const GROUP_GAP: f64 = 4.0 * NODE_HEIGHT;
 const SWEEPS: usize = 12;
 /// Columns spanned by the research-cost range (see [`layout_by_cost`]).
 const COST_COLUMNS: usize = 30;
@@ -33,6 +44,11 @@ const ROUNDS: usize = 12;
 const ALT_WEIGHT: f64 = 0.5;
 /// Weight of a node's current position when it has no neighbors on the aligned side.
 const STAY_WEIGHT: f64 = 0.01;
+/// Height of an edge dummy in rows (`NODE_HEIGHT + GAP_Y`); cards are 1.
+const DUMMY_SIZE: f64 = 0.12;
+/// Alignment weight factors for segments with one / two dummy ends (Gansner et al.).
+const DUMMY_WEIGHT: f64 = 2.0;
+const DUMMY_DUMMY_WEIGHT: f64 = 8.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LayoutEdge {
@@ -41,6 +57,21 @@ pub struct LayoutEdge {
     /// Index of the node requiring it.
     pub to: usize,
     pub alternative: bool,
+}
+
+/// Result of [`route`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct Layout {
+    /// Indexed like the nodes.
+    pub nodes: Vec<Placement>,
+    /// Indexed like the edges: points the edge passes between its endpoints, left to
+    /// right (pairs at the left/right side of each column it crosses). Empty = direct.
+    pub waypoints: Vec<Vec<[f64; 2]>>,
+    /// Edge crossings of the routed drawing (straight segments).
+    pub crossings: usize,
+    /// Indexed like the groups passed to [`route_grouped`]: `(top, bottom)` of the band in
+    /// px, or `None` if the group is empty. Empty without groups.
+    pub groups: Vec<Option<(f64, f64)>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -59,20 +90,105 @@ pub fn layout(n: usize, edges: &[LayoutEdge]) -> Vec<Placement> {
 
 /// [`layout`] where research `costs` (indexed like the nodes; empty = ignore) also push
 /// nodes right, so columns read cheap → expensive like the game's tech tree.
+#[cfg(test)]
 pub fn layout_by_cost(n: usize, edges: &[LayoutEdge], costs: &[f64]) -> Vec<Placement> {
-    let column = compact(columns_from(n, edges, &cost_floor(costs, n)));
+    route(n, edges, costs).nodes
+}
+
+/// [`layout_by_cost`] with waypoints for edges spanning more than one column.
+#[cfg(test)]
+pub fn route(n: usize, edges: &[LayoutEdge], costs: &[f64]) -> Layout {
+    route_grouped(n, edges, costs, &[])
+}
+
+/// [`route`] with every node in a band of its `group` (indexed like the nodes; empty = no bands).
+pub fn route_grouped(n: usize, edges: &[LayoutEdge], costs: &[f64], groups: &[usize]) -> Layout {
+    let real_column = compact(columns_from(n, edges, &cost_floor(costs, n)));
+    let (column, segments, chains) = expand(&real_column, edges);
+    let total = column.len();
     let ncols = column.iter().max().map_or(0, |m| m + 1);
     let mut cols: Vec<Vec<usize>> = vec![Vec::new(); ncols];
     for (v, &c) in column.iter().enumerate() {
         cols[c].push(v);
     }
-    order(&mut cols, &column, edges, n);
-    let comp = components(n, edges);
+    order(&mut cols, &column, &segments, total);
+    let comp = components(total, &segments);
+    let grouped = groups.len() == n && n > 0;
+    // Blocks packed and stacked separately: components, or (group, component) pairs.
+    let (block, block_group) = if grouped {
+        let mut group = vec![0; total];
+        group[..n].copy_from_slice(groups);
+        for (e, chain) in edges.iter().zip(&chains) {
+            for (i, &d) in chain.iter().enumerate() {
+                group[d] = if 2 * i < chain.len() { groups[e.from] } else { groups[e.to] };
+            }
+        }
+        let mut keys: Vec<(usize, usize)> = (0..total).map(|v| (group[v], comp[v])).collect();
+        keys.sort_unstable();
+        keys.dedup();
+        let block = (0..total).map(|v| keys.binary_search(&(group[v], comp[v])).unwrap()).collect();
+        (block, keys.iter().map(|k| k.0).collect())
+    } else {
+        let ncomp = comp.iter().max().map_or(0, |m| m + 1);
+        (comp, vec![0; ncomp])
+    };
     for col in &mut cols {
-        col.sort_by_key(|&v| comp[v]);
+        col.sort_by_key(|&v| block[v]);
     }
-    let pos = coordinates(&cols, &column, edges, &comp);
-    place(&cols, &pos, &comp, n)
+    let size: Vec<f64> = (0..total).map(|v| if v < n { 1.0 } else { DUMMY_SIZE }).collect();
+    let pos = coordinates(&cols, &column, &segments, &block, &size, n);
+    let crossings = crossings_of(&pos, &column, &segments);
+    let (all, bands) = place(&cols, &pos, &block, &block_group, &size, n);
+    let groups = if grouped {
+        let ngroups = groups.iter().max().map_or(0, |m| m + 1);
+        (0..ngroups).map(|g| bands.get(&g).copied()).collect()
+    } else {
+        Vec::new()
+    };
+    let waypoints = chains
+        .iter()
+        .map(|chain| {
+            chain
+                .iter()
+                .flat_map(|&d| {
+                    let p = all[d];
+                    let y = p.y + NODE_HEIGHT / 2.0;
+                    [[p.x, y], [p.x + NODE_WIDTH, y]]
+                })
+                .collect()
+        })
+        .collect();
+    let mut nodes = all;
+    nodes.truncate(n);
+    Layout { nodes, waypoints, crossings, groups }
+}
+
+/// Split edges spanning several columns into unit segments through dummy nodes
+/// (indices `n..`). Returns the column of every node, the segments (plus edges that
+/// are not split: same column or right to left) and each edge's dummies in order.
+fn expand(column: &[usize], edges: &[LayoutEdge]) -> (Vec<usize>, Vec<LayoutEdge>, Vec<Vec<usize>>) {
+    let mut column = column.to_vec();
+    let mut segments = Vec::with_capacity(edges.len());
+    let mut chains = Vec::with_capacity(edges.len());
+    for e in edges {
+        let (cf, ct) = (column[e.from], column[e.to]);
+        let mut chain = Vec::new();
+        if ct > cf + 1 {
+            let mut prev = e.from;
+            for c in cf + 1..ct {
+                let d = column.len();
+                column.push(c);
+                segments.push(LayoutEdge { from: prev, to: d, alternative: e.alternative });
+                chain.push(d);
+                prev = d;
+            }
+            segments.push(LayoutEdge { from: prev, to: e.to, alternative: e.alternative });
+        } else {
+            segments.push(*e);
+        }
+        chains.push(chain);
+    }
+    (column, segments, chains)
 }
 
 /// Placement with columns but no reordering (baseline for crossing tests).
@@ -84,7 +200,7 @@ pub fn unordered(n: usize, edges: &[LayoutEdge]) -> Vec<Placement> {
         cols[c].push(v);
     }
     let pos = centered_positions(&cols, n);
-    place(&cols, &pos, &vec![0; n], n)
+    place(&cols, &pos, &vec![0; n], &[0], &vec![1.0; n], n).0
 }
 
 /// Previous placement: barycenter order, each column packed and centered (comparison baseline).
@@ -97,7 +213,7 @@ pub fn packed(n: usize, edges: &[LayoutEdge]) -> Vec<Placement> {
     }
     order(&mut cols, &column, edges, n);
     let pos = centered_positions(&cols, n);
-    place(&cols, &pos, &vec![0; n], n)
+    place(&cols, &pos, &vec![0; n], &[0], &vec![1.0; n], n).0
 }
 
 /// Minimum column per node from its log research cost: the 2nd–98th percentile range of
@@ -266,16 +382,27 @@ enum Side {
 }
 
 /// Continuous vertical centers in rows (`NODE_HEIGHT + GAP_Y`), keeping each column's order.
-fn coordinates(cols: &[Vec<usize>], column: &[usize], edges: &[LayoutEdge], comp: &[usize]) -> Vec<f64> {
+/// `size` is each node's height in rows; nodes from `real` on are edge dummies.
+fn coordinates(
+    cols: &[Vec<usize>],
+    column: &[usize],
+    edges: &[LayoutEdge],
+    comp: &[usize],
+    size: &[f64],
+    real: usize,
+) -> Vec<f64> {
     let n = column.len();
     let mut neighbors: Vec<Vec<(usize, f64)>> = vec![Vec::new(); n];
     for e in edges.iter().filter(|e| column[e.from] != column[e.to]) {
-        let w = if e.alternative { ALT_WEIGHT } else { 1.0 };
+        let dummies = (e.from >= real) as usize + (e.to >= real) as usize;
+        let w = if e.alternative { ALT_WEIGHT } else { 1.0 }
+            * [1.0, DUMMY_WEIGHT, DUMMY_DUMMY_WEIGHT][dummies];
         neighbors[e.from].push((e.to, w));
         neighbors[e.to].push((e.from, w));
     }
     let mut pos = centered_positions(cols, n);
     let mut targets: Vec<(f64, f64)> = Vec::new();
+    let mut sizes: Vec<f64> = Vec::new();
     let mut pass = |pos: &mut Vec<f64>, c: usize, side: Side| {
         targets.clear();
         targets.extend(cols[c].iter().map(|&v| {
@@ -286,10 +413,12 @@ fn coordinates(cols: &[Vec<usize>], column: &[usize], edges: &[LayoutEdge], comp
             if weight > 0.0 { (sum / weight, weight) } else { (pos[v], STAY_WEIGHT) }
         }));
         let col = &cols[c];
+        sizes.clear();
+        sizes.extend(col.iter().map(|&v| size[v]));
         let mut start = 0;
         while start < col.len() {
             let end = start + col[start..].iter().take_while(|&&v| comp[v] == comp[col[start]]).count();
-            for (&v, y) in col[start..end].iter().zip(pack(&targets[start..end])) {
+            for (&v, y) in col[start..end].iter().zip(pack(&targets[start..end], &sizes[start..end])) {
                 pos[v] = y;
             }
             start = end;
@@ -310,13 +439,22 @@ fn coordinates(cols: &[Vec<usize>], column: &[usize], edges: &[LayoutEdge], comp
     pos
 }
 
-/// Order-preserving positions at distance >= 1 minimizing the weighted squared distance
-/// to `(target, weight)` (isotonic regression on `target - i` by pool adjacent violators).
-fn pack(targets: &[(f64, f64)]) -> impl Iterator<Item = f64> {
+/// Order-preserving centers, neighbors at least half their summed `sizes` apart, minimizing
+/// the weighted squared distance to `(target, weight)` (isotonic regression on
+/// `target - offset` by pool adjacent violators, `offset` = packed position from 0).
+fn pack(targets: &[(f64, f64)], sizes: &[f64]) -> impl Iterator<Item = f64> + use<> {
+    let mut offsets = Vec::with_capacity(targets.len());
+    let mut o = 0.0;
+    for (i, s) in sizes.iter().enumerate() {
+        if i > 0 {
+            o += (sizes[i - 1] + s) / 2.0;
+        }
+        offsets.push(o);
+    }
     // Blocks of (weighted sum, weight, length).
     let mut blocks: Vec<(f64, f64, usize)> = Vec::with_capacity(targets.len());
-    for (i, &(t, w)) in targets.iter().enumerate() {
-        let mut b = (w * (t - i as f64), w, 1);
+    for (&(t, w), &o) in targets.iter().zip(&offsets) {
+        let mut b = (w * (t - o), w, 1);
         while let Some(&last) = blocks.last() {
             if last.0 / last.1 < b.0 / b.1 {
                 break;
@@ -326,31 +464,54 @@ fn pack(targets: &[(f64, f64)]) -> impl Iterator<Item = f64> {
         }
         blocks.push(b);
     }
-    blocks.into_iter().flat_map(|(s, w, len)| std::iter::repeat_n(s / w, len)).enumerate().map(|(i, y)| y + i as f64)
+    blocks.into_iter().flat_map(|(s, w, len)| std::iter::repeat_n(s / w, len)).zip(offsets).map(|(y, o)| y + o)
 }
 
-/// Grid positions from row centers; components are stacked top to bottom.
-fn place(cols: &[Vec<usize>], pos: &[f64], comp: &[usize], n: usize) -> Vec<Placement> {
+/// Grid positions from row centers (`y` = top of a card centered there); blocks
+/// (components) are stacked top to bottom, `GROUP_GAP` apart where `block_group` changes.
+/// Covers all nodes of `cols`; `row` counts the first `real` only. Also returns each
+/// group's `(top, bottom)` in px.
+fn place(
+    cols: &[Vec<usize>],
+    pos: &[f64],
+    comp: &[usize],
+    block_group: &[usize],
+    size: &[f64],
+    real: usize,
+) -> (Vec<Placement>, std::collections::BTreeMap<usize, (f64, f64)>) {
+    let total = pos.len();
     let ncomp = comp.iter().max().map_or(0, |m| m + 1);
+    // Per component: (top, bottom) in rows (cards span 1 including the gap), node count.
     let mut span = vec![(f64::INFINITY, f64::NEG_INFINITY, 0usize); ncomp];
-    for v in 0..n {
+    for v in 0..total {
         let s = &mut span[comp[v]];
-        *s = (s.0.min(pos[v]), s.1.max(pos[v]), s.2 + 1);
+        *s = (s.0.min(pos[v] - size[v] / 2.0), s.1.max(pos[v] + size[v] / 2.0), s.2 + 1);
     }
     let row = NODE_HEIGHT + GAP_Y;
     let mut offset = vec![0.0; ncomp];
+    let mut bands = std::collections::BTreeMap::new();
     let mut top = 0.0;
-    for (i, &(lo, hi, size)) in span.iter().enumerate() {
-        // Isolated nodes (sorted last) form a plain column.
-        if i > 0 && !(size == 1 && span[i - 1].2 == 1) {
+    for (i, &(lo, hi, count)) in span.iter().enumerate() {
+        if count == 0 {
+            continue;
+        }
+        let group = block_group[i];
+        let new_group = i > 0 && block_group[i - 1] != group;
+        if new_group {
+            top += GROUP_GAP - GAP_Y;
+        } else if i > 0 && !(count == 1 && span[i - 1].2 == 1) {
+            // Isolated nodes (sorted last) form a plain column.
             top += COMPONENT_GAP - GAP_Y;
         }
-        offset[i] = top - lo * row;
-        top += (hi - lo) * row + row;
+        offset[i] = top - (lo + 0.5) * row;
+        // Card extents: half a gap inside the row extent on each side.
+        let band = bands.entry(group).or_insert((top, top));
+        band.1 = top + (hi - lo) * row - GAP_Y;
+        top += (hi - lo) * row;
     }
-    let mut out = vec![Placement { column: 0, row: 0, x: 0.0, y: 0.0 }; n];
+    let mut out = vec![Placement { column: 0, row: 0, x: 0.0, y: 0.0 }; total];
     for (c, col) in cols.iter().enumerate() {
-        for (r, &v) in col.iter().enumerate() {
+        for (r, &v) in col.iter().filter(|&&v| v < real).chain(col.iter().filter(|&&v| v >= real)).enumerate() {
             out[v] = Placement {
                 column: c,
                 row: r,
@@ -359,7 +520,7 @@ fn place(cols: &[Vec<usize>], pos: &[f64], comp: &[usize], n: usize) -> Vec<Plac
             };
         }
     }
-    out
+    (out, bands)
 }
 
 /// Number of crossings of the edges drawn as straight lines between node centers.
@@ -509,9 +670,68 @@ mod tests {
     #[test]
     fn columns_never_overlap() {
         let edges = random_dag(400, 800, 3);
-        let p = layout(400, &edges);
-        assert_no_overlap(&p);
-        assert!(p.iter().all(|q| q.y >= 0.0) && p.iter().any(|q| q.y == 0.0));
+        let r = route(400, &edges, &[]);
+        assert_no_overlap(&r.nodes);
+        // Row extents (cards: card plus half a gap each side) start at -GAP_Y / 2, so a
+        // topmost card is at 0; a dummy may be topmost instead.
+        let half_dummy = DUMMY_SIZE * (NODE_HEIGHT + GAP_Y) / 2.0;
+        let tops = r
+            .nodes
+            .iter()
+            .map(|q| q.y - GAP_Y / 2.0)
+            .chain(r.waypoints.iter().flatten().map(|w| w[1] - half_dummy));
+        let top = tops.fold(f64::INFINITY, f64::min);
+        assert!((top + GAP_Y / 2.0).abs() < 1e-6, "{top}");
+        assert!(r.nodes.iter().all(|q| q.y >= 0.0));
+    }
+
+    #[test]
+    fn long_edges_get_waypoints_between_cards() {
+        let edges = random_dag(400, 800, 5);
+        let r = route(400, &edges, &[]);
+        let row = NODE_HEIGHT + GAP_Y;
+        for (e, points) in edges.iter().zip(&r.waypoints) {
+            let (a, b) = (r.nodes[e.from], r.nodes[e.to]);
+            let span = b.column.saturating_sub(a.column);
+            assert_eq!(points.len(), if span > 1 { 2 * (span - 1) } else { 0 }, "{e:?}");
+            assert!(points.windows(2).all(|w| w[0][0] < w[1][0]), "{points:?}");
+            for w in points {
+                // A waypoint never runs through a card of its column.
+                let clear = (row * (1.0 + DUMMY_SIZE) / 2.0) - 1e-6;
+                for q in r.nodes.iter().filter(|q| q.x <= w[0] && w[0] < q.x + NODE_WIDTH) {
+                    assert!((q.y + NODE_HEIGHT / 2.0 - w[1]).abs() >= clear, "{w:?} through {q:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn groups_form_disjoint_bands_in_order() {
+        let n = 300;
+        let edges = random_dag(n, 600, 9);
+        let groups: Vec<usize> = (0..n).map(|v| [2, 0, 3][v % 3]).collect();
+        let r = route_grouped(n, &edges, &[], &groups);
+        assert_no_overlap(&r.nodes);
+        assert_eq!(r.groups.len(), 4);
+        assert!(r.groups[1].is_none());
+        let band = |g: usize| r.groups[g].unwrap();
+        for (v, q) in r.nodes.iter().enumerate() {
+            let (top, bottom) = band(groups[v]);
+            assert!(q.y >= top - 1e-6 && q.y + NODE_HEIGHT <= bottom + 1e-6, "{v} {q:?} not in {top}..{bottom}");
+        }
+        assert!(band(0).1 + GROUP_GAP - GAP_Y <= band(2).0 + 1e-6);
+        assert!(band(2).1 + GROUP_GAP - GAP_Y <= band(3).0 + 1e-6);
+        assert_eq!(route_grouped(n, &edges, &[], &[]), route(n, &edges, &[]));
+    }
+
+    #[test]
+    fn routing_keeps_crossings_low() {
+        let n = 500;
+        let edges = random_dag(n, 1000, 42);
+        let r = route(n, &edges, &[]);
+        let straight = count_crossings(&unordered(n, &edges), &edges);
+        eprintln!("routed crossings {} (input order, straight: {straight})", r.crossings);
+        assert!(r.crossings < straight);
     }
 
     #[test]
@@ -542,9 +762,12 @@ mod tests {
 
     #[test]
     fn pack_preserves_order_and_targets() {
-        assert_eq!(pack(&[(0.0, 1.0), (5.0, 1.0)]).collect::<Vec<_>>(), vec![0.0, 5.0]);
-        assert_eq!(pack(&[(2.0, 1.0), (2.0, 1.0)]).collect::<Vec<_>>(), vec![1.5, 2.5]);
-        assert_eq!(pack(&[(3.0, 3.0), (0.0, 1.0)]).collect::<Vec<_>>(), vec![2.0, 3.0]);
+        let ones = [1.0, 1.0];
+        assert_eq!(pack(&[(0.0, 1.0), (5.0, 1.0)], &ones).collect::<Vec<_>>(), vec![0.0, 5.0]);
+        assert_eq!(pack(&[(2.0, 1.0), (2.0, 1.0)], &ones).collect::<Vec<_>>(), vec![1.5, 2.5]);
+        assert_eq!(pack(&[(3.0, 3.0), (0.0, 1.0)], &ones).collect::<Vec<_>>(), vec![2.0, 3.0]);
+        // A dummy (0.2) next to a card (1) needs only 0.6 rows.
+        assert_eq!(pack(&[(2.0, 1.0), (2.0, 1.0)], &[1.0, 0.2]).collect::<Vec<_>>(), vec![1.7, 2.3]);
     }
 
     #[test]

@@ -104,6 +104,7 @@ pub struct ResearchGraph {
     depth: Vec<usize>,
     cyclic: BTreeSet<EntityId>,
     obtainable: OnceLock<BTreeSet<EntityId>>,
+    redundant: OnceLock<BTreeSet<Edge>>,
 }
 
 const IGNORED_NAMES: [&str; 2] = ["", "PLACEHOLDER"];
@@ -322,12 +323,7 @@ impl ResearchGraph {
 
     /// Everything that (transitively) builds on `id`, including `id`.
     pub fn descendants(&self, id: EntityId, t: Traversal) -> Subgraph {
-        self.walk(id, t, |g, node| {
-            g.dependents(node)
-                .iter()
-                .map(|d| (d.node, Edge { from: node, to: d.node, alternative: d.alternative }))
-                .collect()
-        })
+        self.walk(id, t, |g, node| g.dependents(node).iter().map(|d| (d.node, Edge { from: node, to: d.node, alternative: d.alternative })).collect())
     }
 
     fn walk(&self, start: EntityId, t: Traversal, next: impl Fn(&Self, EntityId) -> Vec<(EntityId, Edge)>) -> Subgraph {
@@ -363,6 +359,50 @@ impl ResearchGraph {
             }
         }
         sub
+    }
+
+    /// Edges implied by a singleton requirement in another group. Alternatives are never redundant.
+    pub fn redundant_edges(&self) -> &BTreeSet<Edge> {
+        self.redundant.get_or_init(|| {
+            let mandatory: Vec<Vec<usize>> = self
+                .requirements
+                .iter()
+                .map(|groups| groups.iter().filter(|g| g.options.len() == 1).map(|g| self.index[&g.options[0]]).collect())
+                .collect();
+            // Separate bounded traversals keep ancestor sets complete even across cycles.
+            let ancestors: Vec<BTreeSet<usize>> = (0..self.nodes.len())
+                .map(|root| {
+                    let mut seen = BTreeSet::new();
+                    let mut stack = mandatory[root].clone();
+                    while let Some(i) = stack.pop() {
+                        if seen.insert(i) {
+                            stack.extend(&mandatory[i]);
+                        }
+                    }
+                    seen
+                })
+                .collect();
+            let mut redundant = BTreeSet::new();
+            for (i, groups) in self.requirements.iter().enumerate() {
+                for (k, group) in groups.iter().enumerate() {
+                    for (a, alternative) in group.options_with_kind() {
+                        if alternative {
+                            continue;
+                        }
+                        if groups.iter().enumerate().any(|(j, other)| {
+                            j != k
+                                && other.options.len() == 1
+                                && other.options[0] != a
+                                && ancestors[self.index[&other.options[0]]].contains(&self.index[&a])
+                        }) {
+                            redundant.insert(Edge { from: a, to: self.nodes[i], alternative: false });
+                        }
+                    }
+                }
+            }
+            // Repeated singleton requirements collapse to the same Edge; retain that edge.
+            redundant
+        })
     }
 
     /// Whether `id` can ever be researched in this scope: every group has an option
@@ -419,15 +459,7 @@ mod tests {
 
     fn ds_with(techs: Vec<Value>, projects: Vec<Value>) -> crate::Dataset {
         let factions = vec![json!({"dataName": "F1"}), json!({"dataName": "F2"})];
-        dataset(
-            &[
-                (META, vec![scenario("S", 1, &[], None)]),
-                (model::TECH, techs),
-                (model::PROJECT, projects),
-                (model::FACTION, factions),
-            ],
-            json!({}),
-        )
+        dataset(&[(META, vec![scenario("S", 1, &[], None)]), (model::TECH, techs), (model::PROJECT, projects), (model::FACTION, factions)], json!({}))
     }
 
     #[test]
@@ -525,6 +557,65 @@ mod tests {
         assert!(!g.is_obtainable(t("C1")));
         assert!(!g.is_obtainable(t("C2")));
         assert_eq!(g.obtainable_set().len(), 4);
+    }
+
+    #[test]
+    fn real_data_redundant_edges() {
+        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../data");
+        let Ok(root) = crate::DataRoot::open(path) else {
+            eprintln!("no extracted data, skipping");
+            return;
+        };
+        let ds = root.latest().expect("latest build loads");
+        let view = ds.overview();
+        let g = view.research_graph();
+        let start = std::time::Instant::now();
+        let redundant = g.redundant_edges();
+        eprintln!("real data: {} redundant edges in {:?}", redundant.len(), start.elapsed());
+        assert!(!redundant.is_empty());
+        assert!(redundant.iter().all(|e| !e.alternative));
+    }
+
+    #[test]
+    fn redundant_edges_follow_only_mandatory_requirements() {
+        for alternatives in [false, true] {
+            let c = if alternatives { json!({"dataName": "C", "prereqs": ["A", "B"], "altPrereq1": "D"}) } else { tech("C", &["A", "B"]) };
+            let ds = ds_with(vec![tech("A", &[]), tech("B", &["A"]), c, tech("D", &[])], vec![]);
+            let view = ds.overview();
+            let g = view.research_graph();
+            let edge = Edge { from: id(&ds, model::TECH, "A"), to: id(&ds, model::TECH, "C"), alternative: false };
+            assert_eq!(g.redundant_edges().contains(&edge), !alternatives);
+            assert_eq!(g.redundant_edges().len(), usize::from(!alternatives));
+        }
+    }
+
+    #[test]
+    fn alternative_edges_are_never_redundant() {
+        let ds = ds_with(
+            vec![tech("A", &[]), tech("B", &["A"]), tech("D", &[]), json!({"dataName": "C", "prereqs": ["D", "B"], "altPrereq0": "A"})],
+            vec![],
+        );
+        let view = ds.overview();
+        assert!(view.research_graph().redundant_edges().is_empty());
+    }
+
+    #[test]
+    fn redundant_edges_terminate_on_cycles() {
+        let ds = ds_with(vec![tech("A", &["B"]), tech("B", &["A"]), tech("C", &["A", "B"])], vec![]);
+        let view = ds.overview();
+        let g = view.research_graph();
+        let c = id(&ds, model::TECH, "C");
+        assert_eq!(g.redundant_edges().len(), 2);
+        assert!(g.redundant_edges().iter().all(|e| e.to == c));
+    }
+
+    #[test]
+    fn duplicate_singletons_keep_the_collapsed_edge() {
+        let ds = ds_with(vec![tech("A", &[]), tech("C", &["A", "A"])], vec![]);
+        let view = ds.overview();
+        let g = view.research_graph();
+        assert_eq!(g.full().edges.len(), 1);
+        assert!(g.redundant_edges().is_empty());
     }
 
     #[test]

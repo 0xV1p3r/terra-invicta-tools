@@ -106,6 +106,26 @@ pub struct SubtreeArgs {
     pub max_depth: Option<usize>,
 }
 
+/// Layout of the full tree.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FullLayout {
+    /// One layered drawing.
+    #[default]
+    Layered,
+    /// One horizontal band per research category.
+    Bands,
+}
+
+/// Vertical extent of a category band (cards and edge routes), in px.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Band {
+    pub category: String,
+    pub top: f64,
+    pub bottom: f64,
+}
+
 /// A laid-out graph, ready to render. Positions are top-left corners in pixels for
 /// nodes of `nodeWidth` × `nodeHeight`; columns run left → right (prereqs first, cheaper first).
 #[derive(Debug, Clone, Serialize)]
@@ -119,6 +139,21 @@ pub struct TreeGraph {
     pub root: Option<String>,
     /// Sum of research cost over all nodes (subtrees: everything needed).
     pub total_cost: f64,
+    /// Category bands, top to bottom (`FullLayout::Bands` only).
+    pub bands: Vec<Band>,
+    /// Focus view: requirement groups satisfied by any one of several cards (left column).
+    pub any_of: Vec<Span>,
+}
+
+/// Vertical extent of a group of cards in the column at `x`, in px.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Span {
+    pub x: f64,
+    pub top: f64,
+    pub bottom: f64,
+    /// Nesting level of the bracket (0 next to the cards); overlapping groups alternate.
+    pub level: usize,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -166,6 +201,10 @@ pub struct TreeEdge {
     pub to: String,
     /// Via `altPrereqN` (render dashed).
     pub alternative: bool,
+    /// Implied by another chain of listed prereqs: the UI may hide it
+    pub redundant: bool,
+    /// Points the edge passes between its endpoints, left to right (empty = direct curve).
+    pub points: Vec<[f64; 2]>,
 }
 
 #[derive(Debug, Clone, Serialize)]

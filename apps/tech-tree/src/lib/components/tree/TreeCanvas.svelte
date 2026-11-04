@@ -6,46 +6,65 @@
 	import { mode } from 'mode-watcher';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import Maximize from '@lucide/svelte/icons/maximize';
+	import ScanSearch from '@lucide/svelte/icons/scan-search';
 	import Minus from '@lucide/svelte/icons/minus';
 	import Plus from '@lucide/svelte/icons/plus';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
-	import { api, type EntityKey, type TechCategory, type TreeGraph } from '$lib/api';
+	import {
+		api,
+		matchesFilter,
+		type EntityKey,
+		type FullLayout,
+		type TechCategory,
+		type TreeFilter,
+		type TreeGraph
+	} from '$lib/api';
 	import { CATEGORIES, CATEGORY_ORDER } from '$lib/categories';
 	import { Button } from '$lib/components/ui/button/index.js';
+	import { settings } from '$lib/settings.svelte';
 	import { app } from '$lib/state.svelte';
 	import { Camera } from './camera';
 	import { FLAGS } from './flags';
 	import HoverCard from './HoverCard.svelte';
 	import MiniMap from './MiniMap.svelte';
 	import { DETAIL_ZOOM, readTheme, render, type Theme } from './render';
-	import { buildScene, nodeAt, type Scene, type SceneNode } from './scene';
-	import SubtreeBar from './SubtreeBar.svelte';
+	import { buildScene, nodeAt, type SceneNode } from './scene';
+	import ViewBar from './ViewBar.svelte';
+
+	const NO_FILTER: TreeFilter = { techs: true, projects: true, categories: [], properties: [] };
 
 	/** Everything the current view depends on; a loaded graph is only "current" for its key. */
 	const request = $derived(
-		app.mode === 'subtree' && app.subtreeRoot
+		app.view.kind === 'subtree'
 			? {
 					kind: 'subtree' as const,
 					scope: $state.snapshot(app.scope),
 					args: {
-						root: app.subtreeRoot,
-						direction: app.subtreeDirection,
-						alternatives: app.subtreeAlternatives,
+						root: app.view.root,
+						direction: app.view.direction,
+						alternatives: app.view.alternatives,
 						maxDepth: null
 					}
 				}
-			: {
-					kind: 'full' as const,
-					scope: $state.snapshot(app.scope),
-					filter: {
-						techs: app.showTechs,
-						projects: app.showProjects,
-						categories: $state.snapshot(app.categories),
-						properties: $state.snapshot(app.properties)
+			: app.view.kind === 'focus'
+				? { kind: 'focus' as const, scope: $state.snapshot(app.scope), root: app.view.root }
+				: {
+						kind: 'full' as const,
+						layout: app.view.layout,
+						scope: $state.snapshot(app.scope),
+						// Highlight mode loads everything and dims non-matches (layout stays put).
+						filter: settings.filterMode === 'highlight' ? NO_FILTER : app.filter
 					}
-				}
 	);
 	const requestKey = $derived(JSON.stringify(request));
+
+	/** Highlight mode with active filters: keys of the matching nodes (others are dimmed). */
+	const matches = $derived.by(() => {
+		if (settings.filterMode !== 'highlight' || app.mode !== 'full' || !app.filtersActive)
+			return null;
+		const filter = app.filter;
+		return new Set((graph?.nodes ?? []).filter((n) => matchesFilter(n, filter)).map((n) => n.key));
+	});
 
 	let loaded = $state.raw<{ key: string; graph: TreeGraph } | null>(null);
 	let loading = $state(false);
@@ -53,10 +72,12 @@
 
 	const graph = $derived(loaded?.graph ?? null);
 	const ready = $derived(loaded?.key === requestKey);
-	const scene = $derived(graph ? buildScene(graph) : null);
+	const scene = $derived(
+		graph ? buildScene(graph, { hideRedundant: settings.hideRedundantLinks }) : null
+	);
 
-	// The full tree is large; keep the last one to make "Back to full tree" instant.
-	let fullCache: { key: string; graph: TreeGraph } | null = null;
+	// The full tree is large; keep the last one per layout to make going back instant.
+	const fullCache: Partial<Record<FullLayout, { key: string; graph: TreeGraph }>> = {};
 	let latest = 0;
 
 	function show(key: string, g: TreeGraph) {
@@ -67,11 +88,12 @@
 	$effect(() => {
 		const key = requestKey;
 		const req = request;
-		if (req.kind === 'full' && fullCache?.key === key) {
+		const cached = req.kind === 'full' ? fullCache[req.layout] : undefined;
+		if (cached?.key === key) {
 			latest++;
 			loading = false;
 			error = null;
-			show(key, fullCache.graph);
+			show(key, cached.graph);
 			return;
 		}
 		const id = ++latest;
@@ -79,12 +101,14 @@
 		error = null;
 		const promise =
 			req.kind === 'full'
-				? api.getTree(req.scope, req.filter)
-				: api.getSubtree(req.scope, req.args);
+				? api.getTree(req.scope, req.filter, req.layout)
+				: req.kind === 'focus'
+					? api.getFocus(req.scope, req.root)
+					: api.getSubtree(req.scope, req.args);
 		promise.then(
 			(g) => {
 				if (id !== latest) return;
-				if (req.kind === 'full') fullCache = { key, graph: g };
+				if (req.kind === 'full') fullCache[req.layout] = { key, graph: g };
 				show(key, g);
 				loading = false;
 			},
@@ -137,10 +161,12 @@
 		render(ctx, dpr, camera, scene, {
 			selected: app.selected,
 			hovered: dragging ? null : hovered,
-			root: app.mode === 'subtree' ? (graph?.root ?? app.subtreeRoot) : null,
+			root: app.root ? (graph?.root ?? app.root) : null,
 			theme,
 			icons,
-			glyphs
+			glyphs,
+			matches,
+			overview: settings.overviewLabels
 		});
 		updateBackground();
 		updateHoverAnchor();
@@ -170,7 +196,17 @@
 
 	// Redraw on anything the picture depends on (camera changes subscribe directly).
 	$effect(() => {
-		void [scene, app.selected, app.mode, app.subtreeRoot, hovered, theme, dpr, assetVersion];
+		void [
+			scene,
+			app.selected,
+			app.view,
+			hovered,
+			theme,
+			dpr,
+			assetVersion,
+			matches,
+			settings.overviewLabels
+		];
 		requestRender();
 	});
 
@@ -198,7 +234,8 @@
 
 	// --- fitting and focusing ------------------------------------------------------
 
-	let fitted: Scene | null = null;
+	/** Graph the camera was last fitted to (scenes are rebuilt for display settings too). */
+	let fitted: TreeGraph | null = null;
 
 	$effect(() => {
 		const s = scene;
@@ -206,9 +243,9 @@
 		if (!s || !ready || width <= 0 || height <= 0) return;
 		untrack(() => {
 			const target = focus ? s.byKey.get(focus) : undefined;
-			if (s !== fitted && (!target || focus === s.graph.root)) {
+			if (s.graph !== fitted && (!target || focus === s.graph.root)) {
 				const first = fitted === null;
-				fitted = s;
+				fitted = s.graph;
 				if (s.nodes.length) camera.animateTo(camera.fitted(s.bounds), first ? 0 : 300);
 				// A freshly opened subtree is shown whole rather than centered on its root.
 				if (target && focus === s.graph.root) {
@@ -218,7 +255,7 @@
 			}
 			if (!focus) return;
 			if (target) {
-				fitted = s;
+				fitted = s.graph;
 				centerOn(target, Math.max(camera.zoom, 0.9));
 				app.focus = null;
 			} else if (app.mode === 'full' && app.filtersActive) {
@@ -240,6 +277,19 @@
 
 	function fitAll() {
 		if (scene?.nodes.length) camera.animateTo(camera.fitted(scene.bounds));
+	}
+
+	/** Fit the camera to the highlighted filter matches. */
+	function fitMatches() {
+		if (!scene || !matches?.size) return;
+		let [x1, y1, x2, y2] = [Infinity, Infinity, -Infinity, -Infinity];
+		for (const key of matches) {
+			const n = scene.byKey.get(key);
+			if (!n) continue;
+			[x1, y1] = [Math.min(x1, n.x), Math.min(y1, n.y)];
+			[x2, y2] = [Math.max(x2, n.x + scene.width), Math.max(y2, n.y + scene.height)];
+		}
+		camera.animateTo(camera.fitted({ x: x1, y: y1, width: x2 - x1, height: y2 - y1 }));
 	}
 
 	function zoomBy(factor: number) {
@@ -305,13 +355,14 @@
 		dragging = false;
 		if (!clicked) return;
 		const n = hit(e);
-		if (n) select(n.key);
+		if (n && app.view.kind === 'focus' && n.key !== app.view.root) app.openFocus(n.key);
+		else if (n) select(n.key);
 		else app.selected = null;
 	}
 
 	function ondblclick(e: MouseEvent) {
 		const n = hit(e);
-		if (n) app.openSubtree(n.key, 'up');
+		if (n && app.view.kind !== 'focus') app.openSubtree(n.key, 'up');
 	}
 
 	function onwheel(e: WheelEvent) {
@@ -386,6 +437,7 @@
 	};
 
 	function onkeydown(e: KeyboardEvent) {
+		if (e.altKey) return; // Alt+arrows: history (window handler)
 		const current = app.selected ? scene?.byKey.get(app.selected) : undefined;
 		const arrow = ARROWS[e.key];
 		if (arrow) {
@@ -397,7 +449,8 @@
 			}
 		} else if ((e.key === 'Enter' || e.key === ' ') && current) {
 			e.preventDefault();
-			if (e.key === 'Enter' && e.shiftKey) app.openSubtree(current.key, 'up');
+			if (e.key === 'Enter' && app.view.kind === 'focus') app.openFocus(current.key);
+			else if (e.key === 'Enter' && e.shiftKey) app.openSubtree(current.key, 'up');
 			else select(current.key);
 		} else if (e.key === 'Escape') {
 			app.selected = null;
@@ -408,6 +461,21 @@
 		} else if (e.key === '0') {
 			fitAll();
 		}
+	}
+
+	/** Alt+←/→ and the mouse back/forward buttons walk the view history. */
+	function onwindowkeydown(e: KeyboardEvent) {
+		if (!e.altKey || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
+		const t = e.target as HTMLElement | null;
+		if (t?.closest('input, textarea, [contenteditable="true"]')) return;
+		e.preventDefault();
+		if (e.key === 'ArrowLeft') app.goBack();
+		else app.goForward();
+	}
+
+	function onwindowmouseup(e: MouseEvent) {
+		if (e.button === 3) app.goBack();
+		else if (e.button === 4) app.goForward();
 	}
 
 	const announcement = $derived.by(() => {
@@ -436,10 +504,10 @@
 	}
 </script>
 
+<svelte:window onkeydown={onwindowkeydown} onmouseup={onwindowmouseup} />
+
 <div class="relative flex h-full min-h-0 flex-col">
-	{#if app.mode === 'subtree'}
-		<SubtreeBar graph={ready ? graph : null} />
-	{/if}
+	<ViewBar graph={ready ? graph : null} />
 	<div
 		bind:this={container}
 		class="tree-surface relative min-h-0 flex-1 overflow-hidden bg-background"
@@ -478,7 +546,8 @@
 		</div>
 		<p id="research-tree-keyboard-help" class="sr-only">
 			Arrow keys move the selection. Enter or Space shows details, Shift+Enter opens the
-			requirements subtree. Plus and minus zoom, 0 fits the tree.
+			requirements subtree (in the focus view, Enter makes the selection the focus). Alt+Left and
+			Alt+Right go back and forward between views. Plus and minus zoom, 0 fits the tree.
 		</p>
 		<p class="sr-only" aria-live="polite">{announcement}</p>
 
@@ -497,6 +566,19 @@
 				<Maximize />
 			</Button>
 		</div>
+
+		{#if matches}
+			<div
+				class="absolute top-3 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full border bg-card py-1 pr-1 pl-3 text-sm shadow"
+			>
+				<span class="text-muted-foreground">{matches.size} matching</span>
+				{#if matches.size}
+					<Button variant="ghost" size="sm" class="h-7 rounded-full" onclick={fitMatches}>
+						<ScanSearch /> Zoom to matches
+					</Button>
+				{/if}
+			</div>
+		{/if}
 
 		{#if scene?.nodes.length}
 			<MiniMap {scene} {camera} />

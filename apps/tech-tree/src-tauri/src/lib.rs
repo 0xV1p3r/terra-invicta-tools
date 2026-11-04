@@ -46,13 +46,23 @@ async fn get_meta(state: State<'_, AppState>) -> CmdResult<Meta> {
 }
 
 #[tauri::command]
-async fn get_tree(state: State<'_, AppState>, scope: ScopeArgs, filter: TreeFilter) -> CmdResult<TreeGraph> {
-    run_blocking(state, move |b| commands::get_tree(b, &scope, &filter)).await
+async fn get_tree(
+    state: State<'_, AppState>,
+    scope: ScopeArgs,
+    filter: TreeFilter,
+    layout: Option<FullLayout>,
+) -> CmdResult<TreeGraph> {
+    run_blocking(state, move |b| commands::get_tree(b, &scope, &filter, layout.unwrap_or_default())).await
 }
 
 #[tauri::command]
 async fn get_subtree(state: State<'_, AppState>, scope: ScopeArgs, args: SubtreeArgs) -> CmdResult<TreeGraph> {
     run_blocking(state, move |b| commands::get_subtree(b, &scope, &args)).await
+}
+
+#[tauri::command]
+async fn get_focus(state: State<'_, AppState>, scope: ScopeArgs, root: String) -> CmdResult<TreeGraph> {
+    run_blocking(state, move |b| commands::get_focus(b, &scope, &root)).await
 }
 
 #[tauri::command]
@@ -85,7 +95,7 @@ pub fn run() {
                 responder.respond(assets::respond(assets_dir, &request));
             });
         })
-        .invoke_handler(tauri::generate_handler![get_meta, get_tree, get_subtree, get_properties, get_entity, search])
+        .invoke_handler(tauri::generate_handler![get_meta, get_tree, get_subtree, get_focus, get_properties, get_entity, search])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

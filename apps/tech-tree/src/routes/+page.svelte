@@ -7,6 +7,7 @@
 	import DetailPanel from '$lib/components/detail/DetailPanel.svelte';
 	import ScopeBar from '$lib/components/scope/ScopeBar.svelte';
 	import SearchPalette from '$lib/components/search/SearchPalette.svelte';
+	import SettingsMenu from '$lib/components/settings/SettingsMenu.svelte';
 	import TreeCanvas from '$lib/components/tree/TreeCanvas.svelte';
 	import TreeFilters from '$lib/components/tree/TreeFilters.svelte';
 	import { Badge } from '$lib/components/ui/badge/index.js';
@@ -71,6 +72,7 @@
 							<PanelRightOpen />
 						</Button>
 					{/if}
+					<SettingsMenu />
 					<LightSwitch />
 				</div>
 			</header>

@@ -3,6 +3,7 @@
 	import ArrowUpToLine from '@lucide/svelte/icons/arrow-up-to-line';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import Crosshair from '@lucide/svelte/icons/crosshair';
+	import Focus from '@lucide/svelte/icons/focus';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 	import X from '@lucide/svelte/icons/x';
 	import { api, type EntityDetail, type UnlockItem, type UnlockKind } from '$lib/api';
@@ -197,6 +198,16 @@
 								onclick={() => app.openSubtree(entity.key, 'down')}
 							>
 								<ArrowDownToLine /> Dependents
+							</Button>
+							<Button
+								variant="outline"
+								size="icon"
+								class="size-8"
+								aria-label="Focus view"
+								title="Focus view: direct requirements and unlocks"
+								onclick={() => app.openFocus(entity.key)}
+							>
+								<Focus />
 							</Button>
 							<Button
 								variant="outline"

@@ -56,7 +56,7 @@ pub fn get_meta(b: &Backend) -> CmdResult<Meta> {
     })
 }
 
-pub fn get_tree(b: &Backend, scope: &ScopeArgs, filter: &TreeFilter) -> CmdResult<TreeGraph> {
+pub fn get_tree(b: &Backend, scope: &ScopeArgs, filter: &TreeFilter, layout: FullLayout) -> CmdResult<TreeGraph> {
     let texts = b.texts(&scope.lang)?;
     let view = b.ds.view(scope::resolve(&b.ds, scope)?);
     let graph = view.research_graph();
@@ -69,17 +69,12 @@ pub fn get_tree(b: &Backend, scope: &ScopeArgs, filter: &TreeFilter) -> CmdResul
             model::Kind::Project => filter.projects,
             _ => false,
         })
-        .filter(|&id| {
-            filter.categories.is_empty()
-                || refs::category(&view, id).is_some_and(|c| filter.categories.contains(&c))
-        })
-        .filter(|&id| {
-            filter.properties.is_empty() || properties::of(&view, id).iter().any(|p| filter.properties.contains(p))
-        })
+        .filter(|&id| filter.categories.is_empty() || refs::category(&view, id).is_some_and(|c| filter.categories.contains(&c)))
+        .filter(|&id| filter.properties.is_empty() || properties::of(&view, id).iter().any(|p| filter.properties.contains(p)))
         .collect();
-    let edges: BTreeSet<Edge> =
-        graph.full().edges.into_iter().filter(|e| nodes.contains(&e.from) && nodes.contains(&e.to)).collect();
-    let mut tree = build_graph(&view, &texts, &nodes, &edges, None);
+    let edges: BTreeSet<Edge> = graph.full().edges.into_iter().filter(|e| nodes.contains(&e.from) && nodes.contains(&e.to)).collect();
+    let unfiltered = filter.techs && filter.projects && filter.categories.is_empty() && filter.properties.is_empty();
+    let mut tree = build_graph(&view, &texts, &nodes, &edges, None, layout == FullLayout::Bands, unfiltered);
     tree.total_cost = tree.nodes.iter().map(|n| n.cost).filter(|c| *c > 0.0).sum();
     Ok(tree)
 }
@@ -103,7 +98,9 @@ pub fn get_subtree(b: &Backend, scope: &ScopeArgs, args: &SubtreeArgs) -> CmdRes
         sub.nodes.extend(down.nodes);
         sub.edges.extend(down.edges);
     }
-    let mut tree = build_graph(&view, &texts, &sub.nodes, &sub.edges, Some(root));
+    // Implying chains are complete only when the walk follows every edge without a depth limit.
+    let complete = args.alternatives && args.max_depth.is_none();
+    let mut tree = build_graph(&view, &texts, &sub.nodes, &sub.edges, Some(root), false, complete);
     tree.total_cost = required_cost(graph, &view, root);
     Ok(tree)
 }
@@ -127,58 +124,54 @@ fn record_flag(view: &View<'_>, id: EntityId, key: &str) -> bool {
     view.record(id).and_then(|r| r.get(key)).and_then(Value::as_bool).unwrap_or(false)
 }
 
-/// Lay out a node/edge set and fill in node data. `total_cost` is left at 0.
+/// Lay out a node/edge set and fill in node data, in one band per category if `bands`.
+/// `total_cost` is left at 0.
 fn build_graph(
     view: &View<'_>,
     texts: &ti_data::Texts,
     nodes: &BTreeSet<EntityId>,
     edges: &BTreeSet<Edge>,
     root: Option<EntityId>,
+    bands: bool,
+    mark_redundant: bool,
 ) -> TreeGraph {
     let ds = view.dataset();
     // Language-independent input order: category, then dataName.
     let mut order: Vec<EntityId> = nodes.iter().copied().collect();
     order.sort_by_cached_key(|&id| (refs::category(view, id).unwrap_or_default(), ds.entity(id).data_name.clone()));
     let index: HashMap<EntityId, usize> = order.iter().enumerate().map(|(i, id)| (*id, i)).collect();
-    let layout_edges: Vec<LayoutEdge> = edges
+    let kept: Vec<&Edge> = edges.iter().filter(|e| index.contains_key(&e.from) && index.contains_key(&e.to)).collect();
+    // A filtered tree may lack the chain implying an edge: then the edge is not redundant there.
+    let none = BTreeSet::new();
+    let redundant = if mark_redundant { view.research_graph().redundant_edges() } else { &none };
+    let layout_edges: Vec<LayoutEdge> = kept
         .iter()
-        .filter_map(|e| Some(LayoutEdge { from: *index.get(&e.from)?, to: *index.get(&e.to)?, alternative: e.alternative }))
+        .filter(|e| !redundant.contains(e))
+        .map(|e| LayoutEdge { from: index[&e.from], to: index[&e.to], alternative: e.alternative })
         .collect();
     let costs: Vec<f64> = order.iter().map(|&id| research_cost(view, id)).collect();
-    let placements = layout::layout_by_cost(order.len(), &layout_edges, &costs);
+    // Band order: category name (matches the frontend's category order).
+    let categories: Vec<String> = order.iter().map(|&id| refs::category(view, id).unwrap_or_default()).collect();
+    let mut band_names: Vec<String> = if bands { categories.clone() } else { Vec::new() };
+    band_names.sort_unstable();
+    band_names.dedup();
+    let groups: Vec<usize> = if bands { categories.iter().map(|c| band_names.binary_search(c).unwrap()).collect() } else { Vec::new() };
+    let routed = layout::route_grouped(order.len(), &layout_edges, &costs, &groups);
+    let placements = routed.nodes;
+    let tree_bands =
+        band_names.into_iter().zip(routed.groups).filter_map(|(category, span)| span.map(|(top, bottom)| Band { category, top, bottom })).collect();
     let obtainable = view.research_graph().obtainable_set();
-    let tree_nodes = order
+    let tree_nodes = order.iter().zip(&placements).map(|(&id, p)| tree_node(view, texts, id, p.column, p.x, p.y, obtainable.contains(&id))).collect();
+    let mut waypoints = routed.waypoints.into_iter();
+    let tree_edges = kept
         .iter()
-        .zip(&placements)
-        .map(|(&id, p)| {
-            let a = view.annotations(id);
-            TreeNode {
-                key: refs::key(view, id),
-                data_name: ds.entity(id).data_name.to_string(),
-                kind: if view.kind(id) == model::Kind::Tech { NodeKind::Tech } else { NodeKind::Project },
-                name: view.name(texts, id),
-                category: refs::category(view, id).unwrap_or_default(),
-                cost: research_cost(view, id),
-                column: p.column,
-                x: p.x,
-                y: p.y,
-                flags: NodeFlags {
-                    scenario_specific: a.scenario_specific,
-                    varies_by_scenario: a.varies_by_scenario,
-                    dlc: a.from_dlc,
-                    faction_locked: !a.factions.is_empty(),
-                    end_game: record_flag(view, id, "endGameTech"),
-                    repeatable: record_flag(view, id, "repeatable"),
-                    obtainable: obtainable.contains(&id),
-                },
-                properties: properties::of(view, id),
-            }
+        .map(|e| TreeEdge {
+            from: refs::key(view, e.from),
+            to: refs::key(view, e.to),
+            alternative: e.alternative,
+            redundant: redundant.contains(e),
+            points: if redundant.contains(e) { Vec::new() } else { waypoints.next().expect("routed edge") },
         })
-        .collect();
-    let tree_edges = edges
-        .iter()
-        .filter(|e| index.contains_key(&e.from) && index.contains_key(&e.to))
-        .map(|e| TreeEdge { from: refs::key(view, e.from), to: refs::key(view, e.to), alternative: e.alternative })
         .collect();
     TreeGraph {
         nodes: tree_nodes,
@@ -187,7 +180,148 @@ fn build_graph(
         node_height: layout::NODE_HEIGHT,
         root: root.map(|r| refs::key(view, r)),
         total_cost: 0.0,
+        bands: tree_bands,
+        any_of: Vec::new(),
     }
+}
+
+fn tree_node(view: &View<'_>, texts: &ti_data::Texts, id: EntityId, column: usize, x: f64, y: f64, obtainable: bool) -> TreeNode {
+    let a = view.annotations(id);
+    TreeNode {
+        key: refs::key(view, id),
+        data_name: view.dataset().entity(id).data_name.to_string(),
+        kind: if view.kind(id) == model::Kind::Tech { NodeKind::Tech } else { NodeKind::Project },
+        name: view.name(texts, id),
+        category: refs::category(view, id).unwrap_or_default(),
+        cost: research_cost(view, id),
+        column,
+        x,
+        y,
+        flags: NodeFlags {
+            scenario_specific: a.scenario_specific,
+            varies_by_scenario: a.varies_by_scenario,
+            dlc: a.from_dlc,
+            faction_locked: !a.factions.is_empty(),
+            end_game: record_flag(view, id, "endGameTech"),
+            repeatable: record_flag(view, id, "repeatable"),
+            obtainable,
+        },
+        properties: properties::of(view, id),
+    }
+}
+
+/// Space between requirement groups in the focus view (room for the "any of" bracket).
+const FOCUS_GROUP_GAP: f64 = 2.0 * layout::GAP_Y;
+
+/// One tech/project with its direct requirements (left, in requirement-group order) and
+/// direct dependents (right, by category, cost and name). Columns are centered on the root.
+pub fn get_focus(b: &Backend, scope: &ScopeArgs, root: &str) -> CmdResult<TreeGraph> {
+    let texts = b.texts(&scope.lang)?;
+    let view = b.ds.view(scope::resolve(&b.ds, scope)?);
+    let root_id = refs::parse_key(&view, root)?;
+    let graph = view.research_graph();
+    if !graph.contains(root_id) {
+        return Err(CmdError::msg(format!("{root} is not a tech or project in this scope")));
+    }
+    let ds = view.dataset();
+    let mut placed: BTreeSet<EntityId> = BTreeSet::from([root_id]);
+    // Requirement groups (options with their alternative flag). An option may satisfy several
+    // groups: groups sharing options are placed next to each other with the shared cards at
+    // their boundary, so each group's cards stay contiguous (one card per option).
+    let mut pending: Vec<Vec<(EntityId, bool)>> = graph
+        .requirements(root_id)
+        .iter()
+        .map(|g| g.options_with_kind().filter(|(o, _)| *o != root_id).collect::<Vec<_>>())
+        .filter(|o| !o.is_empty())
+        .collect();
+    let shared = |a: &[(EntityId, bool)], b: &[(EntityId, bool)]| b.iter().filter(|(o, _)| a.iter().any(|(p, _)| p == o)).count();
+    let mut groups: Vec<Vec<(EntityId, bool)>> = Vec::new();
+    while !pending.is_empty() {
+        let next = groups
+            .last()
+            .and_then(|last| {
+                (0..pending.len())
+                    .max_by_key(|&i| (shared(last, &pending[i]), std::cmp::Reverse(i)))
+                    .filter(|&i| shared(last, &pending[i]) > 0)
+            })
+            .unwrap_or(0);
+        groups.push(pending.remove(next));
+    }
+    let mut dependents: Vec<(EntityId, bool)> =
+        graph.dependents(root_id).iter().filter(|d| graph.contains(d.node) && !groups.iter().flatten().any(|(o, _)| *o == d.node) && placed.insert(d.node)).map(|d| (d.node, d.alternative)).collect();
+    dependents.sort_by_cached_key(|&(id, _)| {
+        let cost = research_cost(&view, id);
+        (refs::category(&view, id).unwrap_or_default(), cost.max(0.0) as u64, ds.entity(id).data_name.clone())
+    });
+
+    let (w, h, gap) = (layout::NODE_WIDTH, layout::NODE_HEIGHT, layout::GAP_Y);
+    let column_x = |c: usize| c as f64 * (w + layout::GAP_X);
+    // Left column, top at 0: each new option once, options shared with the next group last.
+    let mut left: Vec<(EntityId, bool, f64)> = Vec::new();
+    let mut card_y: HashMap<EntityId, f64> = HashMap::new();
+    let mut y = 0.0;
+    for (i, g) in groups.iter().enumerate() {
+        if i > 0 && shared(&groups[i - 1], g) == 0 {
+            y += FOCUS_GROUP_GAP - gap;
+        }
+        let next = groups.get(i + 1).map_or(&[][..], Vec::as_slice);
+        let mut fresh: Vec<(EntityId, bool)> = g.iter().copied().filter(|(o, _)| !card_y.contains_key(o)).collect();
+        fresh.sort_by_key(|(o, _)| next.iter().any(|(p, _)| p == o));
+        for (id, alt) in fresh {
+            card_y.insert(id, y);
+            left.push((id, alt, y));
+            y += h + gap;
+        }
+    }
+    // "Any of" brackets over each group's cards; overlapping ones alternate levels.
+    let mut spans: Vec<(f64, f64, usize)> = Vec::new();
+    for g in groups.iter().filter(|g| g.len() > 1) {
+        let ys = g.iter().map(|(o, _)| card_y[o]);
+        let (top, bottom) = (ys.clone().fold(f64::INFINITY, f64::min), ys.fold(f64::NEG_INFINITY, f64::max) + h);
+        let level = match spans.last() {
+            Some(&(_, prev_bottom, prev_level)) if top < prev_bottom => 1 - prev_level,
+            _ => 0,
+        };
+        spans.push((top, bottom, level));
+    }
+    let left_height = (y - gap).max(0.0);
+    let right_height = (dependents.len() as f64 * (h + gap) - gap).max(0.0);
+    // Center every column on the tallest one.
+    let tallest = left_height.max(right_height).max(h);
+    let (left_off, right_off, root_y) = ((tallest - left_height) / 2.0, (tallest - right_height) / 2.0, (tallest - h) / 2.0);
+
+    let obtainable = graph.obtainable_set();
+    let node = |id: EntityId, column: usize, y: f64| tree_node(&view, &texts, id, column, column_x(column), y, obtainable.contains(&id));
+    let key = |id: EntityId| refs::key(&view, id);
+    let edge = |from: EntityId, to: EntityId, alternative: bool| TreeEdge {
+        from: key(from),
+        to: key(to),
+        alternative,
+        redundant: false,
+        points: Vec::new(),
+    };
+    let mut nodes = vec![node(root_id, 1, root_y)];
+    let mut edges = Vec::new();
+    for &(id, alt, y) in &left {
+        nodes.push(node(id, 0, y + left_off));
+        edges.push(edge(id, root_id, alt));
+    }
+    for (i, &(id, alt)) in dependents.iter().enumerate() {
+        nodes.push(node(id, 2, right_off + i as f64 * (h + gap)));
+        edges.push(edge(root_id, id, alt));
+    }
+    let any_of =
+        spans.into_iter().map(|(top, bottom, level)| Span { x: column_x(0), top: top + left_off, bottom: bottom + left_off, level }).collect();
+    Ok(TreeGraph {
+        nodes,
+        edges,
+        node_width: w,
+        node_height: h,
+        root: Some(key(root_id)),
+        total_cost: required_cost(graph, &view, root_id),
+        bands: Vec::new(),
+        any_of,
+    })
 }
 
 fn unlock_kind_name(kind: UnlockKind) -> &'static str {
@@ -326,13 +460,18 @@ pub(crate) mod tests {
         let Some(b) = backend() else { return };
         let filter = TreeFilter { techs: true, projects: true, categories: vec![], properties: vec![] };
         let t = std::time::Instant::now();
-        let tree = get_tree(&b, &en(), &filter).unwrap();
+        let tree = get_tree(&b, &en(), &filter, FullLayout::Layered).unwrap();
         eprintln!("get_tree (overview, all): {} nodes, {} edges in {:?}", tree.nodes.len(), tree.edges.len(), t.elapsed());
         assert!(tree.nodes.len() > 800);
         assert!(tree.total_cost > 0.0);
         let keys: std::collections::HashSet<&str> = tree.nodes.iter().map(|n| n.key.as_str()).collect();
         assert!(tree.edges.iter().all(|e| keys.contains(e.from.as_str()) && keys.contains(e.to.as_str())));
         assert!(tree.edges.iter().any(|e| e.alternative));
+        let redundant = tree.edges.iter().filter(|e| e.redundant).count();
+        eprintln!("redundant edges: {redundant}");
+        assert!(redundant > 0);
+        assert!(tree.edges.iter().all(|e| !e.alternative || !e.redundant));
+        assert!(tree.edges.iter().filter(|e| e.redundant).all(|e| e.points.is_empty()));
         let by_key: HashMap<&str, &TreeNode> = tree.nodes.iter().map(|n| (n.key.as_str(), n)).collect();
         for e in tree.edges.iter().filter(|e| !e.alternative) {
             assert!(by_key[e.from.as_str()].column < by_key[e.to.as_str()].column, "{} -> {}", e.from, e.to);
@@ -342,11 +481,92 @@ pub(crate) mod tests {
         assert!(tree.nodes.iter().any(|n| n.flags.faction_locked));
         assert!(tree.nodes.iter().filter(|n| n.flags.obtainable).count() > 800);
 
-        let techs = get_tree(&b, &en(), &TreeFilter { techs: true, projects: false, categories: vec![], properties: vec![] }).unwrap();
+        let techs =
+            get_tree(&b, &en(), &TreeFilter { techs: true, projects: false, categories: vec![], properties: vec![] }, FullLayout::Layered).unwrap();
         assert!(techs.nodes.iter().all(|n| n.kind == NodeKind::Tech));
-        let energy =
-            get_tree(&b, &en(), &TreeFilter { techs: true, projects: true, categories: vec!["Energy".into()], properties: vec![] }).unwrap();
+        let energy = get_tree(
+            &b,
+            &en(),
+            &TreeFilter { techs: true, projects: true, categories: vec!["Energy".into()], properties: vec![] },
+            FullLayout::Layered,
+        )
+        .unwrap();
         assert!(!energy.nodes.is_empty() && energy.nodes.iter().all(|n| n.category == "Energy"));
+    }
+
+    /// Every option of every requirement group has a card, and multi-option groups get a
+    /// bracket spanning exactly their cards, also when groups share an option.
+    #[test]
+    fn focus_groups_keep_shared_options() {
+        let Some(b) = backend() else { return };
+        let root = "TIProjectTemplate:Project_AutomatedOutpostCore";
+        let mut shared_seen = false;
+        for scenario in get_meta(&b).unwrap().scenarios {
+            let scope = ScopeArgs { scenario: Some(scenario.name.clone()), ..en() };
+            let Ok(f) = get_focus(&b, &scope, root) else { continue };
+            let detail = get_entity(&b, &scope, root).unwrap();
+            let y: HashMap<&str, f64> = f.nodes.iter().filter(|n| n.column == 0).map(|n| (n.key.as_str(), n.y)).collect();
+            let groups: Vec<Vec<&str>> =
+                detail.requirements.iter().map(|g| g.options.iter().map(|o| o.key.as_str()).collect()).filter(|g: &Vec<&str>| !g.is_empty()).collect();
+            for g in &groups {
+                assert!(g.iter().all(|k| y.contains_key(k)), "{}: {g:?} missing", scenario.name);
+                if g.len() > 1 {
+                    let top = g.iter().map(|k| y[k]).fold(f64::INFINITY, f64::min);
+                    let bottom = g.iter().map(|k| y[k]).fold(f64::NEG_INFINITY, f64::max) + f.node_height;
+                    assert!(f.any_of.iter().any(|s| s.top == top && s.bottom == bottom), "{}: {g:?}", scenario.name);
+                    // Contiguous: no other card inside the bracket.
+                    assert_eq!(y.values().filter(|&&v| v >= top && v < bottom).count(), g.len(), "{}: {g:?}", scenario.name);
+                }
+            }
+            shared_seen |= groups.iter().enumerate().any(|(i, g)| groups[i + 1..].iter().any(|h| h.iter().any(|k| g.contains(k))));
+        }
+        assert!(shared_seen, "no scenario with a shared requirement option");
+    }
+
+    #[test]
+    fn focus_view() {
+        let Some(b) = backend() else { return };
+        let f = get_focus(&b, &en(), "TIProjectTemplate:Project_Pherocytes").unwrap();
+        let root = f.root.as_deref().unwrap();
+        assert_eq!(f.nodes[0].key, root);
+        assert_eq!(f.nodes[0].column, 1);
+        // Pherocytes has one requirement with two options: an "any of" bracket.
+        assert_eq!(f.any_of.len(), 1);
+        assert!(f.nodes.iter().filter(|n| n.column == 0).count() >= 2);
+        assert!(f.edges.iter().all(|e| e.from == root || e.to == root));
+        let keys: std::collections::HashSet<&str> = f.nodes.iter().map(|n| n.key.as_str()).collect();
+        assert_eq!(keys.len(), f.nodes.len());
+
+        let d = get_focus(&b, &en(), "TITechTemplate:AdAstra").unwrap();
+        let deps: Vec<&TreeNode> = d.nodes.iter().filter(|n| n.column == 2).collect();
+        assert!(deps.len() > 3);
+        assert!(deps.windows(2).all(|w| w[0].category <= w[1].category && w[0].y < w[1].y));
+        let detail = get_entity(&b, &en(), "TITechTemplate:AdAstra").unwrap();
+        let research_unlocks = detail.unlocks.iter().filter(|u| u.kind.starts_with("research")).count();
+        assert_eq!(deps.len(), research_unlocks);
+        assert!(get_focus(&b, &en(), "TITechTemplate:Nope").is_err());
+    }
+
+    #[test]
+    fn filtered_trees_keep_redundant_edges() {
+        let Some(b) = backend() else { return };
+        let filter = TreeFilter { techs: true, projects: true, categories: vec!["Energy".into()], properties: vec![] };
+        let tree = get_tree(&b, &en(), &filter, FullLayout::Layered).unwrap();
+        assert!(tree.edges.iter().all(|e| !e.redundant));
+    }
+
+    #[test]
+    fn category_bands() {
+        let Some(b) = backend() else { return };
+        let filter = TreeFilter { techs: true, projects: true, categories: vec![], properties: vec![] };
+        let tree = get_tree(&b, &en(), &filter, FullLayout::Bands).unwrap();
+        assert_eq!(tree.bands.len(), 8);
+        assert!(tree.bands.windows(2).all(|w| w[0].bottom < w[1].top && w[0].category < w[1].category));
+        for n in &tree.nodes {
+            let band = tree.bands.iter().find(|band| band.category == n.category).unwrap();
+            assert!(n.y >= band.top - 1e-6 && n.y + tree.node_height <= band.bottom + 1e-6, "{}", n.key);
+        }
+        assert!(get_tree(&b, &en(), &filter, FullLayout::Layered).unwrap().bands.is_empty());
     }
 
     #[test]
@@ -370,7 +590,7 @@ pub(crate) mod tests {
             categories: vec![],
             properties: vec!["effect:ControlPointMaintenance:up".into(), "effect:MCFreeSpaceMineNetwork:up".into()],
         };
-        let tree = get_tree(&b, &en(), &filter).unwrap();
+        let tree = get_tree(&b, &en(), &filter, FullLayout::Layered).unwrap();
         let mine = find("effect:MCFreeSpaceMineNetwork:up").count;
         assert!(tree.nodes.len() >= cp.count.max(mine) && tree.nodes.len() <= cp.count + mine);
         assert!(tree.nodes.iter().all(|n| n.properties.iter().any(|p| filter.properties.contains(p))));
@@ -389,8 +609,14 @@ pub(crate) mod tests {
             .collect();
         let costs: Vec<f64> = full.nodes.iter().map(|&id| research_cost(&view, id)).collect();
         let t = std::time::Instant::now();
-        let p = layout::layout_by_cost(full.nodes.len(), &edges, &costs);
+        let routed = layout::route(full.nodes.len(), &edges, &costs);
         let elapsed = t.elapsed();
+        let p = routed.nodes;
+        eprintln!(
+            "routed: {} waypoints, crossings of the drawn (routed) edges {}",
+            routed.waypoints.iter().map(Vec::len).sum::<usize>(),
+            routed.crossings
+        );
         let before = layout::count_crossings(&layout::unordered(full.nodes.len(), &edges), &edges);
         let after = layout::count_crossings(&p, &edges);
         let ncols = p.iter().map(|q| q.column + 1).max().unwrap_or(0);
@@ -439,12 +665,7 @@ pub(crate) mod tests {
         let both = get_subtree(&b, &en(), &args("TITechTemplate:AdAstra", Direction::Both)).unwrap();
         assert!(both.nodes.len() >= down.nodes.len());
         assert_eq!(down.total_cost, both.total_cost);
-        let shallow = get_subtree(
-            &b,
-            &en(),
-            &SubtreeArgs { max_depth: Some(1), ..args("TITechTemplate:AdAstra", Direction::Down) },
-        )
-        .unwrap();
+        let shallow = get_subtree(&b, &en(), &SubtreeArgs { max_depth: Some(1), ..args("TITechTemplate:AdAstra", Direction::Down) }).unwrap();
         let root = shallow.root.as_deref().unwrap();
         assert!(shallow.nodes.len() > 1);
         assert!(shallow.nodes.iter().all(|n| n.key == root || shallow.edges.iter().any(|e| e.from == root && e.to == n.key)));
@@ -494,10 +715,13 @@ pub(crate) mod tests {
     fn scoped_queries() {
         let Some(b) = backend() else { return };
         let scope = ScopeArgs { scenario: Some("ModernScenario".into()), faction: Some("ResistCouncil".into()), lang: "en".into() };
-        let tree = get_tree(&b, &scope, &TreeFilter { techs: true, projects: true, categories: vec![], properties: vec![] }).unwrap();
+        let tree =
+            get_tree(&b, &scope, &TreeFilter { techs: true, projects: true, categories: vec![], properties: vec![] }, FullLayout::Layered).unwrap();
         assert!(!tree.nodes.is_empty());
         let bad = ScopeArgs { scenario: Some("NoSuchScenario".into()), ..en() };
-        assert!(get_tree(&b, &bad, &TreeFilter { techs: true, projects: true, categories: vec![], properties: vec![] }).is_err());
+        assert!(
+            get_tree(&b, &bad, &TreeFilter { techs: true, projects: true, categories: vec![], properties: vec![] }, FullLayout::Layered).is_err()
+        );
         let bad = ScopeArgs { faction: Some("NoSuchFaction".into()), ..en() };
         assert!(search(&b, &bad, "laser", 5).is_err());
     }

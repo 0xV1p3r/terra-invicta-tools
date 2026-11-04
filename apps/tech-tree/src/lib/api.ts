@@ -81,6 +81,9 @@ export interface SubtreeArgs {
 	maxDepth: number | null;
 }
 
+/** Layout of the full tree. */
+export type FullLayout = 'layered' | 'bands';
+
 export interface TreeGraph {
 	nodes: TreeNode[];
 	edges: TreeEdge[];
@@ -88,6 +91,26 @@ export interface TreeGraph {
 	nodeHeight: number;
 	root: EntityKey | null;
 	totalCost: number;
+	/** Category bands, top to bottom (`bands` layout only). */
+	bands: Band[];
+	/** Focus view: requirement groups satisfied by any one of several cards. */
+	anyOf: Span[];
+}
+
+/** Vertical extent of a category band (cards and edge routes), in px. */
+export interface Band {
+	category: TechCategory;
+	top: number;
+	bottom: number;
+}
+
+/** Vertical extent of a group of cards in the column at `x`, in px. */
+export interface Span {
+	x: number;
+	top: number;
+	bottom: number;
+	/** Nesting level of the bracket (0 next to the cards); overlapping groups alternate. */
+	level: number;
 }
 
 export interface TreeNode {
@@ -122,6 +145,10 @@ export interface TreeEdge {
 	to: EntityKey;
 	/** Via altPrereqN: render dashed. */
 	alternative: boolean;
+	/** Points `[x, y]` the edge passes between its endpoints, left to right (empty = direct). */
+	points: [number, number][];
+	/** Implied by another chain of listed prereqs: the UI may hide it. */
+	redundant: boolean;
 }
 
 export type EntityKind =
@@ -263,15 +290,25 @@ export interface UnlockItem {
 	entity: EntityRef;
 }
 
+/** The backend's tree filter rule for one node (see `get_tree` in src-tauri/src/commands.rs). */
+export function matchesFilter(n: TreeNode, filter: TreeFilter): boolean {
+	return (
+		(n.kind === 'tech' ? filter.techs : filter.projects) &&
+		(filter.categories.length === 0 || filter.categories.includes(n.category)) &&
+		(filter.properties.length === 0 || n.properties.some((p) => filter.properties.includes(p)))
+	);
+}
+
 /** Outside Tauri (plain `pnpm dev` in a browser) the API is served from static fixtures. */
 export const mockMode = !isTauri();
 
 const tauriApi = {
 	getMeta: () => invoke<Meta>('get_meta'),
-	getTree: (scope: ScopeArgs, filter: TreeFilter) =>
-		invoke<TreeGraph>('get_tree', { scope, filter }),
+	getTree: (scope: ScopeArgs, filter: TreeFilter, layout: FullLayout = 'layered') =>
+		invoke<TreeGraph>('get_tree', { scope, filter, layout }),
 	getSubtree: (scope: ScopeArgs, args: SubtreeArgs) =>
 		invoke<TreeGraph>('get_subtree', { scope, args }),
+	getFocus: (scope: ScopeArgs, root: EntityKey) => invoke<TreeGraph>('get_focus', { scope, root }),
 	getProperties: (scope: ScopeArgs) => invoke<PropertyInfo[]>('get_properties', { scope }),
 	getEntity: (scope: ScopeArgs, key: EntityKey) =>
 		invoke<EntityDetail>('get_entity', { scope, key }),
@@ -293,21 +330,48 @@ async function fixture<T>(...names: string[]): Promise<T> {
 
 /** Approximates the backend filter on the full fixture (keeps backend positions). */
 function filterGraph(graph: TreeGraph, filter: TreeFilter): TreeGraph {
-	const nodes = graph.nodes.filter(
-		(n) =>
-			(n.kind === 'tech' ? filter.techs : filter.projects) &&
-			(filter.categories.length === 0 || filter.categories.includes(n.category)) &&
-			(filter.properties.length === 0 || n.properties.some((p) => filter.properties.includes(p)))
-	);
+	const nodes = graph.nodes.filter((n) => matchesFilter(n, filter));
 	const keys = new Set(nodes.map((n) => n.key));
-	const edges = graph.edges.filter((e) => keys.has(e.from) && keys.has(e.to));
+	// The implying chain of a redundant edge may be filtered out (the backend does the same).
+	const edges = graph.edges
+		.filter((e) => keys.has(e.from) && keys.has(e.to))
+		.map((e) => ({ ...e, redundant: false }));
 	return { ...graph, nodes, edges };
+}
+
+/** Approximates `get_focus` from the full fixture (no requirement groups: no brackets). */
+function focusFromTree(graph: TreeGraph, root: EntityKey): TreeGraph {
+	const byKey = new Map(graph.nodes.map((n) => [n.key, n]));
+	const center = byKey.get(root);
+	if (!center) throw `Mock mode: ${root} is not in the tree fixture`;
+	const step = graph.nodeWidth + 180;
+	const rowHeight = graph.nodeHeight + 24;
+	const left = graph.edges.filter((e) => e.to === root && e.from !== root);
+	const right = graph.edges.filter((e) => e.from === root && e.to !== root);
+	const tallest = Math.max(left.length, right.length, 1);
+	const column = (edges: TreeEdge[], c: number, key: (e: TreeEdge) => EntityKey) =>
+		edges.flatMap((e, i) => {
+			const n = byKey.get(key(e));
+			const offset = ((tallest - edges.length) * rowHeight) / 2;
+			return n ? [{ ...n, column: c, x: c * step, y: offset + i * rowHeight }] : [];
+		});
+	const nodes = [
+		{ ...center, column: 1, x: step, y: ((tallest - 1) * rowHeight) / 2 },
+		...column(left, 0, (e) => e.from),
+		...column(right, 2, (e) => e.to)
+	];
+	const edges = [...left, ...right].map((e) => ({ ...e, points: [], redundant: false }));
+	return { ...graph, nodes, edges, root, bands: [], anyOf: [] };
 }
 
 const mockApi: typeof tauriApi = {
 	getMeta: () => fixture<Meta>('meta'),
-	getTree: async (_scope, filter) => {
+	getTree: async (_scope, filter, layout = 'layered') => {
 		const unfiltered = filter.categories.length === 0 && filter.properties.length === 0;
+		if (layout === 'bands') {
+			const bands = await fixture<TreeGraph>('tree-bands');
+			return unfiltered && filter.techs && filter.projects ? bands : filterGraph(bands, filter);
+		}
 		if (filter.techs && filter.projects && unfiltered) return fixture<TreeGraph>('tree');
 		if (filter.techs && !filter.projects && unfiltered) {
 			try {
@@ -323,6 +387,11 @@ const mockApi: typeof tauriApi = {
 		const dataName = args.root.slice(args.root.indexOf(':') + 1);
 		return fixture<TreeGraph>(`subtree-${args.direction}-${dataName}`);
 	},
+	// Fixtures exist for a few roots; others are approximated from the full tree.
+	getFocus: (_scope, root) =>
+		fixture<TreeGraph>(`focus-${root.slice(root.indexOf(':') + 1)}`).catch(async () =>
+			focusFromTree(await fixture<TreeGraph>('tree'), root)
+		),
 	getProperties: () => fixture<PropertyInfo[]>('properties'),
 	getEntity: (_scope, key) => fixture<EntityDetail>(`entity-${key.replaceAll(':', '__')}`),
 	search: async (_scope, query, limit = 30) => {
