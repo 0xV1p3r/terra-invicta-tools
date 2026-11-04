@@ -8,7 +8,7 @@
 //! * `faction: Some(f)` – additionally hides projects locked to other factions
 //!   (`factionPrereq`), as the game does.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 
 use serde_json::Value;
@@ -61,7 +61,9 @@ pub struct Annotations {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum UnlockKind {
     /// Tech/project that lists this one as a prereq (`alternative`: via `altPrereqN`).
-    Research { alternative: bool },
+    Research {
+        alternative: bool,
+    },
     ShipPart(PartKind),
     HabModule,
     /// Org that becomes available on the market (`requiredTechName`).
@@ -91,6 +93,7 @@ pub struct View<'d> {
     scope: Scope,
     all_scenarios: ScenarioSet,
     graph: OnceLock<ResearchGraph>,
+    region_nations: OnceLock<HashMap<EntityId, EntityId>>,
 }
 
 impl Dataset {
@@ -99,7 +102,7 @@ impl Dataset {
         for s in self.scenarios() {
             all.insert(s.idx);
         }
-        View { ds: self, scope, all_scenarios: all, graph: OnceLock::new() }
+        View { ds: self, scope, all_scenarios: all, graph: OnceLock::new(), region_nations: OnceLock::new() }
     }
 
     pub fn overview(&self) -> View<'_> {
@@ -153,7 +156,9 @@ impl<'d> View<'d> {
     }
 
     fn faction_allows_record(&self, id: EntityId, record: &Value) -> bool {
-        let Some(faction) = self.scope.faction else { return true };
+        let Some(faction) = self.scope.faction else {
+            return true;
+        };
         if &*self.ds.entity(id).template != model::PROJECT {
             return true;
         }
@@ -257,21 +262,81 @@ impl<'d> View<'d> {
     pub fn name(&self, texts: &Texts, id: EntityId) -> String {
         let e = self.ds.entity(id);
         let record = self.record(id).or_else(|| e.variants.first().map(|v| &v.record));
+        if &*e.template == "TIObjectiveTemplate"
+            && let Some(raw) = self.text_raw(texts, id, field::DISPLAY_NAME)
+        {
+            return to_plain(raw);
+        }
+        let localized = texts.entity_field(&e.template, &e.data_name, record, field::DISPLAY_NAME, self.localization_postfix());
+        let friendly = record.and_then(|r| r.get("friendlyName").or_else(|| r.get("displayName"))).and_then(Value::as_str);
+        if localized.is_none_or(|s| to_plain(s).trim().is_empty())
+            && friendly.is_none_or(str::is_empty)
+            && let Some(name) = self.derived_name(texts, id, record)
+        {
+            return name;
+        }
         texts.display_name(&e.template, &e.data_name, record, self.localization_postfix())
+    }
+
+    /// Wiki labels derived from related records where the game supplies no name.
+    fn derived_name(&self, texts: &Texts, id: EntityId, record: Option<&Value>) -> Option<String> {
+        let e = self.ds.entity(id);
+        let r = record?;
+        let value = |key| r.get(key).and_then(Value::as_str);
+        match &*e.template {
+            "TIBilateralTemplate" => {
+                let nation = |key| {
+                    let n = value(key)?;
+                    let id = self.ds.find("TINationTemplate", n)?;
+                    Some(self.name(texts, id))
+                };
+                Some(format!("{} – {} ({})", nation("nation1")?, nation("nation2")?, value("relationType")?))
+            }
+            "TIMapRegionTemplate" => {
+                let nation = value("friendlyNationName")?;
+                let multiple = self
+                    .ds
+                    .of_template("TIMapRegionTemplate")
+                    .iter()
+                    .filter(|&&other| self.record(other).and_then(|r| r.get("friendlyNationName")).and_then(Value::as_str) == Some(nation))
+                    .take(2)
+                    .count()
+                    > 1;
+                let region = crate::text::humanize(e.data_name.strip_prefix("map_").unwrap_or(&e.data_name));
+                Some(if multiple && region != nation { format!("{nation}: {region}") } else { nation.to_string() })
+            }
+            "TIStartTimeTemplate" => {
+                let scenario = self.ds.scenarios().iter().find(|s| s.start_time == Some(id))?;
+                Some(self.name(texts, scenario.meta))
+            }
+            "TIPlayerTemplate" => Some(format!("{} player", self.name(texts, self.ds.find(model::FACTION, value("council")?)?))),
+            "TIVictoryTemplate" => {
+                let ideology = e.data_name.strip_prefix("vc_")?.strip_suffix("Victory")?;
+                let faction = format!("{}Council", crate::text::humanize(ideology));
+                let name = texts.entity_field(model::FACTION, &faction, None, field::DISPLAY_NAME, self.localization_postfix())?;
+                Some(format!("{} victory", to_plain(name)))
+            }
+            _ => None,
+        }
     }
 
     /// Raw localized text (rich-text markup kept) of a field such as [`field::SUMMARY`].
     pub fn text_raw<'t>(&self, texts: &'t Texts, id: EntityId, field: &str) -> Option<&'t str> {
         let e = self.ds.entity(id);
         let record = self.record(id).or_else(|| e.variants.first().map(|v| &v.record));
-        texts
-            .entity_field(&e.template, &e.data_name, record, field, self.localization_postfix())
-            .filter(|t| !t.trim().is_empty())
+        if &*e.template == "TIObjectiveTemplate" {
+            let faction = self.scope.faction.map(|f| &*self.ds.entity(f).data_name);
+            return texts.objective_field(&e.data_name, record, field, faction).filter(|s| !s.trim().is_empty());
+        }
+        texts.entity_field(&e.template, &e.data_name, record, field, self.localization_postfix()).filter(|t| !t.trim().is_empty())
     }
 
     /// Plain text of a field, with tech-quote leader tokens resolved and the project
     /// summary sentinels replaced (see [`View::text_source`]).
     pub fn text(&self, texts: &Texts, id: EntityId, field: &str) -> Option<String> {
+        if field == field::DESCRIPTION && &*self.ds.entity(id).template == "TICodexEntryTemplate" {
+            return texts.codex_description(self.record(id)?);
+        }
         let (source, field) = self.text_source(texts, id, field);
         let raw = self.text_raw(texts, source, field)?;
         let raw = if field == field::QUOTE { texts.replace_leader_tokens(raw) } else { raw.to_string() };
@@ -328,22 +393,100 @@ impl<'d> View<'d> {
 
     // ---- assets ---------------------------------------------------------
 
-    /// Icon resource string: the record's own icon, or the tech category icon for research.
+    /// Initial region ownership is derived from bilateral claims, scoped to this view.
+    pub fn region_nation(&self, id: EntityId) -> Option<EntityId> {
+        self.region_nations
+            .get_or_init(|| {
+                self.entities("TIBilateralTemplate")
+                    .filter_map(|claim| {
+                        let r = self.record(claim)?;
+                        if r.get("initialOwner").and_then(Value::as_bool) != Some(true) {
+                            return None;
+                        }
+                        Some((self.find("TIRegionTemplate", r.get("region1")?.as_str()?)?, self.find("TINationTemplate", r.get("nation1")?.as_str()?)?))
+                    })
+                    .collect()
+            })
+            .get(&id)
+            .copied()
+    }
+
+    fn asset_field(&self, record: &Value, keys: &[&str]) -> Option<String> {
+        keys.iter().find_map(|key| {
+            let value = record.get(*key)?;
+            let resource = value.as_str().or_else(|| value.as_array()?.first()?.as_str())?;
+            self.ds.asset(resource).map(|_| resource.to_string())
+        })
+    }
+
+    /// Existing small assets only. Flags, body symbols and faction logos on related
+    /// entities are derived icons rather than icons explicitly assigned by the game.
     pub fn icon_resource(&self, id: EntityId) -> Option<String> {
-        let record = self.record(id)?;
-        for key in ["iconResource", "stationIconResource", "baseIconResource", "missionIconImagePath", "flagResource", "councilIcon64"] {
-            if let Some(r) = record.get(key).and_then(Value::as_str).filter(|r| !r.is_empty()) {
-                return Some(r.to_string());
+        self.icon_resource_inner(id, 0)
+    }
+
+    fn icon_resource_inner(&self, id: EntityId, depth: u8) -> Option<String> {
+        if depth > 4 {
+            return None;
+        }
+        let r = self.record(id)?;
+        if let Some(icon) = self.asset_field(
+            r,
+            &[
+                "iconResource",
+                "stationIconResource",
+                "baseIconResource",
+                "missionIconImagePath",
+                "flagResource",
+                "councilIcon64",
+                "iconYoung",
+                "baseIconPath",
+                "symbolTexture",
+                "imgPath",
+                "combatUIpath",
+            ],
+        ) {
+            return Some(icon);
+        }
+        let e = self.ds.entity(id);
+        let field = |key| r.get(key).and_then(Value::as_str);
+        let related = |template, key| self.find(template, field(key)?);
+        let target = match &*e.template {
+            "TIOrgIconTemplate" => return self.asset_field(r, &["path"]),
+            "TIRegionTemplate" => self.region_nation(id),
+            "TIBilateralTemplate" => related("TINationTemplate", "nation1"),
+            "TIArmyTemplate" => related("TIRegionTemplate", "homeRegionStr"),
+            "TIOrbitTemplate" => related("TISpaceBodyTemplate", "barycenterName"),
+            "TIHabSiteTemplate" => related("TISpaceBodyTemplate", "parentBodyName"),
+            "TIPlayerTemplate" => related(model::FACTION, "council"),
+            "TISpaceShipTemplate" | "TISpaceFleetTemplate" => related(model::FACTION, "factionName"),
+            "TIHabTemplate" => r.pointer("/sectors/0/faction").and_then(Value::as_str).and_then(|n| self.find(model::FACTION, n)),
+            "TIFactionIdeologyTemplate" | "TIVictoryTemplate" => {
+                let ideology = e.data_name.strip_prefix("vc_").and_then(|n| n.strip_suffix("Victory")).unwrap_or(&e.data_name);
+                self.entities(model::FACTION).find(|&f| self.record(f).and_then(|r| r.get("ideologyName")).and_then(Value::as_str) == Some(ideology))
             }
+            "TICouncilorTemplate" => related("TICouncilorAppearanceTemplate", "appearanceTemplateName"),
+            _ => None,
+        };
+        if let Some(target) = target {
+            return self.icon_resource_inner(target, depth + 1);
+        }
+        if &*e.template == "TISpaceBodyTemplate" {
+            return self.ds.body_icon(&e.data_name).or_else(|| field("friendlyName").and_then(|name| self.ds.body_icon(name)));
         }
         if self.kind(id).is_research() {
-            let category: model::TechCategory = record
-                .get("techCategory")
-                .and_then(|c| model::TechCategory::parse(c.as_str()?))
-                .unwrap_or_default();
-            return category.icon_resource().map(str::to_string);
+            let category = field("techCategory").and_then(model::TechCategory::parse).unwrap_or_default();
+            return category.icon_resource().filter(|r| self.ds.asset(r).is_some()).map(str::to_string);
         }
         None
+    }
+
+    /// Large illustration resources, when the extracted build contains them.
+    pub fn image_resource(&self, id: EntityId) -> Option<String> {
+        self.asset_field(
+            self.record(id)?,
+            &["illustrationPathStrs", "imgPath", "portraitYoung", "backgroundPath", "councilIcon256", "flagResource", "illustrationResource", "combatUIpath"],
+        )
     }
 
     // ---- relations ------------------------------------------------------
@@ -448,7 +591,9 @@ impl<'d> View<'d> {
     /// What unlocks this entity: the required project of a ship part/hab module, the
     /// required tech of an org, …
     pub fn unlocked_by(&self, id: EntityId) -> Vec<EntityId> {
-        let Some(record) = self.record(id) else { return Vec::new() };
+        let Some(record) = self.record(id) else {
+            return Vec::new();
+        };
         let mut out = Vec::new();
         for key in ["requiredProjectName", "requiredTechName", "projectDataName", "unlockTech", "knowledgeProject", "projectUnlockName"] {
             if let Some(name) = record.get(key).and_then(Value::as_str) {
@@ -473,18 +618,12 @@ mod tests {
         let ds = dataset(
             &[
                 (META, vec![scenario("S", 1, &[], None)]),
-                (
-                    model::PROJECT,
-                    vec![json!({"dataName": "Ship"}), json!({"dataName": "Hab"}), json!({"dataName": "Habs"}), json!({"dataName": "Plain"})],
-                ),
+                (model::PROJECT, vec![json!({"dataName": "Ship"}), json!({"dataName": "Hab"}), json!({"dataName": "Habs"}), json!({"dataName": "Plain"})]),
                 // template load order decides which ship part comes first
                 ("TIShipArmorTemplate", vec![json!({"dataName": "Armor", "requiredProjectName": "Ship"})]),
                 (
                     "TIUtilityModuleTemplate",
-                    vec![
-                        json!({"dataName": "Util2", "requiredProjectName": "Ship"}),
-                        json!({"dataName": "Util1", "requiredProjectName": "Ship"}),
-                    ],
+                    vec![json!({"dataName": "Util2", "requiredProjectName": "Ship"}), json!({"dataName": "Util1", "requiredProjectName": "Ship"})],
                 ),
                 (
                     model::HAB_MODULE,

@@ -35,11 +35,17 @@
 	import { assetUrl } from '$lib/api';
 	import CategoryIcon from '$lib/components/tree/CategoryIcon.svelte';
 
-	let { entity, size = 20 }: { entity: EntityRef; size?: number } = $props();
+	let {
+		entity,
+		size = 20,
+		fallbackIcon
+	}: { entity: EntityRef; size?: number; fallbackIcon?: Component } = $props();
 
 	const url = $derived(assetUrl(entity.icon));
 	let failed = $state(false);
-	const KindIcon = $derived(KIND_ICONS[entity.kind] ?? Box);
+	const KindIcon = $derived(
+		(entity.kind === 'other' ? fallbackIcon : undefined) ?? KIND_ICONS[entity.kind] ?? Box
+	);
 
 	$effect(() => {
 		void url;

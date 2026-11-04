@@ -55,10 +55,11 @@ pub fn asset_file(view: &View<'_>, resource: &str) -> Option<String> {
     view.dataset().asset(resource).map(|a| a.file.clone())
 }
 
-pub fn entity_ref(view: &View<'_>, texts: &Texts, id: EntityId) -> EntityRef {
+pub fn entity_ref(view: &View<'_>, texts: &Texts, id: EntityId, spoilers: &std::collections::HashSet<EntityId>) -> EntityRef {
     let e = view.dataset().entity(id);
     let kind = view.kind(id);
     EntityRef {
+        spoiler: spoilers.contains(&id),
         key: key(view, id),
         template: e.template.to_string(),
         data_name: e.data_name.to_string(),

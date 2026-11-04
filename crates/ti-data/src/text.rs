@@ -56,7 +56,11 @@ pub struct Style {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Span {
-    Text { text: String, style: Style, color: Option<String> },
+    Text {
+        text: String,
+        style: Style,
+        color: Option<String>,
+    },
     LineBreak,
     /// `{0}`, `{resistLeader}`, … – filled in by the game at runtime.
     Placeholder(String),
@@ -206,15 +210,8 @@ pub mod field {
 const SCENARIO_POSTFIX_TEMPLATES: [&str; 4] = ["TINationTemplate", "TIRegionTemplate", "TIOrgTemplate", "TIFactionTemplate"];
 /// Templates whose keys all use `localizationName` (`localizationAlias ?? dataName`). For other
 /// templates only `displayName` (inherited from `TIDataTemplate`) does; their other fields use `dataName`.
-const ALIASED_TEMPLATES: [&str; 7] = [
-    "TITechTemplate",
-    "TIProjectTemplate",
-    "TIEffectTemplate",
-    "TIObjectiveTemplate",
-    "TINationTemplate",
-    "TIRegionTemplate",
-    "TIOrgTemplate",
-];
+const ALIASED_TEMPLATES: [&str; 7] =
+    ["TITechTemplate", "TIProjectTemplate", "TIEffectTemplate", "TIObjectiveTemplate", "TINationTemplate", "TIRegionTemplate", "TIOrgTemplate"];
 /// Individual aliased fields of templates not in [`ALIASED_TEMPLATES`].
 const ALIASED_FIELDS: [(&str, &str); 1] = [("TIFactionTemplate", "leader.description")];
 /// Leader tokens in tech quotes, replaced by `TIFactionTemplate.fullLeader.<X>Council`.
@@ -245,7 +242,7 @@ impl Texts {
         self.primary.get(key).or_else(|| self.fallback.as_ref()?.get(key))
     }
 
-    /// The game's `localizationName` of a record: `localizationAlias`, else `dataName`.
+    /// The game's `localizationName` of a record: `localizationAlias`, else a derived, humanised `dataName`.
     pub fn key_name<'r>(_template: &str, data_name: &'r str, record: Option<&'r Value>) -> &'r str {
         record
             .and_then(|r| r.get("localizationAlias"))
@@ -270,6 +267,12 @@ impl Texts {
     /// nation/region/org/faction texts, the drive description shared by all thruster counts.
     /// `record` is the variant in use; `postfix` the scenario's localization postfix.
     pub fn entity_field(&self, template: &str, data_name: &str, record: Option<&Value>, field: &str, postfix: Option<&str>) -> Option<&str> {
+        if template == "TICodexEntryTemplate" && field == field::DISPLAY_NAME {
+            return self.get(&format!("{}.Title", record?.get("locPath")?.as_str()?));
+        }
+        if template == "TIFactionIdeologyTemplate" && field == field::DISPLAY_NAME {
+            return self.get(&format!("{template}.{data_name}"));
+        }
         let name = Self::key_name_for(template, field, data_name, record);
         let key = if template == "TIDriveTemplate" && field == field::DESCRIPTION {
             // `TIDriveTemplate.description.<dataName with last char -> '1'>`
@@ -280,13 +283,42 @@ impl Texts {
             format!("{template}.{field}.{name}")
         };
         if let Some(p) = postfix.filter(|_| SCENARIO_POSTFIX_TEMPLATES.contains(&template))
-            && let Some(v) = self.get(&format!("{key}{p}")) {
-                return Some(v);
-            }
-        self.get(&key)
+            && let Some(v) = self.get(&format!("{key}{p}"))
+        {
+            return Some(v);
+        }
+        self.get(&key).or_else(|| (template == "TIObjectiveTemplate").then(|| self.objective_field(data_name, record, field, None)).flatten())
     }
 
-    /// Display name: localized `displayName`, else `friendlyName`/`displayName` of the record, else `dataName`.
+    /// Objectives try the unsuffixed key, scoped faction, record factions, then a
+    /// deterministic suffix fallback. Aliases apply to all objective fields.
+    pub fn objective_field(&self, data_name: &str, record: Option<&Value>, field: &str, faction: Option<&str>) -> Option<&str> {
+        let name = Self::key_name_for("TIObjectiveTemplate", field, data_name, record);
+        let key = format!("TIObjectiveTemplate.{field}.{name}");
+        if let Some(v) = self.get(&key) {
+            return Some(v);
+        }
+        if let Some(v) = faction.and_then(|f| self.get(&format!("{key}.{f}"))) {
+            return Some(v);
+        }
+        for f in record.and_then(|r| r.get("factionDataNames")).and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str) {
+            if let Some(v) = self.get(&format!("{key}.{f}")) {
+                return Some(v);
+            }
+        }
+        let prefix = format!("{key}.");
+        let matched = self.primary.entries().chain(self.fallback.iter().flat_map(|l| l.entries())).map(|(k, _)| k).filter(|k| k.starts_with(&prefix)).min()?;
+        self.get(matched)
+    }
+
+    /// Consecutive codex pages, converted from game rich text to plain text.
+    pub fn codex_description(&self, record: &Value) -> Option<String> {
+        let path = record.get("locPath")?.as_str()?;
+        let pages: Vec<_> = (0..).map_while(|i| self.get(&format!("{path}{i}"))).map(to_plain).collect();
+        (!pages.is_empty()).then(|| pages.join("\n\n"))
+    }
+
+    /// Display name: localized `displayName`, else `friendlyName`/`displayName` of the record, else a derived, humanised `dataName`.
     pub fn display_name(&self, template: &str, data_name: &str, record: Option<&Value>, postfix: Option<&str>) -> String {
         if let Some(t) = self.entity_field(template, data_name, record, field::DISPLAY_NAME, postfix) {
             let plain = to_plain(t);
@@ -299,7 +331,7 @@ impl Texts {
             .and_then(Value::as_str)
             .filter(|s| !s.is_empty())
             .map(str::to_string)
-            .unwrap_or_else(|| data_name.to_string())
+            .unwrap_or_else(|| humanize(data_name))
     }
 
     /// Replace the faction-leader tokens used in tech quotes.
@@ -322,6 +354,30 @@ mod lookup_tests {
     use super::*;
     use crate::scenario::META;
     use crate::test_support::{dataset, id, scenario};
+
+    #[test]
+    fn objective_faction_priority_and_alias() {
+        let texts = Texts {
+            primary: Arc::new(Locale::new(
+                "en",
+                HashMap::from([
+                    ("TIObjectiveTemplate.description.Alias.F2".into(), "second".into()),
+                    ("TIObjectiveTemplate.description.Alias.F1".into(), "first".into()),
+                    ("TIObjectiveTemplate.displayName.Alias".into(), "unsuffixed".into()),
+                    ("TIObjectiveTemplate.displayName.Alias.F2".into(), "scoped".into()),
+                ]),
+            )),
+            fallback: None,
+        };
+        let record = json!({"localizationAlias": "Alias", "factionDataNames": ["F2", "F1"]});
+        let lookup = |field, faction| texts.objective_field("Original", Some(&record), field, faction);
+        assert_eq!(lookup("description", Some("F1")), Some("first"));
+        assert_eq!(lookup("description", None), Some("second"));
+        assert_eq!(lookup("displayName", Some("F2")), Some("unsuffixed"));
+        assert_eq!(texts.objective_field("Alias", None, "description", None), Some("first"));
+        assert_eq!(humanize("ResearchHabSchematic"), "Research Hab Schematic");
+        assert_eq!(humanize("XMLParser_name"), "XML Parser name");
+    }
 
     #[test]
     fn localization_alias_applies_per_template_and_field() {
@@ -360,4 +416,25 @@ mod lookup_tests {
         assert_eq!(overview.text(&texts, f, "leader.description").as_deref(), Some("Leader description"));
         assert_eq!(overview.text(&texts, f, "Goal").as_deref(), Some("Goal"));
     }
+}
+
+/// Derived fallback label, not game localization. Preserve acronyms and split word boundaries.
+pub fn humanize(name: &str) -> String {
+    let chars: Vec<_> = name.chars().collect();
+    let mut out = String::new();
+    for (i, &c) in chars.iter().enumerate() {
+        if c == '_' || c == '-' {
+            out.push(' ');
+            continue;
+        }
+        if i > 0 && c.is_uppercase() && (chars[i - 1].is_lowercase() || (chars[i - 1].is_uppercase() && chars.get(i + 1).is_some_and(|n| n.is_lowercase()))) {
+            out.push(' ');
+        }
+        out.push(c);
+    }
+    let mut words = out.split_whitespace().collect::<Vec<_>>().join(" ");
+    if let Some(c) = words.chars().next() {
+        words.replace_range(..c.len_utf8(), &c.to_uppercase().to_string());
+    }
+    words
 }

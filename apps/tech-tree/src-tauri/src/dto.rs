@@ -218,6 +218,7 @@ pub struct TreeEdge {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EntityRef {
+    pub spoiler: bool,
     pub key: String,
     pub template: String,
     pub data_name: String,
@@ -243,6 +244,8 @@ pub struct SearchHit {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EntityDetail {
+    pub image: Option<String>,
+    pub effect: Option<EffectLine>,
     pub entity: EntityRef,
     pub summary: Option<String>,
     pub description: Option<String>,
@@ -255,6 +258,10 @@ pub struct EntityDetail {
     pub effects: Vec<EffectLine>,
     pub unlocks: Vec<UnlockItem>,
     pub unlocked_by: Vec<EntityRef>,
+    /// Outgoing references grouped by target template and field.
+    pub references: Vec<RefGroup>,
+    /// Incoming references grouped by source template and field.
+    pub referenced_by: Vec<RefGroup>,
     /// Stats of a hab module, ship part or org (None for other kinds).
     pub stats: Option<EntityStats>,
     pub research_cost: Option<f64>,
@@ -380,4 +387,35 @@ pub struct Stat {
 pub struct StatLinks {
     pub label: String,
     pub entities: Vec<EntityRef>,
+}
+
+/// A nonempty template in the current wiki scope.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WikiSection {
+    pub spoiler: bool,
+    pub template: String,
+    pub label: String,
+    pub group: String,
+    pub count: usize,
+}
+
+/// References sharing an opposite-side template and referencing field.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RefGroup {
+    /// Template of the entities on the other side.
+    pub template: String,
+    /// Field path in the referencing record, e.g. `effects[]`.
+    pub field: String,
+    pub entities: Vec<EntityRef>,
+}
+
+/// One wiki row, with cheap context and an optional effect presentation.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WikiEntry {
+    pub entity: EntityRef,
+    pub subtitle: Option<String>,
+    pub effect: Option<EffectLine>,
 }

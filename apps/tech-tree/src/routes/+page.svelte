@@ -6,6 +6,7 @@
 	import { api, mockMode } from '$lib/api';
 	import DetailPanel from '$lib/components/detail/DetailPanel.svelte';
 	import ScopeBar from '$lib/components/scope/ScopeBar.svelte';
+	import WikiDialog from '$lib/components/wiki/WikiDialog.svelte';
 	import SearchPalette from '$lib/components/search/SearchPalette.svelte';
 	import SettingsMenu from '$lib/components/settings/SettingsMenu.svelte';
 	import TreeCanvas from '$lib/components/tree/TreeCanvas.svelte';
@@ -62,6 +63,7 @@
 				<TreeFilters />
 				<div class="ml-auto flex items-center gap-2">
 					<SearchPalette />
+					<WikiDialog />
 					{#if !app.panelOpen}
 						<Button
 							variant="outline"

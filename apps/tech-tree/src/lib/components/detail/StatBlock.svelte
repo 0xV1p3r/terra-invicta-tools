@@ -4,7 +4,7 @@
 	import { SENTIMENT } from '$lib/effect-style';
 	import EntityLink from './EntityLink.svelte';
 
-	let { stats }: { stats: EntityStats } = $props();
+	let { stats, wide = false }: { stats: EntityStats; wide?: boolean } = $props();
 </script>
 
 <div class="space-y-3">
@@ -21,7 +21,11 @@
 			<h5 class="mb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
 				{group.label}
 			</h5>
-			<dl class="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] gap-1">
+			<dl
+				class="grid gap-2 {wide
+					? 'grid-cols-[repeat(auto-fill,minmax(9rem,1fr))]'
+					: 'grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))]'}"
+			>
 				{#each group.stats as stat (stat.field)}
 					{@const url = assetUrl(stat.icon)}
 					<div class="min-w-0 rounded-md bg-muted/50 px-2 py-1" title="{stat.label} · {stat.field}">

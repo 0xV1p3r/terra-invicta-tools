@@ -6,6 +6,7 @@ export const CORNERS = ['top-left', 'top-right', 'bottom-left', 'bottom-right'] 
 export type Corner = (typeof CORNERS)[number];
 
 export interface Settings {
+	wikiSpoilers: boolean;
 	/** Hide links implied by another chain of listed prerequisites (still shown in a lineage). */
 	hideRedundantLinks: boolean;
 	/** Full-tree filters remove non-matching research, or only dim it (layout stays put). */
@@ -17,6 +18,7 @@ export interface Settings {
 }
 
 const DEFAULTS: Settings = {
+	wikiSpoilers: false,
 	hideRedundantLinks: true,
 	filterMode: 'hide',
 	overviewLabels: false,

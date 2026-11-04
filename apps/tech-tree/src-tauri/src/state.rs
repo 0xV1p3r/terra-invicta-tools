@@ -1,6 +1,6 @@
 //! Application state: the loaded dataset plus per-language caches.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -19,6 +19,7 @@ pub struct Backend {
     /// Canonical `<data root>/<build>/assets`, if it exists on disk.
     pub assets_dir: Option<PathBuf>,
     texts: Mutex<HashMap<String, Arc<Texts>>>,
+    spoilers: Mutex<HashMap<ti_data::Scope, Arc<HashSet<ti_data::EntityId>>>>,
     search: Mutex<HashMap<String, Arc<SearchIndex>>>,
 }
 
@@ -31,7 +32,14 @@ impl Backend {
 
     pub fn new(ds: Dataset, data_dir: PathBuf) -> Self {
         let assets_dir = ds.asset_path("").and_then(|p| p.canonicalize().ok()).filter(|p| p.is_dir());
-        Self { ds: Arc::new(ds), data_dir, assets_dir, texts: Mutex::default(), search: Mutex::default() }
+        Self { ds: Arc::new(ds), data_dir, assets_dir, texts: Mutex::default(), search: Mutex::default(), spoilers: Mutex::default() }
+    }
+
+    pub fn spoilers(&self, view: &ti_data::View<'_>) -> CmdResult<Arc<HashSet<ti_data::EntityId>>> {
+        // "Can any human faction get it?" ignores the selected faction: classify per scenario only.
+        let scope = ti_data::Scope { faction: None, ..view.scope() };
+        let mut cache = self.spoilers.lock().map_err(|_| CmdError::msg("spoiler cache poisoned"))?;
+        Ok(cache.entry(scope).or_insert_with(|| Arc::new(crate::spoilers::classify(&self.ds.view(scope)))).clone())
     }
 
     /// Language code actually used for `lang`: itself if part of the build, else `en`.
@@ -112,7 +120,5 @@ pub fn find_data_dir() -> Option<PathBuf> {
         return Some(PathBuf::from(dir));
     }
     let starts = [std::env::current_dir().ok(), std::env::current_exe().ok().and_then(|e| e.parent().map(Path::to_path_buf))];
-    starts.into_iter().flatten().find_map(|start| {
-        start.ancestors().map(|d| d.join("data")).find(|d| d.join("index.json").is_file())
-    })
+    starts.into_iter().flatten().find_map(|start| start.ancestors().map(|d| d.join("data")).find(|d| d.join("index.json").is_file()))
 }

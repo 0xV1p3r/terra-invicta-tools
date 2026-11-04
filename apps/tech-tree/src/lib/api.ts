@@ -174,6 +174,7 @@ export type EntityKind =
 	| 'other';
 
 export interface EntityRef {
+	spoiler?: boolean;
 	key: EntityKey;
 	template: string;
 	dataName: string;
@@ -191,7 +192,29 @@ export interface SearchHit {
 	matched: 'name' | 'dataName' | 'text' | 'value';
 }
 
+export interface WikiSection {
+	spoiler?: boolean;
+	template: string;
+	label: string;
+	group: string;
+	count: number;
+}
+export interface WikiEntry {
+	entity: EntityRef;
+	subtitle?: string | null;
+	effect?: EffectLine | null;
+}
+export interface RefGroup {
+	template: string;
+	field: string;
+	entities: EntityRef[];
+}
+
 export interface EntityDetail {
+	effect?: EffectLine | null;
+	image?: string | null;
+	references: RefGroup[];
+	referencedBy: RefGroup[];
 	entity: EntityRef;
 	summary: string | null;
 	description: string | null;
@@ -203,7 +226,7 @@ export interface EntityDetail {
 	effects: EffectLine[];
 	unlocks: UnlockItem[];
 	unlockedBy: EntityRef[];
-	/** Stats of a hab module, ship part or org (None for other kinds). */
+	/** Display stats for any wiki template. */
 	stats: EntityStats | null;
 	researchCost: number | null;
 	totalCost: number | null;
@@ -351,6 +374,10 @@ export function matchesFilter(n: TreeNode, filter: TreeFilter): boolean {
 export const mockMode = !isTauri();
 
 const tauriApi = {
+	getWikiIndex: (scope: ScopeArgs, spoilers = false) =>
+		invoke<WikiSection[]>('get_wiki_index', { scope, spoilers }),
+	getWikiEntries: (scope: ScopeArgs, template: string, spoiler = false) =>
+		invoke<WikiEntry[]>('get_wiki_entries', { scope, template, spoiler }),
 	getMeta: () => invoke<Meta>('get_meta'),
 	getTree: (scope: ScopeArgs, filter: TreeFilter, layout: FullLayout = 'layered') =>
 		invoke<TreeGraph>('get_tree', { scope, filter, layout }),
@@ -362,8 +389,9 @@ const tauriApi = {
 		invoke<PropertyInfo[]>('get_properties', { scope, filter }),
 	getEntity: (scope: ScopeArgs, key: EntityKey) =>
 		invoke<EntityDetail>('get_entity', { scope, key }),
-	search: (scope: ScopeArgs, query: string, limit = 30) =>
-		invoke<SearchHit[]>('search', { scope, query, limit })
+	/** `all`: also other factions' projects (the wiki); otherwise only what the faction sees. */
+	search: (scope: ScopeArgs, query: string, limit = 30, all = false) =>
+		invoke<SearchHit[]>('search', { scope, query, limit, all })
 };
 
 // --- Browser mock mode -------------------------------------------------------
@@ -415,6 +443,16 @@ function focusFromTree(graph: TreeGraph, root: EntityKey): TreeGraph {
 }
 
 const mockApi: typeof tauriApi = {
+	getWikiIndex: async (_scope, spoilers = false) =>
+		(await fixture<WikiSection[]>('wiki-index')).filter((s) => spoilers || !s.spoiler),
+	getWikiEntries: async (_scope, template, spoiler = false) => {
+		const entries = await fixture<(WikiEntry | EntityRef)[]>(
+			`wiki-entries-${spoiler ? 'spoiler-' : ''}${template}`
+		);
+		return entries.map((entry): WikiEntry =>
+			'entity' in entry ? entry : { entity: entry, subtitle: null, effect: null }
+		);
+	},
 	getMeta: () => fixture<Meta>('meta'),
 	getTree: async (_scope, filter, layout = 'layered') => {
 		const unfiltered = filter.categories.length === 0 && filter.properties.length === 0;

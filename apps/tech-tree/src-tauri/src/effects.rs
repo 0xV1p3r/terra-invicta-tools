@@ -274,7 +274,16 @@ fn domain(name: &str) -> &'static str {
         "environment"
     } else if starts(&["Economy_", "Spoils", "DirectInvest", "OrgPurchase", "Corruption", "MaxAvailableOrgs", "MapRegionGDP", "GlobalIP"]) {
         "economy"
-    } else if starts(&["PostRegime", "Breakaway", "PublicCampaign", "PublicOpinion", "Atrocity", "Bilateral", "Propaganda", "RandomFactionNationGainsRandomClaim"]) {
+    } else if starts(&[
+        "PostRegime",
+        "Breakaway",
+        "PublicCampaign",
+        "PublicOpinion",
+        "Atrocity",
+        "Bilateral",
+        "Propaganda",
+        "RandomFactionNationGainsRandomClaim",
+    ]) {
         "politics"
     } else {
         "other"
@@ -465,7 +474,8 @@ mod tests {
         let effects: BTreeSet<EntityId> = view.research_graph().nodes().iter().flat_map(|&n| view.effects(n)).collect();
         let mut dump = String::new();
         for &e in &effects {
-            let l = effect_line(&view, &texts, e, entity_ref(&view, &texts, e));
+            let spoilers = &*b.spoilers(&view).unwrap();
+            let l = effect_line(&view, &texts, e, entity_ref(&view, &texts, e, spoilers));
             let text: String = l.segments.iter().map(|s| if s.kind == "value" { format!("[{}]", s.text) } else { s.text.clone() }).collect();
             assert!(!text.starts_with('-'), "{text}");
             dump += &format!(
@@ -485,7 +495,8 @@ mod tests {
         }
         let line = |name: &str| {
             let id = view.find(ti_data::model::EFFECT, name).unwrap();
-            effect_line(&view, &texts, id, entity_ref(&view, &texts, id))
+            let spoilers = &*b.spoilers(&view).unwrap();
+            effect_line(&view, &texts, id, entity_ref(&view, &texts, id, spoilers))
         };
         let ship = line("Effect_BSBE_ShipConstructionTimePenalty");
         assert_eq!((ship.modifier.as_deref(), ship.sentiment.as_str()), (Some("+50%"), "bad"));

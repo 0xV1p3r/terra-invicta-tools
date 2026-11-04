@@ -2,6 +2,8 @@
 //! record, labelled, formatted and grouped. Known fields come from `FIELDS`; anything
 //! else that isn't presentation data (models, sounds, UI paths) lands in "Other".
 
+mod wiki;
+
 use std::collections::HashSet;
 
 use serde_json::{Map, Value};
@@ -346,14 +348,17 @@ const CREW_SALARY_YEAR: f64 = 0.1;
 /// Propellant tanks hold 100 t.
 const TANK_TONS: f64 = 100.0;
 
-/// Stats of a hab module, ship part or org; None for other kinds.
-pub fn entity_stats(view: &View<'_>, texts: &Texts, id: EntityId) -> Option<EntityStats> {
+/// Structured stats for wiki entities; research and effects have dedicated panels.
+pub fn entity_stats(view: &View<'_>, texts: &Texts, id: EntityId, spoilers: &HashSet<EntityId>) -> Option<EntityStats> {
     let kind = view.kind(id);
-    if !matches!(kind, Kind::HabModule | Kind::ShipPart(_) | Kind::Org) {
+    if matches!(kind, Kind::Tech | Kind::Project | Kind::Effect) {
         return None;
     }
+    if !matches!(kind, Kind::HabModule | Kind::ShipPart(_) | Kind::Org) {
+        return wiki::stats(view, texts, id, spoilers);
+    }
     let record = view.record(id)?.as_object()?;
-    let mut b = Builder { view, texts, stats: EntityStats { tags: Vec::new(), groups: Vec::new(), notes: Vec::new(), links: Vec::new() } };
+    let mut b = Builder { view, texts, spoilers, stats: EntityStats { tags: Vec::new(), groups: Vec::new(), notes: Vec::new(), links: Vec::new() } };
     let mut consumed: HashSet<String> = HashSet::new();
 
     if let Some(tier) = record.get("tier").and_then(Value::as_f64) {
@@ -370,7 +375,9 @@ pub fn entity_stats(view: &View<'_>, texts: &Texts, id: EntityId) -> Option<Enti
 
     for spec in FIELDS {
         consumed.insert(spec.field.into());
-        let Some(value) = record.get(spec.field) else { continue };
+        let Some(value) = record.get(spec.field) else {
+            continue;
+        };
         let spec = if spec.field == "missionControl" && matches!(kind, Kind::ShipPart(_)) { &HULL_MISSION_CONTROL } else { spec };
         b.field(spec, value, record);
         if !matches!(spec.fmt, Fmt::Skip) {
@@ -408,6 +415,7 @@ fn prefixed(prefix: &str, field: &str) -> String {
 struct Builder<'a, 'd> {
     view: &'a View<'d>,
     texts: &'a Texts,
+    spoilers: &'a HashSet<EntityId>,
     stats: EntityStats,
 }
 
@@ -457,7 +465,9 @@ impl Builder<'_, '_> {
                 }
             }
             Fmt::Enum(prefix) => {
-                let Some(s) = value.as_str().filter(|s| !s.is_empty()) else { return };
+                let Some(s) = value.as_str().filter(|s| !s.is_empty()) else {
+                    return;
+                };
                 // Some numbers are stored as strings ("req power": "0.290").
                 let text = match s.parse::<f64>() {
                     Ok(_) => return self.number(spec, value, record),
@@ -471,7 +481,9 @@ impl Builder<'_, '_> {
     }
 
     fn number(&mut self, spec: &Field, value: &Value, record: &Map<String, Value>) {
-        let Some(v) = value.as_f64().or_else(|| value.as_str().and_then(|s| s.trim().parse().ok())) else { return };
+        let Some(v) = value.as_f64().or_else(|| value.as_str().and_then(|s| s.trim().parse().ok())) else {
+            return;
+        };
         let rand = record.get(&prefixed("rand", spec.field)).and_then(Value::as_f64).filter(|r| *r != 0.0);
         let chance = record.get(&prefixed("chance", spec.field)).and_then(Value::as_f64).filter(|c| *c < 100.0);
         if v == 0.0 && !spec.always && rand.is_none() {
@@ -480,14 +492,11 @@ impl Builder<'_, '_> {
         let detail = match (rand, chance) {
             (None, None) => None,
             (rand, chance) => Some(
-                [
-                    rand.map(|r| format!("+0–{} random", format_value(spec.fmt, r).trim_start_matches('+'))),
-                    chance.map(|c| format!("{}% chance", num(c))),
-                ]
-                .into_iter()
-                .flatten()
-                .collect::<Vec<_>>()
-                .join(" · "),
+                [rand.map(|r| format!("+0–{} random", format_value(spec.fmt, r).trim_start_matches('+'))), chance.map(|c| format!("{}% chance", num(c)))]
+                    .into_iter()
+                    .flatten()
+                    .collect::<Vec<_>>()
+                    .join(" · "),
             ),
         };
         let stat = self.stat(spec, format_value(spec.fmt, v), spec.tone, v, detail);
@@ -539,9 +548,7 @@ impl Builder<'_, '_> {
         let tons = match kind {
             Kind::HabModule => n("baseMass_tons").map(|t| (t, "Base build cost (in space)")),
             Kind::ShipPart(PartKind::PowerPlant) => n("specificPower_tGW").map(|t| (t, "Build cost per GW")),
-            Kind::ShipPart(PartKind::Radiator) => {
-                n("specificPower_2s_KWkg").filter(|p| *p > 0.0).map(|p| (1000.0 / p, "Build cost per GW waste heat"))
-            }
+            Kind::ShipPart(PartKind::Radiator) => n("specificPower_2s_KWkg").filter(|p| *p > 0.0).map(|p| (1000.0 / p, "Build cost per GW waste heat")),
             Kind::ShipPart(PartKind::Armor) => Some((1.0, "Build cost per ton")),
             Kind::ShipPart(PartKind::Drive) => {
                 // TIDriveTemplate.buildMass_tons: flatMass + thrustPower_GW × specificPower_kgMW.
@@ -619,7 +626,9 @@ impl Builder<'_, '_> {
 
     fn share_group(&mut self, group: &str, field: &str, materials: &Map<String, Value>) {
         for (key, share) in materials {
-            let Some(share) = share.as_f64().filter(|v| *v > 0.0) else { continue };
+            let Some(share) = share.as_f64().filter(|v| *v > 0.0) else {
+                continue;
+            };
             let (label, icon) = self.material(key);
             let stat = Stat { label, value: pct(share), detail: None, sentiment: "neutral".into(), icon, field: format!("{field}.{key}") };
             self.push(group, stat);
@@ -844,7 +853,7 @@ impl Builder<'_, '_> {
     }
 
     fn links(&mut self, record: &Map<String, Value>) {
-        let r = |id| entity_ref(self.view, self.texts, id);
+        let r = |id| entity_ref(self.view, self.texts, id, self.spoilers);
         let mut add = |label: &str, refs: Vec<EntityRef>| {
             if !refs.is_empty() {
                 self.stats.links.push(StatLinks { label: label.into(), entities: refs });
@@ -1033,7 +1042,7 @@ mod tests {
         let texts = b.texts("en").unwrap();
         let view = b.ds.overview();
         let id = view.find(template, data_name).unwrap_or_else(|| panic!("{template}:{data_name}"));
-        entity_stats(&view, &texts, id).unwrap()
+        entity_stats(&view, &texts, id, &b.spoilers(&view).unwrap()).unwrap()
     }
 
     fn value<'s>(s: &'s EntityStats, field: &str) -> &'s Stat {
@@ -1103,10 +1112,11 @@ mod tests {
 
     #[test]
     fn org_stats() {
-        if backend().is_none() {
-            return;
-        }
-        let s = stats(model::ORG, "CooperateSpecial");
+        let Some(b) = backend() else { return };
+        let texts = b.texts("en").unwrap();
+        let view = b.ds.view(ti_data::Scope::scenario(b.ds.scenario_by_name("ModernScenario").unwrap().idx));
+        let id = view.find(model::ORG, "CooperateSpecial").unwrap();
+        let s = entity_stats(&view, &texts, id, &b.spoilers(&view).unwrap()).unwrap();
         assert_eq!(value(&s, "administration").value, "+6");
         assert_eq!(value(&s, "incomeResearch").value, "+10");
         assert_eq!(value(&s, "techBonuses.Xenology").value, "+10%");

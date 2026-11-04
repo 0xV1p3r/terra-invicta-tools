@@ -29,6 +29,15 @@
 	</Popover.Trigger>
 	<Popover.Content class="w-80" align="end">
 		<div class="grid gap-4 text-sm">
+			<h2 class="font-semibold">Wiki</h2>
+			<div class="flex items-start justify-between gap-4">
+				<Label for="setting-wiki-spoilers" class="grid gap-1 font-normal"
+					><span class="font-medium">Show spoilers in wiki</span><span class="text-muted-foreground"
+						>alien and story content</span
+					></Label
+				>
+				<Switch id="setting-wiki-spoilers" bind:checked={settings.wikiSpoilers} />
+			</div>
 			<h2 class="font-semibold">Tree display</h2>
 			<div class="flex items-start justify-between gap-4">
 				<Label for="setting-redundant" class="grid gap-1 font-normal">

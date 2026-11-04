@@ -72,7 +72,12 @@
 		};
 	});
 	function shortcut(event: KeyboardEvent) {
-		if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k' && !event.repeat) {
+		if (
+			(event.ctrlKey || event.metaKey) &&
+			event.key.toLowerCase() === 'k' &&
+			!event.shiftKey &&
+			!event.repeat
+		) {
 			event.preventDefault();
 			if (app.meta) open = !open;
 		}

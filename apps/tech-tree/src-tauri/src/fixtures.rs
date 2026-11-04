@@ -8,6 +8,8 @@
 //! ```
 //!
 //! File names:
+//! * `wiki-index.json` – `get_wiki_index`
+//! * `wiki-entries-<template>.json` – `get_wiki_entries` for representative templates
 //! * `meta.json`                     – `get_meta`
 //! * `tree.json`, `tree-techs.json`  – `get_tree` (techs+projects / techs only, all categories)
 //! * `tree-bands.json`               – `get_tree` with the category-band layout (all research)
@@ -24,7 +26,10 @@ use std::path::PathBuf;
 use serde::Serialize;
 use ti_data::{EntityId, model};
 
-use crate::commands::{self, tests::{backend, en}};
+use crate::commands::{
+    self,
+    tests::{backend, en},
+};
 use crate::dto::*;
 use crate::refs;
 
@@ -34,7 +39,9 @@ fn write_fixtures() {
     let Some(b) = backend() else { return };
     let out = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../static/mock");
     std::fs::create_dir_all(&out).unwrap();
+    let written = std::cell::RefCell::new(BTreeSet::<String>::new());
     let write = |name: &str, value: &dyn erased::Json| {
+        written.borrow_mut().insert(name.to_string());
         let path = out.join(name);
         std::fs::write(&path, value.to_json()).unwrap();
         eprintln!("{:>9} {}", std::fs::metadata(&path).unwrap().len(), name);
@@ -48,6 +55,27 @@ fn write_fixtures() {
     write("tree-bands.json", &commands::get_tree(&b, &scope, &all, FullLayout::Bands).unwrap());
     write("properties.json", &commands::get_properties(&b, &scope, &all).unwrap());
 
+    write("wiki-index.json", &commands::get_wiki_index(&b, &scope, Some(true)).unwrap());
+    let mut wiki_keys = Vec::new();
+    for template in [
+        "TITechTemplate",
+        "TIProjectTemplate",
+        "TIEffectTemplate",
+        "TIDriveTemplate",
+        "TINationTemplate",
+        "TIFactionTemplate",
+        "TICodexEntryTemplate",
+        "TIGlobalConfig",
+    ] {
+        let entries = commands::get_wiki_entries(&b, &scope, template, None).unwrap();
+        wiki_keys.extend(entries.iter().take(3).map(|e| e.entity.key.clone()));
+        write(&format!("wiki-entries-{template}.json"), &entries);
+    }
+    for template in ["TIProjectTemplate", "TIObjectiveTemplate"] {
+        let entries = commands::get_wiki_entries(&b, &scope, template, Some(true)).unwrap();
+        wiki_keys.extend(entries.iter().take(3).map(|e| e.entity.key.clone()));
+        write(&format!("wiki-entries-spoiler-{template}.json"), &entries);
+    }
     let mut index = Index::default();
     for (dir, direction, root) in [
         ("up", Direction::Up, "TIProjectTemplate:Project_ProtiumConverterTorch"),
@@ -84,9 +112,7 @@ fn write_fixtures() {
         first(model::TECH, &|id| view.record(id).is_some_and(|r| r["endGameTech"] == true)),
         first(model::TECH, &|id| view.annotations(id).scenario_specific),
         // (not an alien one: Project_AlienMasterProject unlocks ~1900 ship parts)
-        first(model::PROJECT, &|id| {
-            !view.annotations(id).factions.is_empty() && !b.ds.entity(id).data_name.contains("Alien")
-        }),
+        first(model::PROJECT, &|id| !view.annotations(id).factions.is_empty() && !b.ds.entity(id).data_name.contains("Alien")),
         first(model::PROJECT, &|id| view.annotations(id).from_dlc),
         first(model::PROJECT, &|id| view.annotations(id).varies_by_scenario),
         first(model::PROJECT, &|id| view.record(id).is_some_and(|r| r["repeatable"] == true)),
@@ -99,6 +125,7 @@ fn write_fixtures() {
         view.effects(view.find(model::TECH, "AdAstra").unwrap()).first().copied(),
         first(model::FACTION, &|_| true),
     ];
+    keys.extend(wiki_keys);
     keys.extend(picks.into_iter().flatten().map(|id| refs::key(&view, id)));
     // Everything reachable in one click from three roots, so detail navigation works.
     let mut related = BTreeSet::new();
@@ -119,13 +146,23 @@ fn write_fixtures() {
 
     for q in ["laser", "fusion", "ad astra"] {
         let name = format!("search-{}.json", q.replace(' ', "_"));
-        write(&name, &commands::search(&b, &scope, q, 30).unwrap());
+        write(&name, &commands::search(&b, &scope, q, 30, false).unwrap());
         index.searches.push(q.into());
     }
     write("index.json", &index);
-    let total: u64 = std::fs::read_dir(&out).unwrap().map(|e| e.unwrap().metadata().unwrap().len()).sum();
+    // Drop fixtures of earlier runs (renamed or no longer written) so the directory matches `index.json`.
+    let written = written.into_inner();
+    for entry in std::fs::read_dir(&out).unwrap() {
+        let path = entry.unwrap().path();
+        let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        if name.ends_with(".json") && !written.contains(&name) {
+            std::fs::remove_file(&path).unwrap();
+        }
+    }
+    let total: u64 = written.iter().map(|name| std::fs::metadata(out.join(name)).unwrap().len()).sum();
     eprintln!("total {total} bytes in {}", out.display());
-    assert!(total < 5_000_000);
+    // Full wiki entry lists and bidirectional references bring this to about 6 MB.
+    assert!(total < 10_000_000);
 }
 
 #[derive(Default, Serialize)]

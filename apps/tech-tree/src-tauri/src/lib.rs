@@ -5,6 +5,7 @@
 //! * `scope`    – `ScopeArgs` → `ti_data::Scope`
 //! * `commands` – command logic (no Tauri runtime needed; tested on real data)
 //! * `layout`   – layered graph layout
+//! * `wiki`     – wiki section labels and group order
 //! * `refs`     – entity keys and `EntityRef`s
 //! * `effects`  – effect descriptions
 //! * `properties` – filterable tech/project properties (effects, unlocks)
@@ -22,8 +23,10 @@ mod layout;
 mod properties;
 mod refs;
 mod scope;
+mod spoilers;
 mod state;
 mod stats;
+mod wiki;
 
 use dto::*;
 use error::{CmdError, CmdResult};
@@ -31,10 +34,7 @@ use state::{AppState, Backend};
 use tauri::{Manager, State};
 
 /// Run command logic on the blocking pool so the UI thread stays responsive.
-async fn run_blocking<T: Send + 'static>(
-    state: State<'_, AppState>,
-    f: impl FnOnce(&Backend) -> CmdResult<T> + Send + 'static,
-) -> CmdResult<T> {
+async fn run_blocking<T: Send + 'static>(state: State<'_, AppState>, f: impl FnOnce(&Backend) -> CmdResult<T> + Send + 'static) -> CmdResult<T> {
     let state = AppState::clone(&state);
     tauri::async_runtime::spawn_blocking(move || f(&*state.backend()?))
         .await
@@ -47,12 +47,17 @@ async fn get_meta(state: State<'_, AppState>) -> CmdResult<Meta> {
 }
 
 #[tauri::command]
-async fn get_tree(
-    state: State<'_, AppState>,
-    scope: ScopeArgs,
-    filter: TreeFilter,
-    layout: Option<FullLayout>,
-) -> CmdResult<TreeGraph> {
+async fn get_wiki_index(state: State<'_, AppState>, scope: ScopeArgs, spoilers: Option<bool>) -> CmdResult<Vec<WikiSection>> {
+    run_blocking(state, move |b| commands::get_wiki_index(b, &scope, spoilers)).await
+}
+
+#[tauri::command]
+async fn get_wiki_entries(state: State<'_, AppState>, scope: ScopeArgs, template: String, spoiler: Option<bool>) -> CmdResult<Vec<WikiEntry>> {
+    run_blocking(state, move |b| commands::get_wiki_entries(b, &scope, &template, spoiler)).await
+}
+
+#[tauri::command]
+async fn get_tree(state: State<'_, AppState>, scope: ScopeArgs, filter: TreeFilter, layout: Option<FullLayout>) -> CmdResult<TreeGraph> {
     run_blocking(state, move |b| commands::get_tree(b, &scope, &filter, layout.unwrap_or_default())).await
 }
 
@@ -77,8 +82,8 @@ async fn get_entity(state: State<'_, AppState>, scope: ScopeArgs, key: String) -
 }
 
 #[tauri::command]
-async fn search(state: State<'_, AppState>, scope: ScopeArgs, query: String, limit: usize) -> CmdResult<Vec<SearchHit>> {
-    run_blocking(state, move |b| commands::search(b, &scope, &query, limit)).await
+async fn search(state: State<'_, AppState>, scope: ScopeArgs, query: String, limit: usize, all: Option<bool>) -> CmdResult<Vec<SearchHit>> {
+    run_blocking(state, move |b| commands::search(b, &scope, &query, limit, all.unwrap_or(false))).await
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -96,7 +101,17 @@ pub fn run() {
                 responder.respond(assets::respond(assets_dir, &request));
             });
         })
-        .invoke_handler(tauri::generate_handler![get_meta, get_tree, get_subtree, get_focus, get_properties, get_entity, search])
+        .invoke_handler(tauri::generate_handler![
+            get_wiki_index,
+            get_wiki_entries,
+            get_meta,
+            get_tree,
+            get_subtree,
+            get_focus,
+            get_properties,
+            get_entity,
+            search
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

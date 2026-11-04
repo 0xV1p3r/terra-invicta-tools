@@ -7,7 +7,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use serde_json::Value;
 
@@ -107,6 +107,7 @@ pub struct Dataset {
     pub(crate) scenarios: Vec<Scenario>,
     pub(crate) resolution: Resolution,
     assets: AssetIndex,
+    body_icons: OnceLock<HashMap<String, String>>,
     locales: Mutex<HashMap<String, Arc<Locale>>>,
 }
 
@@ -181,13 +182,7 @@ impl Dataset {
             .layers
             .iter()
             .enumerate()
-            .map(|(i, l)| Layer {
-                idx: LayerIdx(i as u8),
-                id: l.id.clone(),
-                is_dlc: l.kind != "base",
-                dlc: l.dlc.clone(),
-                folder: l.folder.clone(),
-            })
+            .map(|(i, l)| Layer { idx: LayerIdx(i as u8), id: l.id.clone(), is_dlc: l.kind != "base", dlc: l.dlc.clone(), folder: l.folder.clone() })
             .collect();
 
         let mut ds = Dataset {
@@ -203,6 +198,7 @@ impl Dataset {
             scenarios: Vec::new(),
             resolution: Resolution::default(),
             assets: AssetIndex::default(),
+            body_icons: OnceLock::new(),
             locales: Mutex::new(HashMap::new()),
             manifest,
         };
@@ -238,19 +234,16 @@ impl Dataset {
 
     fn add_record(&mut self, layer: LayerIdx, load_order: u32, template: &str, record: Value) {
         // The game skips records without a dataName.
-        let Some(name) = record.get("dataName").and_then(Value::as_str) else { return };
+        let Some(name) = record.get("dataName").and_then(Value::as_str) else {
+            return;
+        };
         let template: Arc<str> = self.intern_template(template).unwrap_or_else(|| Arc::from(template));
         let data_name: Arc<str> = Arc::from(name);
         let id = match self.by_key.get(&*template).and_then(|m| m.get(&*data_name)) {
             Some(id) => *id,
             None => {
                 let id = EntityId(self.entities.len() as u32);
-                self.entities.push(Entity {
-                    id,
-                    template: template.clone(),
-                    data_name: data_name.clone(),
-                    variants: Vec::new(),
-                });
+                self.entities.push(Entity { id, template: template.clone(), data_name: data_name.clone(), variants: Vec::new() });
                 self.by_key.entry(template.clone()).or_default().insert(data_name.clone(), id);
                 self.by_template.entry(template).or_default().push(id);
                 self.by_data_name.entry(data_name).or_default().push(id);
@@ -344,6 +337,25 @@ impl Dataset {
     /// Image metadata for a resource string such as `shipbuildericons/ICO_SteelArmor`.
     pub fn asset(&self, resource: &str) -> Option<&AssetEntry> {
         self.assets.resources.get(resource)
+    }
+
+    /// Match inconsistent punctuation in body icon names deterministically.
+    pub(crate) fn body_icon(&self, name: &str) -> Option<String> {
+        let normalize = |s: &str| s.chars().filter(char::is_ascii_alphanumeric).flat_map(char::to_lowercase).collect::<String>();
+        self.body_icons
+            .get_or_init(|| {
+                let mut keys: Vec<_> = self.assets.resources.keys().collect();
+                keys.sort();
+                let mut icons = HashMap::new();
+                for key in keys {
+                    if let Some(suffix) = key.strip_prefix("icons_2d/ICO_") {
+                        icons.entry(normalize(suffix)).or_insert_with(|| key.clone());
+                    }
+                }
+                icons
+            })
+            .get(&normalize(name))
+            .cloned()
     }
 
     /// Image of an inline text sprite (`<sprite name="control_point">` → `control_point`).

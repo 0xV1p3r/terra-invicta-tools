@@ -88,11 +88,11 @@ impl SearchIndex {
     /// Index every entity (all layers) with texts from `texts`.
     pub fn build(ds: &Dataset, texts: &Texts) -> Self {
         let mut docs = Vec::with_capacity(ds.entities().len());
-        let postfixes: Vec<Option<String>> = std::iter::once(None)
-            .chain(ds.scenarios().iter().filter_map(|s| s.localization_postfix.clone()).map(Some))
-            .collect();
+        let overview = ds.overview();
+        let postfixes: Vec<Option<String>> =
+            std::iter::once(None).chain(ds.scenarios().iter().filter_map(|s| s.localization_postfix.clone()).map(Some)).collect();
         for e in ds.entities() {
-            let mut names: Vec<String> = Vec::new();
+            let mut names = vec![normalize(&overview.name(texts, e.id))];
             let mut text = String::new();
             // Names/texts of every variant and every scenario postfix, so any scope finds it.
             for v in &e.variants {
@@ -111,6 +111,10 @@ impl SearchIndex {
                         }
                     }
                 }
+            }
+            if let Some(body) = overview.text(texts, e.id, field::DESCRIPTION) {
+                text.push_str(&normalize(&body));
+                text.push('\n');
             }
             // Raw values of every variant, each distinct value once.
             let mut values = String::new();
@@ -154,7 +158,9 @@ impl SearchIndex {
             let mut score = 0u32;
             let mut best = MatchField::Value;
             for term in &terms {
-                let Some((s, f)) = score_term(doc, term) else { continue 'docs };
+                let Some((s, f)) = score_term(doc, term) else {
+                    continue 'docs;
+                };
                 score += s;
                 best = best.min(f);
             }
