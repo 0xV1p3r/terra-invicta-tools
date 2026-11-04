@@ -23,6 +23,7 @@ mod properties;
 mod refs;
 mod scope;
 mod state;
+mod stats;
 
 use dto::*;
 use error::{CmdError, CmdResult};

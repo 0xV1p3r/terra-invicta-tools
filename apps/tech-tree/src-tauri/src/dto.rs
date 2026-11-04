@@ -255,6 +255,8 @@ pub struct EntityDetail {
     pub effects: Vec<EffectLine>,
     pub unlocks: Vec<UnlockItem>,
     pub unlocked_by: Vec<EntityRef>,
+    /// Stats of a hab module, ship part or org (None for other kinds).
+    pub stats: Option<EntityStats>,
     pub research_cost: Option<f64>,
     /// Research cost of everything needed, including this (listed prereqs only).
     pub total_cost: Option<f64>,
@@ -332,4 +334,50 @@ pub struct UnlockItem {
     /// `claim`, `trait`, `codex`, `mission`, `objective`.
     pub kind: String,
     pub entity: EntityRef,
+    /// Stats of unlocked hab modules, ship parts and orgs.
+    pub stats: Option<EntityStats>,
+}
+
+/// Every stat of a hab module, ship part or org, grouped for display (see `stats.rs`).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EntityStats {
+    /// Short classifications ("Tier 2", "Station", "Fusion Thermal", "Criminal").
+    pub tags: Vec<String>,
+    pub groups: Vec<StatGroup>,
+    /// Rules and conditions as sentences (special rules, eligibility, drive notes).
+    pub notes: Vec<String>,
+    /// Related entities (missions granted, upgrade chain, required tech).
+    pub links: Vec<StatLinks>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StatGroup {
+    /// "Combat", "Income / month", "Build materials", …
+    pub label: String,
+    pub stats: Vec<Stat>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Stat {
+    pub label: String,
+    /// Formatted value with unit ("1,200 t", "+45", "35%").
+    pub value: String,
+    /// Randomized orgs: roll range and chance, e.g. "+0–4 · 50% chance".
+    pub detail: Option<String>,
+    /// For the owning faction: `good`, `bad` or `neutral`.
+    pub sentiment: String,
+    /// Game icon (asset path, like `EntityRef::icon`).
+    pub icon: Option<String>,
+    /// Record field the value comes from.
+    pub field: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StatLinks {
+    pub label: String,
+    pub entities: Vec<EntityRef>,
 }

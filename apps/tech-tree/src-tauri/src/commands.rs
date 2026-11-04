@@ -14,6 +14,7 @@ use crate::layout::{self, LayoutEdge};
 use crate::properties;
 use crate::refs::{self, entity_ref};
 use crate::scope;
+use crate::stats::entity_stats;
 use crate::state::Backend;
 
 pub fn get_meta(b: &Backend) -> CmdResult<Meta> {
@@ -392,9 +393,10 @@ pub fn get_entity(b: &Backend, scope: &ScopeArgs, key: &str) -> CmdResult<Entity
         unlocks: view
             .unlocks(id)
             .into_iter()
-            .map(|u| UnlockItem { kind: unlock_kind_name(u.kind).into(), entity: r(u.entity) })
+            .map(|u| UnlockItem { kind: unlock_kind_name(u.kind).into(), entity: r(u.entity), stats: entity_stats(&view, &texts, u.entity) })
             .collect(),
         unlocked_by: view.unlocked_by(id).into_iter().map(r).collect(),
+        stats: entity_stats(&view, &texts, id),
         research_cost: is_research.then(|| research_cost(&view, id)),
         total_cost: is_research.then(|| required_cost(graph, &view, id)),
         record: record.clone(),

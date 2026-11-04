@@ -203,6 +203,8 @@ export interface EntityDetail {
 	effects: EffectLine[];
 	unlocks: UnlockItem[];
 	unlockedBy: EntityRef[];
+	/** Stats of a hab module, ship part or org (None for other kinds). */
+	stats: EntityStats | null;
 	researchCost: number | null;
 	totalCost: number | null;
 	record: Record<string, unknown>;
@@ -296,6 +298,44 @@ export type UnlockKind =
 export interface UnlockItem {
 	kind: UnlockKind;
 	entity: EntityRef;
+	/** Stats of unlocked hab modules, ship parts and orgs. */
+	stats: EntityStats | null;
+}
+
+/** Every stat of a hab module, ship part or org, grouped for display (see `stats.rs`). */
+export interface EntityStats {
+	/** Short classifications ("Tier 2", "Station", "Fusion Thermal", "Criminal"). */
+	tags: string[];
+	groups: StatGroup[];
+	/** Rules and conditions as sentences (special rules, eligibility, drive notes). */
+	notes: string[];
+	/** Related entities (missions granted, upgrade chain, required tech). */
+	links: StatLinks[];
+}
+
+export interface StatGroup {
+	/** "Combat", "Income / month", "Build materials", … */
+	label: string;
+	stats: Stat[];
+}
+
+export interface Stat {
+	label: string;
+	/** Formatted value with unit ("1,200 t", "+45", "35%"). */
+	value: string;
+	/** Randomized orgs: roll range and chance, e.g. "+0–4 · 50% chance". */
+	detail: string | null;
+	/** For the owning faction: `good`, `bad` or `neutral`. */
+	sentiment: EffectSentiment;
+	/** Game icon (asset path, like `EntityRef::icon`). */
+	icon: string | null;
+	/** Record field the value comes from. */
+	field: string;
+}
+
+export interface StatLinks {
+	label: string;
+	entities: EntityRef[];
 }
 
 /** The backend's tree filter rule for one node (see `get_tree` in src-tauri/src/commands.rs). */

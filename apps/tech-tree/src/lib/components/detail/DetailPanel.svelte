@@ -18,6 +18,8 @@
 	import EffectItem from './EffectItem.svelte';
 	import EntityIcon from './EntityIcon.svelte';
 	import EntityLink from './EntityLink.svelte';
+	import StatBlock from './StatBlock.svelte';
+	import UnlockCard from './UnlockCard.svelte';
 
 	const UNLOCK_LABELS: Record<UnlockKind, string> = {
 		research: 'Research',
@@ -70,6 +72,8 @@
 
 	// Some projects unlock well over a thousand items (e.g. territorial claims).
 	const UNLOCK_PREVIEW = 25;
+	// Unlock cards with stats start expanded only in small groups (drive families have up to 6 variants).
+	const OPEN_CARDS = 6;
 	let expanded = $state<Partial<Record<UnlockKind, boolean>>>({});
 	$effect(() => {
 		void app.selected;
@@ -344,6 +348,11 @@
 						</ul>
 					{/if}
 
+					{#if detail.stats}
+						{@render section('Stats')}
+						<StatBlock stats={detail.stats} />
+					{/if}
+
 					{#if detail.effects.length}
 						{@render section('Effects')}
 						<ul class="space-y-2 text-sm">
@@ -362,9 +371,19 @@
 										{UNLOCK_LABELS[kind] ?? kind}
 										<span class="text-xs text-muted-foreground">({items.length})</span>
 									</h4>
-									<ul class="flex flex-col text-sm">
-										{#each expanded[kind] ? items : items.slice(0, UNLOCK_PREVIEW) as item, i (i)}
-											<li><EntityLink entity={item.entity} /></li>
+									<ul class="flex flex-col text-sm {items.some((u) => u.stats) ? 'gap-2' : ''}">
+										{#each expanded[kind] ? items : items.slice(0, UNLOCK_PREVIEW) as item, i (`${i}:${item.entity.key}`)}
+											<li>
+												{#if item.stats}
+													<UnlockCard
+														entity={item.entity}
+														stats={item.stats}
+														open={items.length <= OPEN_CARDS}
+													/>
+												{:else}
+													<EntityLink entity={item.entity} />
+												{/if}
+											</li>
 										{/each}
 									</ul>
 									{#if items.length > UNLOCK_PREVIEW}
