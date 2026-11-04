@@ -1,10 +1,22 @@
 <script lang="ts">
+	import ArrowDownLeft from '@lucide/svelte/icons/arrow-down-left';
+	import ArrowDownRight from '@lucide/svelte/icons/arrow-down-right';
+	import ArrowUpLeft from '@lucide/svelte/icons/arrow-up-left';
+	import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
 	import Settings from '@lucide/svelte/icons/settings';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
 	import * as Popover from '$lib/components/ui/popover/index.js';
 	import { Switch } from '$lib/components/ui/switch/index.js';
-	import { settings } from '$lib/settings.svelte';
+	import * as ToggleGroup from '$lib/components/ui/toggle-group/index.js';
+	import { settings, type Corner } from '$lib/settings.svelte';
+
+	const CORNER_OPTIONS = [
+		{ value: 'top-left', label: 'Top left', icon: ArrowUpLeft },
+		{ value: 'top-right', label: 'Top right', icon: ArrowUpRight },
+		{ value: 'bottom-left', label: 'Bottom left', icon: ArrowDownLeft },
+		{ value: 'bottom-right', label: 'Bottom right', icon: ArrowDownRight }
+	] as const;
 </script>
 
 <Popover.Root>
@@ -51,6 +63,23 @@
 					</span>
 				</Label>
 				<Switch id="setting-overview" bind:checked={settings.overviewLabels} />
+			</div>
+			<div class="flex items-center justify-between gap-4">
+				<span id="setting-minimap-corner" class="font-medium">Minimap position</span>
+				<ToggleGroup.Root
+					type="single"
+					size="sm"
+					variant="outline"
+					value={settings.minimapCorner}
+					onValueChange={(v) => v && (settings.minimapCorner = v as Corner)}
+					aria-labelledby="setting-minimap-corner"
+				>
+					{#each CORNER_OPTIONS as c (c.value)}
+						<ToggleGroup.Item value={c.value} aria-label={c.label} title={c.label}>
+							<c.icon />
+						</ToggleGroup.Item>
+					{/each}
+				</ToggleGroup.Root>
 			</div>
 		</div>
 	</Popover.Content>

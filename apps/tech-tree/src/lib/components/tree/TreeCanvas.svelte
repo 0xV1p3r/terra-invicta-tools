@@ -562,7 +562,15 @@
 			<HoverCard node={hoveredNode} x={hoverAnchor.x} y={hoverAnchor.y} {width} {height} />
 		{/if}
 
-		<div class="absolute bottom-3 left-3 flex flex-col gap-1" role="group" aria-label="Zoom">
+		<!-- Zoom controls yield the bottom-left corner to the minimap. -->
+		<div
+			class={[
+				'absolute bottom-3 flex flex-col gap-1',
+				settings.minimapCorner === 'bottom-left' ? 'right-3' : 'left-3'
+			]}
+			role="group"
+			aria-label="Zoom"
+		>
 			<Button variant="outline" size="icon" aria-label="Zoom in" onclick={() => zoomBy(1.25)}>
 				<Plus />
 			</Button>

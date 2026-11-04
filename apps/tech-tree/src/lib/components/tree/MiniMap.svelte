@@ -4,6 +4,7 @@
 	import { onDestroy } from 'svelte';
 	import { mode } from 'mode-watcher';
 	import * as Card from '$lib/components/ui/card/index.js';
+	import { settings, type Corner } from '$lib/settings.svelte';
 	import type { Camera } from './camera';
 	import type { Scene } from './scene';
 
@@ -12,6 +13,12 @@
 	const WIDTH = 200;
 	const HEIGHT = 150;
 	const PAD = 6;
+	const CORNER_CLASS: Record<Corner, string> = {
+		'top-left': 'top-3 left-3',
+		'top-right': 'top-3 right-3',
+		'bottom-left': 'bottom-3 left-3',
+		'bottom-right': 'right-3 bottom-3'
+	};
 
 	let canvas = $state<HTMLCanvasElement>();
 	const dpr = typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1;
@@ -93,7 +100,7 @@
 	}
 </script>
 
-<Card.Root class="absolute right-3 bottom-3 overflow-hidden p-0 shadow">
+<Card.Root class="absolute {CORNER_CLASS[settings.minimapCorner]} overflow-hidden p-0 shadow">
 	<canvas
 		bind:this={canvas}
 		class="block cursor-pointer"
