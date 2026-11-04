@@ -1,5 +1,5 @@
 // Small display formatters shared by tree and detail views.
-import type { EntityKind } from '$lib/api';
+import type { EntityKind, UnlockKind } from '$lib/api';
 
 /** Compact research cost: 950 → "950", 12500 → "12.5k", 2_000_000 → "2M". */
 export function formatCost(cost: number | null | undefined): string {
@@ -30,6 +30,20 @@ export const KIND_LABELS: Record<EntityKind, string> = {
 	mission: 'Mission',
 	codex: 'Codex',
 	other: 'Other'
+};
+
+export const UNLOCK_LABELS: Record<UnlockKind, string> = {
+	research: 'Research',
+	researchAlternative: 'Research (alternative prerequisite)',
+	shipPart: 'Ship parts',
+	habModule: 'Hab modules',
+	org: 'Orgs',
+	grantedOrg: 'Granted orgs',
+	claim: 'Claims',
+	trait: 'Traits',
+	codex: 'Codex entries',
+	mission: 'Missions',
+	objective: 'Objectives'
 };
 
 /** Techs and projects live in the tree; everything else only in the detail panel. */

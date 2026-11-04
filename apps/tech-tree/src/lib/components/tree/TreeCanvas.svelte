@@ -497,7 +497,7 @@
 	// --- hover card -------------------------------------------------------------------
 
 	let hoverAnchor = $state<{ x: number; y: number } | null>(null);
-	/** Cards show everything themselves once zoomed in far enough: no hover card then. */
+	/** Zoomed out, cards show little themselves; zoomed in, the hover card expands with more. */
 	let zoomedOut = $state(true);
 	const hoveredNode = $derived(hovered && !dragging ? (scene?.byKey.get(hovered) ?? null) : null);
 
@@ -560,8 +560,15 @@
 		</p>
 		<p class="sr-only" aria-live="polite">{announcement}</p>
 
-		{#if hoveredNode && hoverAnchor && zoomedOut}
-			<HoverCard node={hoveredNode} x={hoverAnchor.x} y={hoverAnchor.y} {width} {height} />
+		{#if hoveredNode && hoverAnchor}
+			<HoverCard
+				node={hoveredNode}
+				x={hoverAnchor.x}
+				y={hoverAnchor.y}
+				{width}
+				{height}
+				expanded={!zoomedOut}
+			/>
 		{/if}
 
 		<!-- Zoom controls yield the bottom-left corner to the minimap. -->
