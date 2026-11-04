@@ -9,6 +9,8 @@ export interface Settings {
 	wikiSpoilers: boolean;
 	/** Hide links implied by another chain of listed prerequisites (still shown in a lineage). */
 	hideRedundantLinks: boolean;
+	/** Long links run as shared lines (fan-out/fan-in trunks, buses between cards). */
+	mergeLinks: boolean;
 	/** Full-tree filters remove non-matching research, or only dim it (layout stays put). */
 	filterMode: FilterMode;
 	/** Zoomed far out: plain category blocks with screen-sized landmark labels. */
@@ -20,6 +22,7 @@ export interface Settings {
 const DEFAULTS: Settings = {
 	wikiSpoilers: false,
 	hideRedundantLinks: true,
+	mergeLinks: true,
 	filterMode: 'hide',
 	overviewLabels: false,
 	minimapCorner: 'top-left'

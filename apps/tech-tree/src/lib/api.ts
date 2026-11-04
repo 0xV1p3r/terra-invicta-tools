@@ -379,10 +379,15 @@ const tauriApi = {
 	getWikiEntries: (scope: ScopeArgs, template: string, spoiler = false) =>
 		invoke<WikiEntry[]>('get_wiki_entries', { scope, template, spoiler }),
 	getMeta: () => invoke<Meta>('get_meta'),
-	getTree: (scope: ScopeArgs, filter: TreeFilter, layout: FullLayout = 'layered') =>
-		invoke<TreeGraph>('get_tree', { scope, filter, layout }),
-	getSubtree: (scope: ScopeArgs, args: SubtreeArgs) =>
-		invoke<TreeGraph>('get_subtree', { scope, args }),
+	/** `mergeEdges`: long edges run as shared lines (more compact, not traceable one by one). */
+	getTree: (
+		scope: ScopeArgs,
+		filter: TreeFilter,
+		layout: FullLayout = 'layered',
+		mergeEdges = true
+	) => invoke<TreeGraph>('get_tree', { scope, filter, layout, mergeEdges }),
+	getSubtree: (scope: ScopeArgs, args: SubtreeArgs, mergeEdges = true) =>
+		invoke<TreeGraph>('get_subtree', { scope, args, mergeEdges }),
 	getFocus: (scope: ScopeArgs, root: EntityKey) => invoke<TreeGraph>('get_focus', { scope, root }),
 	/** Properties of the full-tree research passing `filter` (its `properties` are ignored). */
 	getProperties: (scope: ScopeArgs, filter: TreeFilter) =>
@@ -395,7 +400,7 @@ const tauriApi = {
 };
 
 // --- Browser mock mode -------------------------------------------------------
-// Fixtures live in `static/mock/` and ignore the scope. Missing fixtures reject
+// Fixtures live in `static/mock/` and ignore the scope (and edge merging: always on). Missing fixtures reject
 // with an error message, like a failing backend command would.
 
 async function fixture<T>(...names: string[]): Promise<T> {

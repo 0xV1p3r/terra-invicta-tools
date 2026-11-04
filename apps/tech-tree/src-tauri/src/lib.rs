@@ -57,13 +57,19 @@ async fn get_wiki_entries(state: State<'_, AppState>, scope: ScopeArgs, template
 }
 
 #[tauri::command]
-async fn get_tree(state: State<'_, AppState>, scope: ScopeArgs, filter: TreeFilter, layout: Option<FullLayout>) -> CmdResult<TreeGraph> {
-    run_blocking(state, move |b| commands::get_tree(b, &scope, &filter, layout.unwrap_or_default())).await
+async fn get_tree(
+    state: State<'_, AppState>,
+    scope: ScopeArgs,
+    filter: TreeFilter,
+    layout: Option<FullLayout>,
+    merge_edges: Option<bool>,
+) -> CmdResult<TreeGraph> {
+    run_blocking(state, move |b| commands::get_tree(b, &scope, &filter, layout.unwrap_or_default(), merge_edges.unwrap_or(true))).await
 }
 
 #[tauri::command]
-async fn get_subtree(state: State<'_, AppState>, scope: ScopeArgs, args: SubtreeArgs) -> CmdResult<TreeGraph> {
-    run_blocking(state, move |b| commands::get_subtree(b, &scope, &args)).await
+async fn get_subtree(state: State<'_, AppState>, scope: ScopeArgs, args: SubtreeArgs, merge_edges: Option<bool>) -> CmdResult<TreeGraph> {
+    run_blocking(state, move |b| commands::get_subtree(b, &scope, &args, merge_edges.unwrap_or(true))).await
 }
 
 #[tauri::command]

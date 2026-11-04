@@ -43,13 +43,15 @@
 						direction: app.view.direction,
 						alternatives: app.view.alternatives,
 						maxDepth: null
-					}
+					},
+					mergeEdges: settings.mergeLinks
 				}
 			: app.view.kind === 'focus'
 				? { kind: 'focus' as const, scope: $state.snapshot(app.scope), root: app.view.root }
 				: {
 						kind: 'full' as const,
 						layout: app.view.layout,
+						mergeEdges: settings.mergeLinks,
 						scope: $state.snapshot(app.scope),
 						// Highlight mode loads everything and dims non-matches (layout stays put).
 						filter: settings.filterMode === 'highlight' ? NO_FILTER : app.filter
@@ -100,10 +102,10 @@
 		error = null;
 		const promise =
 			req.kind === 'full'
-				? api.getTree(req.scope, req.filter, req.layout)
+				? api.getTree(req.scope, req.filter, req.layout, req.mergeEdges)
 				: req.kind === 'focus'
 					? api.getFocus(req.scope, req.root)
-					: api.getSubtree(req.scope, req.args);
+					: api.getSubtree(req.scope, req.args, req.mergeEdges);
 		promise.then(
 			(g) => {
 				if (id !== latest) return;

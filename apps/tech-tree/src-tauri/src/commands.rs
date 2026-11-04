@@ -128,7 +128,7 @@ fn reference_groups(view: &View<'_>, texts: &ti_data::Texts, id: EntityId, incom
         .collect()
 }
 
-pub fn get_tree(b: &Backend, scope: &ScopeArgs, filter: &TreeFilter, layout: FullLayout) -> CmdResult<TreeGraph> {
+pub fn get_tree(b: &Backend, scope: &ScopeArgs, filter: &TreeFilter, layout: FullLayout, merge_edges: bool) -> CmdResult<TreeGraph> {
     let texts = b.texts(&scope.lang)?;
     let view = b.ds.view(scope::resolve(&b.ds, scope)?);
     let graph = view.research_graph();
@@ -141,7 +141,7 @@ pub fn get_tree(b: &Backend, scope: &ScopeArgs, filter: &TreeFilter, layout: Ful
         .collect();
     let edges: BTreeSet<Edge> = graph.full().edges.into_iter().filter(|e| nodes.contains(&e.from) && nodes.contains(&e.to)).collect();
     let unfiltered = filter.techs && filter.projects && filter.categories.is_empty() && filter.properties.is_empty();
-    let mut tree = build_graph(&view, &texts, &nodes, &edges, None, layout == FullLayout::Bands, unfiltered);
+    let mut tree = build_graph(&view, &texts, &nodes, &edges, None, GraphLayout { bands: layout == FullLayout::Bands, merge_edges }, unfiltered);
     tree.total_cost = tree.nodes.iter().map(|n| n.cost).filter(|c| *c > 0.0).sum();
     Ok(tree)
 }
@@ -156,7 +156,7 @@ fn matches_kind_and_category(view: &View<'_>, id: EntityId, filter: &TreeFilter)
     kind && (filter.categories.is_empty() || refs::category(view, id).is_some_and(|c| filter.categories.contains(&c)))
 }
 
-pub fn get_subtree(b: &Backend, scope: &ScopeArgs, args: &SubtreeArgs) -> CmdResult<TreeGraph> {
+pub fn get_subtree(b: &Backend, scope: &ScopeArgs, args: &SubtreeArgs, merge_edges: bool) -> CmdResult<TreeGraph> {
     let texts = b.texts(&scope.lang)?;
     let view = b.ds.view(scope::resolve(&b.ds, scope)?);
     let root = refs::parse_key(&view, &args.root)?;
@@ -177,7 +177,7 @@ pub fn get_subtree(b: &Backend, scope: &ScopeArgs, args: &SubtreeArgs) -> CmdRes
     }
     // Implying chains are complete only when the walk follows every edge without a depth limit.
     let complete = args.alternatives && args.max_depth.is_none();
-    let mut tree = build_graph(&view, &texts, &sub.nodes, &sub.edges, Some(root), false, complete);
+    let mut tree = build_graph(&view, &texts, &sub.nodes, &sub.edges, Some(root), GraphLayout { bands: false, merge_edges }, complete);
     tree.total_cost = required_cost(graph, &view, root);
     Ok(tree)
 }
@@ -204,15 +204,22 @@ fn record_flag(view: &View<'_>, id: EntityId, key: &str) -> bool {
     view.record(id).and_then(|r| r.get(key)).and_then(Value::as_bool).unwrap_or(false)
 }
 
-/// Lay out a node/edge set and fill in node data, in one band per category if `bands`.
-/// `total_cost` is left at 0.
+/// How [`build_graph`] lays out its graph.
+struct GraphLayout {
+    /// One band per category.
+    bands: bool,
+    /// Long edges merged into shared lines.
+    merge_edges: bool,
+}
+
+/// Lay out a node/edge set and fill in node data. `total_cost` is left at 0.
 fn build_graph(
     view: &View<'_>,
     texts: &ti_data::Texts,
     nodes: &BTreeSet<EntityId>,
     edges: &BTreeSet<Edge>,
     root: Option<EntityId>,
-    bands: bool,
+    options: GraphLayout,
     mark_redundant: bool,
 ) -> TreeGraph {
     let ds = view.dataset();
@@ -232,11 +239,11 @@ fn build_graph(
     let costs: Vec<f64> = order.iter().map(|&id| research_cost(view, id)).collect();
     // Band order: category name (matches the frontend's category order).
     let categories: Vec<String> = order.iter().map(|&id| refs::category(view, id).unwrap_or_default()).collect();
-    let mut band_names: Vec<String> = if bands { categories.clone() } else { Vec::new() };
+    let mut band_names: Vec<String> = if options.bands { categories.clone() } else { Vec::new() };
     band_names.sort_unstable();
     band_names.dedup();
-    let groups: Vec<usize> = if bands { categories.iter().map(|c| band_names.binary_search(c).unwrap()).collect() } else { Vec::new() };
-    let routed = layout::route_grouped(order.len(), &layout_edges, &costs, &groups);
+    let groups: Vec<usize> = if options.bands { categories.iter().map(|c| band_names.binary_search(c).unwrap()).collect() } else { Vec::new() };
+    let routed = layout::route_grouped(order.len(), &layout_edges, &costs, &groups, options.merge_edges);
     let placements = routed.nodes;
     let tree_bands =
         band_names.into_iter().zip(routed.groups).filter_map(|(category, span)| span.map(|(top, bottom)| Band { category, top, bottom })).collect();
@@ -641,7 +648,7 @@ pub(crate) mod tests {
         let Some(b) = backend() else { return };
         let filter = TreeFilter { techs: true, projects: true, categories: vec![], properties: vec![] };
         let t = std::time::Instant::now();
-        let tree = get_tree(&b, &en(), &filter, FullLayout::Layered).unwrap();
+        let tree = get_tree(&b, &en(), &filter, FullLayout::Layered, true).unwrap();
         eprintln!("get_tree (overview, all): {} nodes, {} edges in {:?}", tree.nodes.len(), tree.edges.len(), t.elapsed());
         assert!(tree.nodes.len() > 800);
         assert!(tree.total_cost > 0.0);
@@ -663,10 +670,10 @@ pub(crate) mod tests {
         assert!(tree.nodes.iter().filter(|n| n.flags.obtainable).count() > 800);
 
         let techs =
-            get_tree(&b, &en(), &TreeFilter { techs: true, projects: false, categories: vec![], properties: vec![] }, FullLayout::Layered).unwrap();
+            get_tree(&b, &en(), &TreeFilter { techs: true, projects: false, categories: vec![], properties: vec![] }, FullLayout::Layered, true).unwrap();
         assert!(techs.nodes.iter().all(|n| n.kind == NodeKind::Tech));
         let energy =
-            get_tree(&b, &en(), &TreeFilter { techs: true, projects: true, categories: vec!["Energy".into()], properties: vec![] }, FullLayout::Layered)
+            get_tree(&b, &en(), &TreeFilter { techs: true, projects: true, categories: vec!["Energy".into()], properties: vec![] }, FullLayout::Layered, true)
                 .unwrap();
         assert!(!energy.nodes.is_empty() && energy.nodes.iter().all(|n| n.category == "Energy"));
     }
@@ -730,7 +737,7 @@ pub(crate) mod tests {
     fn filtered_trees_keep_redundant_edges() {
         let Some(b) = backend() else { return };
         let filter = TreeFilter { techs: true, projects: true, categories: vec!["Energy".into()], properties: vec![] };
-        let tree = get_tree(&b, &en(), &filter, FullLayout::Layered).unwrap();
+        let tree = get_tree(&b, &en(), &filter, FullLayout::Layered, true).unwrap();
         assert!(tree.edges.iter().all(|e| !e.redundant));
     }
 
@@ -738,14 +745,14 @@ pub(crate) mod tests {
     fn category_bands() {
         let Some(b) = backend() else { return };
         let filter = TreeFilter { techs: true, projects: true, categories: vec![], properties: vec![] };
-        let tree = get_tree(&b, &en(), &filter, FullLayout::Bands).unwrap();
+        let tree = get_tree(&b, &en(), &filter, FullLayout::Bands, true).unwrap();
         assert_eq!(tree.bands.len(), 8);
         assert!(tree.bands.windows(2).all(|w| w[0].bottom < w[1].top && w[0].category < w[1].category));
         for n in &tree.nodes {
             let band = tree.bands.iter().find(|band| band.category == n.category).unwrap();
             assert!(n.y >= band.top - 1e-6 && n.y + tree.node_height <= band.bottom + 1e-6, "{}", n.key);
         }
-        assert!(get_tree(&b, &en(), &filter, FullLayout::Layered).unwrap().bands.is_empty());
+        assert!(get_tree(&b, &en(), &filter, FullLayout::Layered, true).unwrap().bands.is_empty());
     }
 
     #[test]
@@ -770,7 +777,7 @@ pub(crate) mod tests {
             categories: vec![],
             properties: vec!["effect:ControlPointMaintenance:up".into(), "effect:MCFreeSpaceMineNetwork:up".into()],
         };
-        let tree = get_tree(&b, &en(), &filter, FullLayout::Layered).unwrap();
+        let tree = get_tree(&b, &en(), &filter, FullLayout::Layered, true).unwrap();
         let mine = find("effect:MCFreeSpaceMineNetwork:up").count;
         assert!(tree.nodes.len() >= cp.count.max(mine) && tree.nodes.len() <= cp.count + mine);
         assert!(tree.nodes.iter().all(|n| n.properties.iter().any(|p| filter.properties.contains(p))));
@@ -780,7 +787,7 @@ pub(crate) mod tests {
         assert_eq!(cp.icon.as_deref(), Some("sprites/control_point.png"));
         let energy = TreeFilter { categories: vec!["Energy".into()], ..filter.clone() };
         let faceted = get_properties(&b, &en(), &energy).unwrap();
-        let energy_tree = get_tree(&b, &en(), &TreeFilter { properties: vec![], ..energy.clone() }, FullLayout::Layered).unwrap();
+        let energy_tree = get_tree(&b, &en(), &TreeFilter { properties: vec![], ..energy.clone() }, FullLayout::Layered, true).unwrap();
         assert!(faceted.len() < catalog.len());
         for p in &faceted {
             let on_screen = energy_tree.nodes.iter().filter(|n| n.properties.contains(&p.id)).count();
@@ -849,19 +856,19 @@ pub(crate) mod tests {
     fn subtrees() {
         let Some(b) = backend() else { return };
         let args = |root: &str, direction| SubtreeArgs { root: root.into(), direction, alternatives: true, max_depth: None };
-        let up = get_subtree(&b, &en(), &args("TIProjectTemplate:Project_ProtiumConverterTorch", Direction::Up)).unwrap();
+        let up = get_subtree(&b, &en(), &args("TIProjectTemplate:Project_ProtiumConverterTorch", Direction::Up), true).unwrap();
         assert_eq!(up.root.as_deref(), Some("TIProjectTemplate:Project_ProtiumConverterTorch"));
         assert!(up.nodes.len() > 10);
         assert!(up.total_cost > 0.0);
-        let down = get_subtree(&b, &en(), &args("TITechTemplate:AdAstra", Direction::Down)).unwrap();
-        let both = get_subtree(&b, &en(), &args("TITechTemplate:AdAstra", Direction::Both)).unwrap();
+        let down = get_subtree(&b, &en(), &args("TITechTemplate:AdAstra", Direction::Down), true).unwrap();
+        let both = get_subtree(&b, &en(), &args("TITechTemplate:AdAstra", Direction::Both), true).unwrap();
         assert!(both.nodes.len() >= down.nodes.len());
         assert_eq!(down.total_cost, both.total_cost);
-        let shallow = get_subtree(&b, &en(), &SubtreeArgs { max_depth: Some(1), ..args("TITechTemplate:AdAstra", Direction::Down) }).unwrap();
+        let shallow = get_subtree(&b, &en(), &SubtreeArgs { max_depth: Some(1), ..args("TITechTemplate:AdAstra", Direction::Down) }, true).unwrap();
         let root = shallow.root.as_deref().unwrap();
         assert!(shallow.nodes.len() > 1);
         assert!(shallow.nodes.iter().all(|n| { n.key == root || shallow.edges.iter().any(|e| e.from == root && e.to == n.key) }));
-        assert!(get_subtree(&b, &en(), &args("TITechTemplate:Nope", Direction::Up)).is_err());
+        assert!(get_subtree(&b, &en(), &args("TITechTemplate:Nope", Direction::Up), true).is_err());
     }
 
     #[test]
@@ -908,11 +915,11 @@ pub(crate) mod tests {
         let Some(b) = backend() else { return };
         let scope = ScopeArgs { scenario: Some("ModernScenario".into()), faction: Some("ResistCouncil".into()), lang: "en".into() };
         let tree =
-            get_tree(&b, &scope, &TreeFilter { techs: true, projects: true, categories: vec![], properties: vec![] }, FullLayout::Layered).unwrap();
+            get_tree(&b, &scope, &TreeFilter { techs: true, projects: true, categories: vec![], properties: vec![] }, FullLayout::Layered, true).unwrap();
         assert!(!tree.nodes.is_empty());
         let bad = ScopeArgs { scenario: Some("NoSuchScenario".into()), ..en() };
         assert!(
-            get_tree(&b, &bad, &TreeFilter { techs: true, projects: true, categories: vec![], properties: vec![] }, FullLayout::Layered).is_err()
+            get_tree(&b, &bad, &TreeFilter { techs: true, projects: true, categories: vec![], properties: vec![] }, FullLayout::Layered, true).is_err()
         );
         let bad = ScopeArgs { faction: Some("NoSuchFaction".into()), ..en() };
         assert!(search(&b, &bad, "laser", 5, false).is_err());

@@ -20,10 +20,16 @@
 //!   with a smaller height (`DUMMY_SIZE` rows), so edges run between cards instead of
 //!   through them; segments touching dummies weigh more in alignment so long edges
 //!   stay straight. Each dummy becomes a pair of waypoints (left/right column edge).
+//!   Dummies are shared (edge concentration): long edges leaving one node run as one
+//!   trunk that branches off toward each target, long edges entering one node merge
+//!   into one trunk before it. An edge whose source and target both fan this way joins
+//!   the source's trunk for its first half and the target's for the rest. Then every run
+//!   of adjacent dummies in a column (no card between them) merges into one bus. Without
+//!   `merge`, every edge keeps dummies of its own.
 //! * Optional groups (e.g. research categories): every group becomes a horizontal band
 //!   of its own (components inside), stacked in group order with `GROUP_GAP`. Dummies
-//!   of an edge between groups belong to the source's group for the first half of the
-//!   edge and to the target's for the rest.
+//!   of an edge between groups belong to the source's group (and trunk) for the first
+//!   half of the edge and to the target's for the rest.
 //! * Components are stacked vertically with `COMPONENT_GAP` (isolated nodes as one
 //!   plain column); min y is 0. Positions are top-left corners.
 //!
@@ -50,7 +56,7 @@ const DUMMY_SIZE: f64 = 0.12;
 const DUMMY_WEIGHT: f64 = 2.0;
 const DUMMY_DUMMY_WEIGHT: f64 = 8.0;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct LayoutEdge {
     /// Index of the prerequisite node.
     pub from: usize,
@@ -98,13 +104,15 @@ pub fn layout_by_cost(n: usize, edges: &[LayoutEdge], costs: &[f64]) -> Vec<Plac
 /// [`layout_by_cost`] with waypoints for edges spanning more than one column.
 #[cfg(test)]
 pub fn route(n: usize, edges: &[LayoutEdge], costs: &[f64]) -> Layout {
-    route_grouped(n, edges, costs, &[])
+    route_grouped(n, edges, costs, &[], true)
 }
 
-/// [`route`] with every node in a band of its `group` (indexed like the nodes; empty = no bands).
-pub fn route_grouped(n: usize, edges: &[LayoutEdge], costs: &[f64], groups: &[usize]) -> Layout {
+/// [`route`] with every node in a band of its `group` (indexed like the nodes; empty = no
+/// bands), merging long edges into shared lines if `merge`.
+pub fn route_grouped(n: usize, edges: &[LayoutEdge], costs: &[f64], groups: &[usize], merge: bool) -> Layout {
     let real_column = compact(columns_from(n, edges, &cost_floor(costs, n)));
-    let (column, segments, chains) = expand(&real_column, edges);
+    let grouped = groups.len() == n && n > 0;
+    let (column, segments, mut chains, group) = expand(&real_column, edges, if grouped { groups } else { &[] }, merge);
     let total = column.len();
     let ncols = column.iter().max().map_or(0, |m| m + 1);
     let mut cols: Vec<Vec<usize>> = vec![Vec::new(); ncols];
@@ -113,16 +121,8 @@ pub fn route_grouped(n: usize, edges: &[LayoutEdge], costs: &[f64], groups: &[us
     }
     order(&mut cols, &column, &segments, total);
     let comp = components(total, &segments);
-    let grouped = groups.len() == n && n > 0;
     // Blocks packed and stacked separately: components, or (group, component) pairs.
     let (block, block_group) = if grouped {
-        let mut group = vec![0; total];
-        group[..n].copy_from_slice(groups);
-        for (e, chain) in edges.iter().zip(&chains) {
-            for (i, &d) in chain.iter().enumerate() {
-                group[d] = if 2 * i < chain.len() { groups[e.from] } else { groups[e.to] };
-            }
-        }
         let mut keys: Vec<(usize, usize)> = (0..total).map(|v| (group[v], comp[v])).collect();
         keys.sort_unstable();
         keys.dedup();
@@ -135,8 +135,21 @@ pub fn route_grouped(n: usize, edges: &[LayoutEdge], costs: &[f64], groups: &[us
     for col in &mut cols {
         col.sort_by_key(|&v| block[v]);
     }
+    let lane = if merge { buses(&mut cols, &segments, &block, n) } else { (0..total).collect() };
+    let mut seen = std::collections::HashSet::new();
+    let segments: Vec<LayoutEdge> = segments
+        .iter()
+        .map(|e| LayoutEdge { from: lane[e.from], to: lane[e.to], alternative: e.alternative })
+        .filter(|e| seen.insert(*e))
+        .collect();
+    for d in chains.iter_mut().flatten() {
+        *d = lane[*d];
+    }
     let size: Vec<f64> = (0..total).map(|v| if v < n { 1.0 } else { DUMMY_SIZE }).collect();
-    let pos = coordinates(&cols, &column, &segments, &block, &size, n);
+    let mut pos = coordinates(&cols, &column, &segments, &block, &size, n);
+    for v in n..total {
+        pos[v] = pos[lane[v]];
+    }
     let crossings = crossings_of(&pos, &column, &segments);
     let (all, bands) = place(&cols, &pos, &block, &block_group, &size, n);
     let groups = if grouped {
@@ -164,31 +177,93 @@ pub fn route_grouped(n: usize, edges: &[LayoutEdge], costs: &[f64], groups: &[us
 }
 
 /// Split edges spanning several columns into unit segments through dummy nodes
-/// (indices `n..`). Returns the column of every node, the segments (plus edges that
-/// are not split: same column or right to left) and each edge's dummies in order.
-fn expand(column: &[usize], edges: &[LayoutEdge]) -> (Vec<usize>, Vec<LayoutEdge>, Vec<Vec<usize>>) {
+/// (indices `n..`), shared per trunk if `merge` (see the module docs). Returns the column of every
+/// node, the distinct segments (plus edges that are not split: same column or right to
+/// left), each edge's dummies in order and the group of every node (all 0 without `groups`).
+fn expand(
+    column: &[usize],
+    edges: &[LayoutEdge],
+    groups: &[usize],
+    merge: bool,
+) -> (Vec<usize>, Vec<LayoutEdge>, Vec<Vec<usize>>, Vec<usize>) {
+    let n = column.len();
+    let mut group = if groups.is_empty() { vec![0; n] } else { groups.to_vec() };
+    let long = |e: &&LayoutEdge| column[e.to] > column[e.from] + 1;
+    // Long edges per (node, alternative) leaving / entering it.
+    let (mut fan_out, mut fan_in) = (vec![[0usize; 2]; n], vec![[0usize; 2]; n]);
+    for e in edges.iter().filter(long) {
+        fan_out[e.from][e.alternative as usize] += 1;
+        fan_in[e.to][e.alternative as usize] += 1;
+    }
     let mut column = column.to_vec();
+    // Trunk dummies by (endpoint, entering it, column, alternative).
+    let mut trunk: std::collections::HashMap<(usize, bool, usize, bool), usize> = std::collections::HashMap::new();
+    let mut seen = std::collections::HashSet::new();
     let mut segments = Vec::with_capacity(edges.len());
     let mut chains = Vec::with_capacity(edges.len());
     for e in edges {
         let (cf, ct) = (column[e.from], column[e.to]);
         let mut chain = Vec::new();
         if ct > cf + 1 {
+            let a = e.alternative as usize;
+            let (fans_out, fans_in) = (fan_out[e.from][a] > 1, fan_in[e.to][a] > 1);
+            // Columns before `split` join the source's trunk, the rest the target's.
+            let split = if (fans_out && fans_in) || group[e.from] != group[e.to] {
+                cf + 1 + (ct - cf - 1).div_ceil(2)
+            } else if fans_in {
+                cf + 1
+            } else {
+                ct
+            };
             let mut prev = e.from;
             for c in cf + 1..ct {
-                let d = column.len();
-                column.push(c);
-                segments.push(LayoutEdge { from: prev, to: d, alternative: e.alternative });
+                let end = if c < split { e.from } else { e.to };
+                let mut add = || {
+                    column.push(c);
+                    group.push(group[end]);
+                    column.len() - 1
+                };
+                let d = if merge { *trunk.entry((end, c >= split, c, e.alternative)).or_insert_with(add) } else { add() };
+                if seen.insert((prev, d, e.alternative)) {
+                    segments.push(LayoutEdge { from: prev, to: d, alternative: e.alternative });
+                }
                 chain.push(d);
                 prev = d;
             }
-            segments.push(LayoutEdge { from: prev, to: e.to, alternative: e.alternative });
+            if seen.insert((prev, e.to, e.alternative)) {
+                segments.push(LayoutEdge { from: prev, to: e.to, alternative: e.alternative });
+            }
         } else {
             segments.push(*e);
         }
         chains.push(chain);
     }
-    (column, segments, chains)
+    (column, segments, chains, group)
+}
+
+/// Merge every run of adjacent dummies in a column (same block and line style, no card
+/// between them) into its first one, a bus the edges share. Removes the merged dummies
+/// from `cols` and returns the dummy each node maps to (itself if kept).
+fn buses(cols: &mut [Vec<usize>], segments: &[LayoutEdge], block: &[usize], real: usize) -> Vec<usize> {
+    let mut alternative = vec![false; block.len()];
+    for e in segments {
+        for v in [e.from, e.to] {
+            if v >= real {
+                alternative[v] = e.alternative;
+            }
+        }
+    }
+    let mut lane: Vec<usize> = (0..block.len()).collect();
+    for col in cols {
+        col.dedup_by(|&mut v, &mut kept| {
+            let merge = v >= real && kept >= real && block[v] == block[kept] && alternative[v] == alternative[kept];
+            if merge {
+                lane[v] = kept;
+            }
+            merge
+        });
+    }
+    lane
 }
 
 /// Placement with columns but no reordering (baseline for crossing tests).
@@ -706,11 +781,24 @@ mod tests {
     }
 
     #[test]
+    fn long_edges_share_trunks() {
+        // Chain 0 → 1 → 2 → 3 → 4 sets the columns; 0 fans out to 3 and 4.
+        let r = route(5, &[e(0, 1), e(1, 2), e(2, 3), e(3, 4), e(0, 3), e(0, 4)], &[]);
+        assert_eq!(r.waypoints[4][..], r.waypoints[5][..4]);
+        // Chain 0 → 1 → 2 → 3; 0 and 1 fan in to 3.
+        let r = route(4, &[e(0, 1), e(1, 2), e(2, 3), e(0, 3), e(1, 3)], &[]);
+        assert_eq!(r.waypoints[3][2..], r.waypoints[4][..]);
+        // Unmerged: one dummy per edge and column.
+        let r = route_grouped(4, &[e(0, 1), e(1, 2), e(2, 3), e(0, 3), e(1, 3)], &[], &[], false);
+        assert_ne!(r.waypoints[3][2..], r.waypoints[4][..]);
+    }
+
+    #[test]
     fn groups_form_disjoint_bands_in_order() {
         let n = 300;
         let edges = random_dag(n, 600, 9);
         let groups: Vec<usize> = (0..n).map(|v| [2, 0, 3][v % 3]).collect();
-        let r = route_grouped(n, &edges, &[], &groups);
+        let r = route_grouped(n, &edges, &[], &groups, true);
         assert_no_overlap(&r.nodes);
         assert_eq!(r.groups.len(), 4);
         assert!(r.groups[1].is_none());
@@ -721,7 +809,7 @@ mod tests {
         }
         assert!(band(0).1 + GROUP_GAP - GAP_Y <= band(2).0 + 1e-6);
         assert!(band(2).1 + GROUP_GAP - GAP_Y <= band(3).0 + 1e-6);
-        assert_eq!(route_grouped(n, &edges, &[], &[]), route(n, &edges, &[]));
+        assert_eq!(route_grouped(n, &edges, &[], &[], true), route(n, &edges, &[]));
     }
 
     #[test]

@@ -50,6 +50,16 @@
 				<Switch id="setting-redundant" bind:checked={settings.hideRedundantLinks} />
 			</div>
 			<div class="flex items-start justify-between gap-4">
+				<Label for="setting-merge-links" class="grid gap-1 font-normal">
+					<span class="font-medium">Merge long links</span>
+					<span class="text-muted-foreground">
+						Links spanning several columns share lines, so the tree is more compact. Off, every link
+						gets a lane of its own.
+					</span>
+				</Label>
+				<Switch id="setting-merge-links" bind:checked={settings.mergeLinks} />
+			</div>
+			<div class="flex items-start justify-between gap-4">
 				<Label for="setting-filter-mode" class="grid gap-1 font-normal">
 					<span class="font-medium">Highlight filter matches</span>
 					<span class="text-muted-foreground">

@@ -49,10 +49,10 @@ fn write_fixtures() {
     let scope = en();
     write("meta.json", &commands::get_meta(&b).unwrap());
     let all = TreeFilter { techs: true, projects: true, categories: vec![], properties: vec![] };
-    write("tree.json", &commands::get_tree(&b, &scope, &all, FullLayout::Layered).unwrap());
+    write("tree.json", &commands::get_tree(&b, &scope, &all, FullLayout::Layered, true).unwrap());
     let techs = TreeFilter { projects: false, ..all.clone() };
-    write("tree-techs.json", &commands::get_tree(&b, &scope, &techs, FullLayout::Layered).unwrap());
-    write("tree-bands.json", &commands::get_tree(&b, &scope, &all, FullLayout::Bands).unwrap());
+    write("tree-techs.json", &commands::get_tree(&b, &scope, &techs, FullLayout::Layered, true).unwrap());
+    write("tree-bands.json", &commands::get_tree(&b, &scope, &all, FullLayout::Bands, true).unwrap());
     write("properties.json", &commands::get_properties(&b, &scope, &all).unwrap());
 
     write("wiki-index.json", &commands::get_wiki_index(&b, &scope, Some(true)).unwrap());
@@ -83,7 +83,7 @@ fn write_fixtures() {
         ("both", Direction::Both, "TITechTemplate:OrbitalShipbuilding"),
     ] {
         let args = SubtreeArgs { root: root.into(), direction, alternatives: true, max_depth: None };
-        let tree = commands::get_subtree(&b, &scope, &args).unwrap();
+        let tree = commands::get_subtree(&b, &scope, &args, true).unwrap();
         let name = format!("subtree-{dir}-{}.json", root.split_once(':').unwrap().1);
         write(&name, &tree);
         index.subtrees.push(name);
