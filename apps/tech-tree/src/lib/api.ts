@@ -361,6 +361,66 @@ export interface StatLinks {
 	entities: EntityRef[];
 }
 
+// --- Solar system map --------------------------------------------------------
+
+/** Everything the solar system map draws. Positions come from propagating `orbit` (see map/kepler.ts). */
+export interface SolarSystem {
+	/** Start date of the scenario (overview: the base campaign's), `YYYY-MM-DD`. */
+	startDate: string;
+	/** Every space body in scope, parents before children (the Sun first). */
+	bodies: SpaceBodyInfo[];
+	lagrangePoints: LagrangePointInfo[];
+}
+
+export type BodyType =
+	'star' | 'planet' | 'dwarfPlanet' | 'planetaryMoon' | 'asteroidalMoon' | 'asteroid' | 'comet';
+
+export type SpaceResource = 'water' | 'volatiles' | 'metals' | 'nobles' | 'fissiles';
+
+/** Rating the game shows for an unprospected site. */
+export type ResourceRating = 'empty' | 'possible' | 'low' | 'medium' | 'high' | 'max';
+
+export interface SpaceBodyInfo {
+	entity: EntityRef;
+	bodyType: BodyType;
+	/** Key of the body it orbits; null for the Sun. */
+	parent: EntityKey | null;
+	/** Null for the Sun (and bodies without usable elements). */
+	orbit: OrbitElements | null;
+	/** The game's mean radius in km (mean half-dimension for irregular bodies; 0 without size data). */
+	radiusKm: number;
+	massKg: number | null;
+	maxHabSize: number;
+	habSiteCount: number;
+	/** The game's rating of the unprospected body, averaged over its hab sites; empty without hab sites. */
+	resources: Partial<Record<SpaceResource, ResourceRating>>;
+}
+
+/** Keplerian elements as the game uses them (angles in degrees). */
+export interface OrbitElements {
+	semiMajorAxisKm: number;
+	eccentricity: number;
+	inclinationDeg: number;
+	longAscendingNodeDeg: number;
+	argPeriapsisDeg: number;
+	meanAnomalyAtEpochDeg: number;
+	/** Epoch as a Julian year (2000.0 = J2000). */
+	epochJulianYear: number;
+	/** Orbital period around the parent, in days. */
+	periodDays: number;
+	/** Full precession cycles, in years (moons only). The game never applies them. */
+	nodalPrecessionYears: number | null;
+	apsidalPrecessionYears: number | null;
+}
+
+export interface LagrangePointInfo {
+	entity: EntityRef;
+	point: 'L1' | 'L2' | 'L3' | 'L4' | 'L5';
+	/** Body the point belongs to (e.g. Mercury); its parent is the primary. */
+	body: EntityKey;
+	maxHabSize: number;
+}
+
 /** The backend's tree filter rule for one node (see `get_tree` in src-tauri/src/commands.rs). */
 export function matchesFilter(n: TreeNode, filter: TreeFilter): boolean {
 	return (
@@ -399,7 +459,8 @@ const tauriApi = {
 	 * `kinds`: only hits of these kinds (empty = any), applied before `limit`.
 	 */
 	search: (scope: ScopeArgs, query: string, limit = 30, all = false, kinds: EntityKind[] = []) =>
-		invoke<SearchHit[]>('search', { scope, query, limit, all, kinds })
+		invoke<SearchHit[]>('search', { scope, query, limit, all, kinds }),
+	getSolarSystem: (scope: ScopeArgs) => invoke<SolarSystem>('get_solar_system', { scope })
 };
 
 // --- Browser mock mode -------------------------------------------------------
@@ -505,7 +566,8 @@ const mockApi: typeof tauriApi = {
 		const name = query.trim().replace(/\s+/g, '_');
 		const hits = await fixture<SearchHit[]>(`search-${name}`, `search-${name.toLowerCase()}`);
 		return hits.filter((h) => !kinds.length || kinds.includes(h.entity.kind)).slice(0, limit);
-	}
+	},
+	getSolarSystem: () => fixture<SolarSystem>('solar-system')
 };
 
 export const api = mockMode ? mockApi : tauriApi;

@@ -99,6 +99,11 @@ async fn search(
     run_blocking(state, move |b| commands::search(b, &scope, &query, limit, all.unwrap_or(false), &kinds.unwrap_or_default())).await
 }
 
+#[tauri::command]
+async fn get_solar_system(state: State<'_, AppState>, scope: ScopeArgs) -> CmdResult<SolarSystem> {
+    run_blocking(state, move |b| commands::get_solar_system(b, &scope)).await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -123,7 +128,8 @@ pub fn run() {
             get_focus,
             get_properties,
             get_entity,
-            search
+            search,
+            get_solar_system
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

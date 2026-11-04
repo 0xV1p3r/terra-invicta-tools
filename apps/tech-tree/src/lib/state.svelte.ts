@@ -21,8 +21,16 @@ export type ViewSpec =
 
 export type ViewKind = ViewSpec['kind'];
 
-/** A history step: the view and the entity selected in it. */
+/** Top-level page: the research tree or the solar system map. */
+export type Page = 'tree' | 'map';
+
+/** Templates the solar system map shows (navigating to one opens the map). */
+const MAP_TEMPLATES = ['TISpaceBodyTemplate:', 'TINavigableTemplate:'];
+export const isMapKey = (key: EntityKey) => MAP_TEMPLATES.some((t) => key.startsWith(t));
+
+/** A history step: the page, the view and the entity selected in it. */
 interface HistoryEntry {
+	page: Page;
 	view: ViewSpec;
 	selected: EntityKey | null;
 	/** The selection was a node of the tree, so restoring it centers on it again. */
@@ -36,6 +44,8 @@ class AppState {
 	/** Loaded once on startup; null until then (or on error, see `error`). */
 	meta = $state<Meta | null>(null);
 	error = $state<string | null>(null);
+
+	page = $state<Page>('tree');
 
 	/** Data scope: overview by default (all scenarios, no faction). */
 	scope = $state<ScopeArgs>({ scenario: null, faction: null, lang: 'en' });
@@ -122,6 +132,7 @@ class AppState {
 	private current(): HistoryEntry {
 		const selected = this.selected;
 		return {
+			page: this.page,
 			view: $state.snapshot(this.view),
 			selected,
 			inTree: selected !== null && this.treeKeys.has(selected)
@@ -140,12 +151,17 @@ class AppState {
 		this.view = next;
 	}
 
-	/** History navigation: also select the entity again and center the tree on it (or the view's root). */
-	private restore({ view, selected, inTree }: HistoryEntry) {
+	/**
+	 * History navigation: back to the page, select the entity again and center on it (the tree on
+	 * the view's root when it wasn't a node).
+	 */
+	private restore({ page, view, selected, inTree }: HistoryEntry) {
+		this.page = page;
 		this.setView(view);
 		this.selected = selected;
 		if (selected) this.panelOpen = true;
 		this.focus = inTree ? selected : view.kind === 'full' ? null : view.root;
+		if (selected && isMapKey(selected)) this.mapFocus = selected;
 	}
 
 	/** Entity shown in the detail panel. */
@@ -153,18 +169,32 @@ class AppState {
 	/** Node the tree view should center on next (e.g. after a search). */
 	focus = $state<EntityKey | null>(null);
 
+	/** Body whose system the map shows (its satellites); null = the Sun's. */
+	mapSystem = $state<EntityKey | null>(null);
+	/** Body or Lagrange point the map should show and center on next. */
+	mapFocus = $state<EntityKey | null>(null);
+
 	/** Keys of the nodes currently loaded in the tree view (set by the canvas). */
 	treeKeys = $state.raw<ReadonlySet<EntityKey>>(new Set());
 	/** Detail panel visibility. */
 	panelOpen = $state(true);
 
 	/**
-	 * Follow an entity reference: show it in the panel; techs/projects are also focused in the tree.
-	 * A history step, so Back returns to the previous entity (selecting on the canvas is not).
+	 * Follow an entity reference: show it in the panel; techs/projects are also focused in the
+	 * tree, space bodies and Lagrange points on the map. A history step, so Back returns to the
+	 * previous entity (selecting on the canvas or the map is not).
 	 */
 	navigate(ref: Pick<EntityRef, 'key' | 'kind'>) {
 		const research = ref.kind === 'tech' || ref.kind === 'project';
 		this.panelOpen = true;
+		if (isMapKey(ref.key)) {
+			if (ref.key !== this.selected || this.page !== 'map') this.record();
+			this.page = 'map';
+			this.selected = ref.key;
+			this.mapFocus = ref.key;
+			return;
+		}
+		if (research) this.page = 'tree';
 		if (research && this.view.kind === 'focus') return this.openFocus(ref.key);
 		if (research && this.view.kind !== 'full' && !this.treeKeys.has(ref.key)) this.showFullTree();
 		else if (ref.key !== this.selected) this.record();
@@ -173,18 +203,21 @@ class AppState {
 	}
 
 	openSubtree(root: EntityKey, direction: Direction = 'up') {
+		this.page = 'tree';
 		this.go({ kind: 'subtree', root, direction, alternatives: this.subtreeAlternatives });
 		this.selected = root;
 		this.focus = root;
 	}
 
 	openFocus(root: EntityKey) {
+		this.page = 'tree';
 		this.go({ kind: 'focus', root });
 		this.selected = root;
 		this.focus = root;
 	}
 
 	showFullTree(focus: EntityKey | null = null) {
+		this.page = 'tree';
 		this.go({ kind: 'full', layout: this.fullLayout });
 		this.focus = focus;
 	}

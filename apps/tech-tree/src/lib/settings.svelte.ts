@@ -2,6 +2,9 @@
 
 export type FilterMode = 'hide' | 'highlight';
 
+/** Radial distance scale of the solar system map. */
+export type MapScale = 'log' | 'linear';
+
 export const CORNERS = ['top-left', 'top-right', 'bottom-left', 'bottom-right'] as const;
 export type Corner = (typeof CORNERS)[number];
 
@@ -19,6 +22,10 @@ export interface Settings {
 	landmarkLabels: boolean;
 	/** Corner of the tree canvas the minimap sits in. */
 	minimapCorner: Corner;
+	/** Log scale keeps inner and outer orbits readable together; linear shows true proportions. */
+	mapScale: MapScale;
+	/** Map filters hide non-matching bodies, or only dim them. */
+	mapFilterMode: FilterMode;
 }
 
 const DEFAULTS: Settings = {
@@ -28,7 +35,9 @@ const DEFAULTS: Settings = {
 	filterMode: 'hide',
 	overviewLabels: true,
 	landmarkLabels: false,
-	minimapCorner: 'top-left'
+	minimapCorner: 'top-left',
+	mapScale: 'log',
+	mapFilterMode: 'highlight'
 };
 
 const STORAGE_KEY = 'ti-tech-tree:settings';
@@ -45,6 +54,9 @@ function load(): Settings {
 		}
 		if (out.filterMode !== 'hide' && out.filterMode !== 'highlight')
 			out.filterMode = DEFAULTS.filterMode;
+		if (out.mapScale !== 'log' && out.mapScale !== 'linear') out.mapScale = DEFAULTS.mapScale;
+		if (out.mapFilterMode !== 'hide' && out.mapFilterMode !== 'highlight')
+			out.mapFilterMode = DEFAULTS.mapFilterMode;
 		if (!CORNERS.includes(out.minimapCorner)) out.minimapCorner = DEFAULTS.minimapCorner;
 		return out;
 	} catch {

@@ -5,7 +5,7 @@ use std::collections::{BTreeSet, HashMap};
 
 use serde_json::Value;
 use ti_data::graph::{Edge, ResearchGraph};
-use ti_data::{EntityId, Traversal, UnlockKind, View, model};
+use ti_data::{EntityId, Traversal, UnlockKind, View, model, space};
 
 use crate::dto::*;
 use crate::effects::effect_line;
@@ -510,6 +510,72 @@ pub fn search(b: &Backend, scope: &ScopeArgs, query: &str, limit: usize, all: bo
         .collect())
 }
 
+/// Start date of the scope's scenario (overview: the default scenario's), `YYYY-MM-DD`.
+fn start_date(view: &View<'_>) -> Option<String> {
+    let ds = view.dataset();
+    let scenario = view.scenario().or_else(|| ds.default_scenario())?;
+    let record = &ds.selected_variant(scenario.idx, scenario.start_time?)?.record;
+    let field = |key| record.get(key).and_then(Value::as_i64);
+    Some(format!("{:04}-{:02}-{:02}", field("year")?, field("month")?, field("day")?))
+}
+
+/// Bodies of the scope (parents first) with their orbits and resource ratings, plus Lagrange points.
+pub fn get_solar_system(b: &Backend, scope: &ScopeArgs) -> CmdResult<SolarSystem> {
+    let texts = b.texts(&scope.lang)?;
+    let view = b.ds.view(scope::resolve(&b.ds, scope)?);
+    let spoilers = &*b.spoilers(&view)?;
+    let system = space::System::load(&view);
+    let key = |i: usize| refs::key(&view, system.bodies[i].id);
+    let bodies = system
+        .bodies
+        .iter()
+        .map(|body| {
+            let d = &body.data;
+            // Angles the game would randomize are shown as 0. A massless parent gives no usable period.
+            let period_s = system.orbital_period_s(body).filter(|p| p.is_finite() && *p > 0.0);
+            let orbit = d.semi_major_axis_m().zip(period_s).map(|(a, period_s)| OrbitElements {
+                semi_major_axis_km: a / 1000.0,
+                eccentricity: d.eccentricity(),
+                inclination_deg: d.inclination_deg.unwrap_or(0.0),
+                long_ascending_node_deg: d.long_ascending_node_deg.unwrap_or(0.0),
+                arg_periapsis_deg: d.arg_periapsis().unwrap_or(0.0),
+                mean_anomaly_at_epoch_deg: d.mean_anomaly_at_epoch().unwrap_or(0.0),
+                epoch_julian_year: d.epoch(),
+                period_days: period_s / 86_400.0,
+                nodal_precession_years: d.nodal_precession_years,
+                apsidal_precession_years: d.apsidal_precession_years,
+            });
+            SpaceBodyInfo {
+                entity: entity_ref(&view, &texts, body.id, spoilers),
+                body_type: d.object_type.name().into(),
+                parent: body.parent.map(key),
+                orbit,
+                radius_km: d.mean_radius(),
+                mass_kg: d.mass_kg,
+                max_hab_size: d.max_hab_size,
+                hab_site_count: body.sites.len() as u32,
+                resources: space::Resource::ALL
+                    .into_iter()
+                    .filter_map(|r| Some((r.key().to_string(), system.body_rating(body, r)?.name().to_string())))
+                    .collect(),
+            }
+        })
+        .collect();
+    let lagrange_points = system
+        .lagrange_points
+        .iter()
+        .filter_map(|(id, point)| {
+            Some(LagrangePointInfo {
+                entity: entity_ref(&view, &texts, *id, spoilers),
+                point: point.lagrange_value.clone(),
+                body: key(system.index(&point.related_object)?),
+                max_hab_size: point.max_hab_size,
+            })
+        })
+        .collect();
+    Ok(SolarSystem { start_date: start_date(&view).unwrap_or_default(), bodies, lagrange_points })
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use std::path::PathBuf;
@@ -940,5 +1006,35 @@ pub(crate) mod tests {
         let parts = search(&b, &en(), "laser", 5, false, &["shipPart".into()]).unwrap();
         assert_eq!(parts.len(), 5);
         assert!(parts.iter().all(|h| h.entity.kind == "shipPart"));
+    }
+
+    #[test]
+    fn solar_system() {
+        let Some(b) = backend() else { return };
+        let s = get_solar_system(&b, &en()).unwrap();
+        assert_eq!(s.start_date, "2022-09-30");
+        assert!(s.bodies.len() > 450, "{}", s.bodies.len());
+        assert_eq!((s.bodies[0].entity.data_name.as_str(), s.bodies[0].body_type.as_str()), ("Sol", "star"));
+        assert!(s.bodies[0].parent.is_none() && s.bodies[0].orbit.is_none());
+        let index: HashMap<&str, usize> = s.bodies.iter().enumerate().map(|(i, b)| (b.entity.key.as_str(), i)).collect();
+        for (i, body) in s.bodies.iter().enumerate().skip(1) {
+            let parent = body.parent.as_deref().unwrap_or_else(|| panic!("{} has no parent", body.entity.key));
+            assert!(index[parent] < i, "{} before its parent", body.entity.key);
+        }
+        let earth = s.bodies.iter().find(|b| b.entity.data_name == "Earth").unwrap();
+        assert_eq!(earth.parent.as_deref(), Some("TISpaceBodyTemplate:Sol"));
+        assert!((earth.orbit.as_ref().unwrap().period_days - 365.25).abs() < 0.2);
+        assert!(earth.entity.icon.is_some());
+        let luna = s.bodies.iter().find(|b| b.entity.data_name == "Luna").unwrap();
+        assert!(luna.hab_site_count > 0 && luna.resources.len() == 5, "{:?}", luna.resources);
+        assert!(luna.orbit.as_ref().unwrap().nodal_precession_years.is_some());
+        let ratings = ["empty", "possible", "low", "medium", "high", "max"];
+        assert!(s.bodies.iter().flat_map(|b| b.resources.values()).all(|r| ratings.contains(&r.as_str())));
+        assert!(s.bodies.iter().any(|b| b.resources.values().any(|r| r == "max")));
+        assert!(s.lagrange_points.len() > 100);
+        assert!(s.lagrange_points.iter().all(|l| index.contains_key(l.body.as_str()) && l.point.starts_with('L')));
+
+        let scenario = ScopeArgs { scenario: Some("2003Scenario".into()), ..en() };
+        assert_eq!(get_solar_system(&b, &scenario).unwrap().start_date, "2003-03-31");
     }
 }

@@ -11,16 +11,30 @@
 	import WikiDialog from '$lib/components/wiki/WikiDialog.svelte';
 	import SearchPalette from '$lib/components/search/SearchPalette.svelte';
 	import SettingsDialog from '$lib/components/settings/SettingsDialog.svelte';
-	import Pill, { pillIcon } from '$lib/components/toolbar/Pill.svelte';
+	import Pill, { pillIcon, pillToggle, segmented } from '$lib/components/toolbar/Pill.svelte';
 	import PillDivider from '$lib/components/toolbar/PillDivider.svelte';
 	import Tip from '$lib/components/toolbar/Tip.svelte';
 	import TreeCanvas from '$lib/components/tree/TreeCanvas.svelte';
 	import TreeFilters from '$lib/components/tree/TreeFilters.svelte';
 	import ViewBar from '$lib/components/tree/ViewBar.svelte';
+	import MapFilters from '$lib/components/map/MapFilters.svelte';
+	import SolarMap from '$lib/components/map/SolarMap.svelte';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
+	import * as ToggleGroup from '$lib/components/ui/toggle-group/index.js';
 	import * as Tooltip from '$lib/components/ui/tooltip/index.js';
-	import { app } from '$lib/state.svelte';
+	import { app, type Page } from '$lib/state.svelte';
+
+	const PAGES: { value: Page; label: string; title: string }[] = [
+		{ value: 'tree', label: 'Tech tree', title: 'Research tree: techs and projects' },
+		{ value: 'map', label: 'Solar system', title: 'Solar system map: space bodies and their stats' }
+	];
+
+	// The map mounts on first use and then stays (like the tree) so switching back is instant.
+	let mapMounted = $state(false);
+	$effect(() => {
+		if (app.page === 'map') mapMounted = true;
+	});
 
 	/** The tree on screen, for the view controls (null while a new view loads). */
 	let treeGraph = $state.raw<TreeGraph | null>(null);
@@ -142,17 +156,40 @@
 			<div
 				class="@container relative z-10 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-b bg-card px-3 py-1.5 shadow-sm"
 				role="region"
-				aria-label="Tree toolbar"
+				aria-label={app.page === 'map' ? 'Map toolbar' : 'Tree toolbar'}
 				{@attach pinUtilities}
 			>
-				<ViewBar graph={treeGraph} />
+				<Pill aria-label="Page">
+					<ToggleGroup.Root
+						type="single"
+						size="sm"
+						spacing={0.5}
+						class={segmented}
+						value={app.page}
+						onValueChange={(v) => v && (app.page = v as Page)}
+						aria-label="Page"
+					>
+						{#each PAGES as p (p.value)}
+							<Tip text={p.title}>
+								<ToggleGroup.Item value={p.value} class={pillToggle}>{p.label}</ToggleGroup.Item>
+							</Tip>
+						{/each}
+					</ToggleGroup.Root>
+				</Pill>
+				{#if app.page === 'tree'}
+					<ViewBar graph={treeGraph} />
+				{/if}
 				<ScopeBar />
 				<div
 					role="group"
 					aria-label="Filters"
 					class="flex max-w-full flex-wrap items-center gap-x-3 gap-y-1.5"
 				>
-					<TreeFilters />
+					{#if app.page === 'tree'}
+						<TreeFilters />
+					{:else}
+						<MapFilters />
+					{/if}
 				</div>
 				<Pill class="ml-auto gap-0.5" aria-label="Search and settings" data-utilities>
 					<SearchPalette />
@@ -163,7 +200,9 @@
 							? app.panelOpen
 								? 'Hide details panel'
 								: 'Show details panel'
-							: 'Select a tech or project to see its details'}
+							: app.page === 'map'
+								? 'Select a body to see its details'
+								: 'Select a tech or project to see its details'}
 					>
 						<!-- aria-disabled rather than disabled, so keyboard users can reach the explanation. -->
 						<Button
@@ -184,9 +223,14 @@
 				</Pill>
 			</div>
 			<div class="flex min-h-0 flex-1">
-				<main class="min-w-0 flex-1">
+				<main class="min-w-0 flex-1" class:hidden={app.page !== 'tree'}>
 					<TreeCanvas bind:graph={treeGraph} />
 				</main>
+				{#if mapMounted}
+					<main class="min-w-0 flex-1" class:hidden={app.page !== 'map'}>
+						<SolarMap />
+					</main>
+				{/if}
 				{#if app.panelOpen && app.selected}
 					<div class="w-[420px] shrink-0">
 						<DetailPanel />
@@ -197,8 +241,10 @@
 				<!-- Dev-only marker; kept out of the toolbar flow so it can't push the pills around. -->
 				<Badge
 					variant="outline"
-					class="pointer-events-none fixed bottom-3 left-1/2 z-20 -translate-x-1/2 bg-card/90 text-amber-400"
-					>mock data</Badge
+					class="pointer-events-none fixed left-1/2 z-20 -translate-x-1/2 bg-card/90 text-amber-400 {app.page ===
+					'map'
+						? 'bottom-28'
+						: 'bottom-3'}">mock data</Badge
 				>
 			{/if}
 		</div>

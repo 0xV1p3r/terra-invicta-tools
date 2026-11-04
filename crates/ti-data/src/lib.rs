@@ -21,6 +21,7 @@ pub mod refs;
 pub mod scenario;
 pub mod search;
 pub mod source;
+pub mod space;
 pub mod text;
 pub mod view;
 

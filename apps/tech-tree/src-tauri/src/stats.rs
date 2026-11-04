@@ -2,6 +2,7 @@
 //! record, labelled, formatted and grouped. Known fields come from `FIELDS`; anything
 //! else that isn't presentation data (models, sounds, UI paths) lands in "Other".
 
+mod space;
 mod wiki;
 
 use std::collections::HashSet;
@@ -350,6 +351,12 @@ const TANK_TONS: f64 = 100.0;
 
 /// Structured stats for wiki entities; research and effects have dedicated panels.
 pub fn entity_stats(view: &View<'_>, texts: &Texts, id: EntityId, spoilers: &HashSet<EntityId>) -> Option<EntityStats> {
+    if matches!(
+        view.dataset().entity(id).template.as_ref(),
+        ti_data::space::SPACE_BODY | ti_data::space::HAB_SITE | ti_data::space::ORBIT | ti_data::space::MINING_PROFILE
+    ) {
+        return space::stats(view, texts, id, spoilers);
+    }
     let kind = view.kind(id);
     if matches!(kind, Kind::Tech | Kind::Project | Kind::Effect) {
         return None;
@@ -1047,6 +1054,33 @@ mod tests {
 
     fn value<'s>(s: &'s EntityStats, field: &str) -> &'s Stat {
         s.groups.iter().flat_map(|g| &g.stats).find(|st| st.field == field).unwrap_or_else(|| panic!("no {field} in {s:#?}"))
+    }
+
+    #[test]
+    fn space_entity_stats() {
+        let Some(b) = backend() else { return };
+        let earth = stats(ti_data::space::SPACE_BODY, "Earth");
+        let gravity = value(&earth, "surfaceGravity_g").value.strip_suffix(" g").unwrap().parse::<f64>().unwrap();
+        assert!((gravity - 1.0).abs() < 0.02, "Earth gravity: {gravity}");
+        assert!(earth.links.iter().any(|l| l.label == "Parent body"));
+        let has = |s: &EntityStats, field: &str| s.groups.iter().flat_map(|g| &g.stats).any(|st| st.field == field);
+        // no size data / no mass: unknown values are left out rather than shown as 0
+        assert!(!has(&stats(ti_data::space::SPACE_BODY, "Skrymir"), "meanRadius_km"));
+        let comet = stats(ti_data::space::SPACE_BODY, "PonsWinnecke");
+        assert!(!has(&comet, "surfaceGravity_g") && !has(&comet, "escapeVelocity_kps"));
+        let view = b.ds.overview();
+        let mars_id = view.find(ti_data::space::SPACE_BODY, "Mars").unwrap();
+        let mars: ti_data::space::SpaceBody = model::parse(view.record(mars_id).unwrap());
+        let site = stats(ti_data::space::HAB_SITE, &mars.hab_sites[0]);
+        let output = site.groups.iter().find(|g| g.label == "Expected output / month").unwrap();
+        assert_eq!(output.stats.len(), 5);
+        assert!(output.stats.iter().all(|s| s.detail.is_some() && s.value.contains('–')));
+        let orbit = stats(ti_data::space::ORBIT, &mars.orbits[0]);
+        assert!(!value(&orbit, "stationCapacity").value.is_empty());
+        let site_id = view.find(ti_data::space::HAB_SITE, &mars.hab_sites[0]).unwrap();
+        let data: ti_data::space::HabSite = model::parse(view.record(site_id).unwrap());
+        let profile = stats(ti_data::space::MINING_PROFILE, &data.mining_profile);
+        assert_eq!(profile.groups[0].stats.len(), 5);
     }
 
     #[test]
