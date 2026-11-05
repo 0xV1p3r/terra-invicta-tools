@@ -30,7 +30,7 @@ export class Camera {
 	/** Viewport size in CSS pixels. */
 	width = 0;
 	height = 0;
-	/** Screen rectangles covered by floating overlays (toolbar, minimap, controls). */
+	/** Screen rectangles covered by floating overlays (minimap, controls). */
 	overlays: Rect[] = [];
 
 	private listeners = new Set<() => void>();

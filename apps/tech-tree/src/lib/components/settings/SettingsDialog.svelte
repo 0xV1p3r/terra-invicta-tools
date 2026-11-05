@@ -43,7 +43,7 @@
 	<Tip text="Settings">
 		<Dialog.Trigger>
 			{#snippet child({ props })}
-				<Button {...props} variant="ghost" size="icon" class="rounded-full" aria-label="Settings">
+				<Button {...props} variant="ghost" size="icon" class="size-8" aria-label="Settings">
 					<Settings />
 				</Button>
 			{/snippet}

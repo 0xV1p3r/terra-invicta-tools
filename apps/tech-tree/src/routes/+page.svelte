@@ -3,7 +3,7 @@
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import PanelRightOpen from '@lucide/svelte/icons/panel-right-open';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
-	import { api, mockMode } from '$lib/api';
+	import { api, mockMode, type TreeGraph } from '$lib/api';
 	import DetailPanel from '$lib/components/detail/DetailPanel.svelte';
 	import ScopeBar from '$lib/components/scope/ScopeBar.svelte';
 	import WikiDialog from '$lib/components/wiki/WikiDialog.svelte';
@@ -14,11 +14,15 @@
 	import Tip from '$lib/components/toolbar/Tip.svelte';
 	import TreeCanvas from '$lib/components/tree/TreeCanvas.svelte';
 	import TreeFilters from '$lib/components/tree/TreeFilters.svelte';
+	import ViewBar from '$lib/components/tree/ViewBar.svelte';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { LightSwitch } from '$lib/components/ui/light-switch/index.js';
 	import * as Tooltip from '$lib/components/ui/tooltip/index.js';
 	import { app } from '$lib/state.svelte';
+
+	/** The tree on screen, for the view controls (null while a new view loads). */
+	let treeGraph = $state.raw<TreeGraph | null>(null);
 
 	onMount(() => {
 		api.getMeta().then(
@@ -51,40 +55,50 @@
 			>
 		</main>
 	{:else}
-		<div class="flex h-screen overflow-hidden">
-			<main class="min-w-0 flex-1">
-				<h1 class="sr-only">Terra Invicta Tech Tree</h1>
-				<TreeCanvas>
-					{#snippet leading()}
-						<ScopeBar />
-						<TreeFilters />
-					{/snippet}
-					{#snippet trailing()}
-						<Pill aria-label="Search and settings">
-							<SearchPalette />
-							<WikiDialog />
-							<PillDivider />
-							{#if !app.panelOpen}
-								<Tip text="Show details panel">
-									<Button
-										variant="ghost"
-										size="icon"
-										class="size-8 rounded-full"
-										aria-label="Show details panel"
-										onclick={() => (app.panelOpen = true)}
-									>
-										<PanelRightOpen />
-									</Button>
-								</Tip>
-							{/if}
-							<SettingsDialog />
-							<Tip text="Toggle light/dark theme">
-								<LightSwitch variant="ghost" class="size-8 rounded-full" />
-							</Tip>
-						</Pill>
-					{/snippet}
-				</TreeCanvas>
-			</main>
+		<div class="flex h-screen flex-col overflow-hidden">
+			<h1 class="sr-only">Terra Invicta Tech Tree</h1>
+			<!-- Toolbar band across the window, so the details panel doesn't squeeze it. -->
+			<div
+				class="z-10 flex shrink-0 flex-wrap items-center divide-x border-b bg-muted/60 px-1 py-1 [&>:last-child]:ml-auto"
+				role="toolbar"
+				aria-label="Tree toolbar"
+			>
+				<ViewBar graph={treeGraph} />
+				<ScopeBar />
+				<TreeFilters />
+				<Pill aria-label="Search and settings">
+					<SearchPalette />
+					<WikiDialog />
+					<PillDivider />
+					{#if !app.panelOpen}
+						<Tip text="Show details panel">
+							<Button
+								variant="ghost"
+								size="icon"
+								class="size-8"
+								aria-label="Show details panel"
+								onclick={() => (app.panelOpen = true)}
+							>
+								<PanelRightOpen />
+							</Button>
+						</Tip>
+					{/if}
+					<SettingsDialog />
+					<Tip text="Toggle light/dark theme">
+						<LightSwitch variant="ghost" class="size-8" />
+					</Tip>
+				</Pill>
+			</div>
+			<div class="flex min-h-0 flex-1">
+				<main class="min-w-0 flex-1">
+					<TreeCanvas bind:graph={treeGraph} />
+				</main>
+				{#if app.panelOpen && app.selected}
+					<div class="w-[420px] shrink-0">
+						<DetailPanel />
+					</div>
+				{/if}
+			</div>
 			{#if mockMode}
 				<!-- Dev-only marker; kept out of the toolbar flow so it can't push the pills around. -->
 				<Badge
@@ -92,11 +106,6 @@
 					class="pointer-events-none fixed bottom-3 left-1/2 z-20 -translate-x-1/2 bg-card/90 text-amber-600 dark:text-amber-400"
 					>mock data</Badge
 				>
-			{/if}
-			{#if app.panelOpen && app.selected}
-				<div class="w-[420px] shrink-0">
-					<DetailPanel />
-				</div>
 			{/if}
 		</div>
 	{/if}

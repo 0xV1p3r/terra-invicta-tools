@@ -4,9 +4,8 @@
 	import * as Select from '$lib/components/ui/select';
 	import { Badge } from '$lib/components/ui/badge';
 	import Pill, { pillItem } from '$lib/components/toolbar/Pill.svelte';
-	import PillDivider from '$lib/components/toolbar/PillDivider.svelte';
-	// Borderless triggers: the pill already frames them.
-	const trigger = `${pillItem} border-0 bg-transparent shadow-none hover:bg-accent dark:bg-transparent dark:hover:bg-accent/50 data-[size=sm]:h-8 data-[size=sm]:rounded-full`;
+	// Borderless triggers, like the other toolbar controls.
+	const trigger = `${pillItem} border-0 bg-transparent shadow-none hover:bg-accent dark:bg-transparent dark:hover:bg-accent/50 data-[size=sm]:h-8 data-[size=sm]:rounded-md`;
 	const all = '__all__';
 	let listed = $derived(app.meta?.scenarios.filter((s) => s.listed) ?? []);
 	let other = $derived(app.meta?.scenarios.filter((s) => !s.listed) ?? []);
@@ -56,7 +55,6 @@
 			{/if}
 		</Select.Content>
 	</Select.Root>
-	<PillDivider />
 	<Select.Root
 		type="single"
 		value={app.scope.faction ?? all}
