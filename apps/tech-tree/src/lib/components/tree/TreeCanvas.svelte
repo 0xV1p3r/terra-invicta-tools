@@ -179,7 +179,8 @@
 			icons,
 			glyphs,
 			matches,
-			overview: settings.overviewLabels
+			overview: settings.overviewLabels,
+			landmarks: settings.landmarkLabels
 		});
 		updateBackground();
 		updateHoverAnchor();
@@ -278,7 +279,8 @@
 			dpr,
 			assetVersion,
 			matches,
-			settings.overviewLabels
+			settings.overviewLabels,
+			settings.landmarkLabels
 		];
 		requestRender();
 	});

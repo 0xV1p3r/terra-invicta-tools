@@ -135,6 +135,15 @@
 				</Label>
 				<Switch id="setting-overview" bind:checked={settings.overviewLabels} />
 			</div>
+			<div class="flex items-start justify-between gap-4">
+				<Label for="setting-landmarks" class="grid gap-2 font-normal">
+					<span class="font-medium">Landmark labels when zoomed out</span>
+					<span class="leading-relaxed text-muted-foreground">
+						Too far out to read cards, name key research where there is room.
+					</span>
+				</Label>
+				<Switch id="setting-landmarks" bind:checked={settings.landmarkLabels} />
+			</div>
 			<div class="flex items-center justify-between gap-4">
 				<span id="setting-minimap-corner" class="font-medium">Minimap position</span>
 				<ToggleGroup.Root
