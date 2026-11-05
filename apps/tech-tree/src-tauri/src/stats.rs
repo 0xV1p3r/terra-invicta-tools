@@ -353,7 +353,7 @@ const TANK_TONS: f64 = 100.0;
 pub fn entity_stats(view: &View<'_>, texts: &Texts, id: EntityId, spoilers: &HashSet<EntityId>) -> Option<EntityStats> {
     if matches!(
         view.dataset().entity(id).template.as_ref(),
-        ti_data::space::SPACE_BODY | ti_data::space::HAB_SITE | ti_data::space::ORBIT | ti_data::space::MINING_PROFILE
+        ti_data::space::SPACE_BODY | ti_data::space::HAB_SITE | ti_data::space::ORBIT | ti_data::space::MINING_PROFILE | ti_data::space::NAVIGABLE
     ) {
         return space::stats(view, texts, id, spoilers);
     }
@@ -1063,6 +1063,19 @@ mod tests {
         let gravity = value(&earth, "surfaceGravity_g").value.strip_suffix(" g").unwrap().parse::<f64>().unwrap();
         assert!((gravity - 1.0).abs() < 0.02, "Earth gravity: {gravity}");
         assert!(earth.links.iter().any(|l| l.label == "Parent body"));
+        assert_eq!(earth.groups[0].label, "Habitation");
+        assert_eq!(value(&earth, "orbitalPeriod").value, "1 year");
+        assert_eq!(value(&earth, "inclination_Deg").value, "0°");
+        assert_eq!(value(&earth, "mass_kg").value, "5.97 × 10²⁴ kg");
+        let luna = stats(ti_data::space::SPACE_BODY, "Luna");
+        assert_eq!(value(&luna, "rotationPeriod_strHours").value, "27.5 days");
+        assert_eq!(value(&luna, "tidallyLocked").value, "Yes");
+        assert_eq!(luna.groups[1].label, "Resources");
+        assert_eq!(luna.links[0].label, "Hab sites");
+        let point = stats(ti_data::space::NAVIGABLE, "EarthLunaL1");
+        assert_eq!(point.groups[0].label, "Habitation");
+        assert_eq!(value(&point, "lagrangeValue").value, "L1");
+        assert_eq!(value(&point, "relatedObject").value, "Luna");
         let has = |s: &EntityStats, field: &str| s.groups.iter().flat_map(|g| &g.stats).any(|st| st.field == field);
         // no size data / no mass: unknown values are left out rather than shown as 0
         assert!(!has(&stats(ti_data::space::SPACE_BODY, "Skrymir"), "meanRadius_km"));
@@ -1074,7 +1087,7 @@ mod tests {
         let site = stats(ti_data::space::HAB_SITE, &mars.hab_sites[0]);
         let output = site.groups.iter().find(|g| g.label == "Expected output / month").unwrap();
         assert_eq!(output.stats.len(), 5);
-        assert!(output.stats.iter().all(|s| s.detail.is_some() && s.value.contains('–')));
+        assert!(output.stats.iter().all(|s| s.detail.as_ref().is_some_and(|d| d.contains('–')) && !s.value.contains('–')));
         let orbit = stats(ti_data::space::ORBIT, &mars.orbits[0]);
         assert!(!value(&orbit, "stationCapacity").value.is_empty());
         let site_id = view.find(ti_data::space::HAB_SITE, &mars.hab_sites[0]).unwrap();

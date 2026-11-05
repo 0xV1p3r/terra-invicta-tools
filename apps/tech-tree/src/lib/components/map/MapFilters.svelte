@@ -56,15 +56,36 @@
 						{#each ITEM_TYPES as type (type)}
 							<Label class="flex items-center gap-2 font-normal">
 								<Checkbox
+									aria-label={TYPE_LABELS[type]}
 									checked={mapState.types.includes(type)}
 									onCheckedChange={(on) => setType(type, on)}
 								/>
-								<span class="size-2.5 rounded-full" style="background: {TYPE_COLORS[type]}"></span>
+								{#if type === 'lagrange'}
+									<span
+										aria-hidden="true"
+										class="size-2 rotate-45 border"
+										style="border-color: {TYPE_COLORS[type]}"
+									></span>
+								{:else if type === 'planet'}
+									<span
+										aria-hidden="true"
+										class="size-2.5 rounded-full border border-muted-foreground bg-muted"
+									></span>
+								{:else}
+									<span
+										aria-hidden="true"
+										class="size-2.5 rounded-full"
+										style="background: {TYPE_COLORS[type]}"
+									></span>
+								{/if}
 								{TYPE_LABELS[type]}
 							</Label>
 						{/each}
 					</div>
 				</div>
+				<p class="text-xs text-muted-foreground">
+					Planets: individual colors. Marker sizes are illustrative, not to scale.
+				</p>
 				<div class="flex items-center justify-between gap-4">
 					<Label for="map-hab-sites" class="font-medium">Has hab sites</Label>
 					<Switch id="map-hab-sites" bind:checked={mapState.habSitesOnly} />

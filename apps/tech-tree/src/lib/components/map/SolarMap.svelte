@@ -2,6 +2,7 @@
 	// The solar system map: one system (a body and its satellites) at a time, drawn on one
 	// <canvas> by `render.ts`, with DOM overlays for the breadcrumb, date and zoom controls.
 	import { onDestroy, onMount, untrack } from 'svelte';
+	import CircleQuestionMark from '@lucide/svelte/icons/circle-question-mark';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import LogIn from '@lucide/svelte/icons/log-in';
 	import Maximize from '@lucide/svelte/icons/maximize';
@@ -13,6 +14,7 @@
 	import { Camera } from '$lib/components/tree/camera';
 	import * as Breadcrumb from '$lib/components/ui/breadcrumb/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
+	import * as Popover from '$lib/components/ui/popover/index.js';
 	import { settings } from '$lib/settings.svelte';
 	import { app } from '$lib/state.svelte';
 	import { parseDate } from './kepler';
@@ -26,6 +28,7 @@
 		systemOf,
 		updatePositions,
 		TYPE_LABELS,
+		type MapBody,
 		type MapItem,
 		type SystemScene
 	} from './scene';
@@ -77,14 +80,43 @@
 	});
 	const crumbs = $derived(index && centerKey ? pathTo(index, centerKey) : []);
 
-	/** Items failing the filters (the center always passes). */
-	const filtered = $derived.by(() => {
+	/**
+	 * Filter outcome in this system: `failing` items (the center always passes), and among them
+	 * the `gateways`, bodies whose satellites (at any depth) have matches, kept to reach those.
+	 */
+	const filterResult = $derived.by(() => {
 		if (!scene || !mapState.filtersActive) return null;
 		const center = scene.center;
 		const fails = (it: MapItem) =>
 			!(it.body === center && !it.point) &&
 			!mapState.matches(it.type, it.point ? null : (it.body?.info ?? null));
-		return new Set(scene.items.filter(fails).map((it) => it.key));
+		const hasMatch = (body: MapBody): boolean =>
+			body.children.some(
+				(c) =>
+					mapState.matches(c.info.bodyType, c.info) ||
+					(c.points.length > 0 && mapState.matches('lagrange', null)) ||
+					hasMatch(c)
+			);
+		const failing = scene.items.filter(fails);
+		const gateways = new Set(
+			failing.filter((it) => !it.point && it.body && hasMatch(it.body)).map((it) => it.key)
+		);
+		return {
+			filtered: new Set(failing.filter((it) => !gateways.has(it.key)).map((it) => it.key)),
+			gateways,
+			matching: scene.items.length - failing.length - 1,
+			total: scene.items.length - 1
+		};
+	});
+	/** Items failing the filters, other than gateways; null = no filter. */
+	const filtered = $derived(filterResult?.filtered ?? null);
+	const gateways = $derived(filterResult?.gateways ?? null);
+	const hideFiltered = $derived(settings.mapFilterMode === 'hide');
+
+	// A selection the filters hide is dropped.
+	$effect(() => {
+		const sel = app.selected;
+		if (sel && hideFiltered && filtered?.has(sel)) untrack(() => (app.selected = null));
 	});
 
 	// Positions follow the date (and a rebuilt scene).
@@ -158,7 +190,9 @@
 			hovered: dragging ? null : hovered,
 			theme,
 			filtered,
-			hideFiltered: settings.mapFilterMode === 'hide',
+			gateways,
+			hideFiltered,
+			reserved: obstacles.map((r) => [r.left, r.top, r.right, r.bottom] as const),
 			minorLabels: !!scene && camera.zoom >= fitZoom(scene) * 2.5,
 			icons
 		});
@@ -177,7 +211,18 @@
 	});
 
 	$effect(() => {
-		void [scene, app.selected, hovered, theme, dpr, icons, filtered, settings.mapFilterMode];
+		void [
+			scene,
+			app.selected,
+			hovered,
+			theme,
+			dpr,
+			icons,
+			filtered,
+			gateways,
+			hideFiltered,
+			obstacles
+		];
 		void fontVersion;
 		requestRender();
 	});
@@ -216,15 +261,26 @@
 
 	// --- fitting and focusing ---------------------------------------------------------
 
+	/** Camera transitions apply at once when the user asks for reduced motion. */
+	let reducedMotion = $state(false);
+	$effect(() => {
+		const query = matchMedia('(prefers-reduced-motion: reduce)');
+		reducedMotion = query.matches;
+		const update = () => (reducedMotion = query.matches);
+		query.addEventListener('change', update);
+		return () => query.removeEventListener('change', update);
+	});
+	const motion = (duration: number) => (reducedMotion ? 0 : duration);
+
 	/** Zoom showing the system's extent clear of the overlays (time bar below, breadcrumb above). */
 	const fitZoom = (s: SystemScene) => (Math.min(width, height - 140) / 2 / s.extent) * 0.95;
 
 	function fitAll(duration = 300) {
-		if (scene) camera.animateTo(camera.centered(0, 0, fitZoom(scene)), duration);
+		if (scene) camera.animateTo(camera.centered(0, 0, fitZoom(scene)), motion(duration));
 	}
 
 	function centerOn(it: MapItem, zoom = camera.zoom, duration = 400) {
-		camera.animateTo(camera.centered(it.wx, it.wy, zoom), duration);
+		camera.animateTo(camera.centered(it.wx, it.wy, zoom), motion(duration));
 	}
 
 	/** Scene the camera was last fitted to. */
@@ -380,9 +436,10 @@
 	/** Keyboard selection: step through the system, most important and innermost first. */
 	function cycle(dir: 1 | -1) {
 		if (!scene) return;
-		const order = [...scene.items].sort(
-			(a, b) => a.priority - b.priority || Math.hypot(a.wx, a.wy) - Math.hypot(b.wx, b.wy)
-		);
+		const order = scene.items
+			.filter((it) => !(hideFiltered && filtered?.has(it.key)))
+			.sort((a, b) => a.priority - b.priority || Math.hypot(a.wx, a.wy) - Math.hypot(b.wx, b.wy));
+		if (!order.length) return;
 		const at = order.findIndex((it) => it.key === app.selected);
 		const it =
 			order[at < 0 ? (dir > 0 ? 0 : order.length - 1) : (at + dir + order.length) % order.length];
@@ -393,8 +450,10 @@
 	function onkeydown(e: KeyboardEvent) {
 		if (e.key === 'ArrowRight' || e.key === 'ArrowDown') cycle(1);
 		else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') cycle(-1);
-		else if (e.key === 'Escape') app.selected = null;
-		else if (e.key === 'Backspace') goUp();
+		else if (e.key === 'Escape') {
+			if (hoveredItem) hoverDismissed = hoveredItem.key;
+			else app.selected = null;
+		} else if (e.key === 'Backspace') goUp();
 		else if (e.key === 'Enter' && app.selected) enterSystem(app.selected);
 		else if (e.key === '+' || e.key === '=') zoomBy(1.25);
 		else if (e.key === '-') zoomBy(0.8);
@@ -406,8 +465,15 @@
 
 	// --- overlays ---------------------------------------------------------------------
 
-	let hoverAnchor = $state<{ x: number; y: number } | null>(null);
-	const hoveredItem = $derived(hovered && !dragging ? (scene?.byKey.get(hovered) ?? null) : null);
+	let hoverAnchor = $state<{ x: number; y: number; r: number } | null>(null);
+	/** Hover card hidden with Escape until the pointer leaves that item. */
+	let hoverDismissed = $state<EntityKey | null>(null);
+	$effect(() => {
+		if (hovered !== hoverDismissed) untrack(() => (hoverDismissed = null));
+	});
+	const hoveredItem = $derived(
+		hovered && !dragging && hovered !== hoverDismissed ? (scene?.byKey.get(hovered) ?? null) : null
+	);
 
 	function updateHoverAnchor() {
 		const it = hoveredItem;
@@ -415,10 +481,29 @@
 			if (hoverAnchor) hoverAnchor = null;
 			return;
 		}
-		const x = it.sx + it.size;
-		const y = it.sy;
-		if (hoverAnchor?.x !== x || hoverAnchor?.y !== y) hoverAnchor = { x, y };
+		const { sx: x, sy: y, size: r } = it;
+		if (hoverAnchor?.x !== x || hoverAnchor?.y !== y || hoverAnchor?.r !== r)
+			hoverAnchor = { x, y, r };
 	}
+
+	// Overlays the hover card keeps clear of, measured when it appears (container coordinates).
+	let topLeft = $state<HTMLDivElement>();
+	let topCenter = $state<HTMLDivElement>();
+	let bottomLeft = $state<HTMLDivElement>();
+	let timeBar = $state<HTMLDivElement>();
+	let obstacles = $state.raw<DOMRect[]>([]);
+	// Measured whenever the overlays may have moved: the hover card and the label placer avoid them.
+	$effect(() => {
+		if (!container) return;
+		void [width, height, hoveredItem, crumbs, enterable, filterResult, data];
+		const origin = container.getBoundingClientRect();
+		obstacles = [topLeft, topCenter, bottomLeft, timeBar].flatMap((el) => {
+			const r = el?.getBoundingClientRect();
+			return r && r.width > 0
+				? [new DOMRect(r.x - origin.x, r.y - origin.y, r.width, r.height)]
+				: [];
+		});
+	});
 
 	/** Selected body with satellites, other than the center: offer to enter its system. */
 	const enterable = $derived.by(() => {
@@ -426,10 +511,57 @@
 		return it && !it.point && it.body !== scene?.center && it.body?.children.length ? it : null;
 	});
 
-	const announcement = $derived.by(() => {
-		const it = app.selected ? scene?.byKey.get(app.selected) : undefined;
-		return it ? `${it.name}, ${TYPE_LABELS[it.type]}` : '';
+	// Polite announcements: the system when it changes, then the selection.
+	let announcement = $state('');
+	let announcedSystem: EntityKey | null = null;
+	let announcedSelection: EntityKey | null = null;
+	$effect(() => {
+		const s = scene;
+		const sel = app.selected;
+		untrack(() => {
+			const parts: string[] = [];
+			const systemChanged = !!s && s.center.key !== announcedSystem;
+			if (systemChanged) {
+				announcedSystem = s.center.key;
+				parts.push(systemSummary(s));
+			}
+			if (sel !== announcedSelection) {
+				announcedSelection = sel;
+				const it = sel ? s?.byKey.get(sel) : undefined;
+				if (it) parts.push(`${it.name}, ${TYPE_LABELS[it.type]}`);
+			} else if (!systemChanged) return;
+			let text = parts.join('. ');
+			// Screen readers skip a region whose text didn't change.
+			if (text && text === announcement) text += '\u00a0';
+			announcement = text;
+		});
 	});
+
+	function systemSummary(s: SystemScene) {
+		const points = s.items.filter((it) => it.point).length;
+		const bodies = s.items.length - points - 1;
+		const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+		return [
+			`${s.center.info.entity.name} system`,
+			count(bodies, 'body', 'bodies'),
+			...(points ? [count(points, 'Lagrange point', 'Lagrange points')] : [])
+		].join(', ');
+	}
+
+	/** Mouse and keyboard controls, for the help popover and screen readers. */
+	const HELP: [string, string][] = [
+		['Click', 'Show a body’s details'],
+		['Double-click', 'Enter its system of moons'],
+		['Drag', 'Pan'],
+		['Wheel', 'Zoom'],
+		['Arrow keys', 'Step through the bodies and Lagrange points'],
+		['Enter', 'Open the selected body’s system'],
+		['Backspace', 'Go up one level'],
+		['Space', 'Play or pause time'],
+		['+ / −', 'Zoom in or out'],
+		['0', 'Fit the system'],
+		['Escape', 'Hide the hover card, or clear the selection']
+	];
 </script>
 
 <div
@@ -471,33 +603,56 @@
 	</p>
 	<p class="sr-only" aria-live="polite">{announcement}</p>
 
-	{#if crumbs.length}
-		<div class="absolute top-3 left-3 rounded-lg border bg-card px-3 py-1.5 shadow">
-			<Breadcrumb.Root>
-				<Breadcrumb.List>
-					{#each crumbs as body, i (body.key)}
-						{#if i > 0}<Breadcrumb.Separator />{/if}
-						<Breadcrumb.Item>
-							{#if i === crumbs.length - 1}
-								<Breadcrumb.Page>{body.info.entity.name}</Breadcrumb.Page>
-							{:else}
-								<Breadcrumb.Link
-									href="#{body.info.entity.dataName}"
-									onclick={(e: MouseEvent) => {
-										e.preventDefault();
-										app.mapSystem = i === 0 ? null : body.key;
-									}}>{body.info.entity.name}</Breadcrumb.Link
-								>
-							{/if}
-						</Breadcrumb.Item>
-					{/each}
-				</Breadcrumb.List>
-			</Breadcrumb.Root>
-		</div>
-	{/if}
+	<div bind:this={topLeft} class="absolute top-3 left-3 flex flex-col items-start gap-2">
+		{#if crumbs.length}
+			<div class="rounded-lg border bg-card px-3 py-1.5 shadow">
+				<Breadcrumb.Root>
+					<Breadcrumb.List>
+						{#each crumbs as body, i (body.key)}
+							{#if i > 0}<Breadcrumb.Separator />{/if}
+							<Breadcrumb.Item>
+								{#if i === crumbs.length - 1}
+									<Breadcrumb.Page>{body.info.entity.name}</Breadcrumb.Page>
+								{:else}
+									<Breadcrumb.Link
+										href="#{body.info.entity.dataName}"
+										onclick={(e: MouseEvent) => {
+											e.preventDefault();
+											app.mapSystem = i === 0 ? null : body.key;
+										}}>{body.info.entity.name}</Breadcrumb.Link
+									>
+								{/if}
+							</Breadcrumb.Item>
+						{/each}
+					</Breadcrumb.List>
+				</Breadcrumb.Root>
+			</div>
+		{/if}
+		{#if filterResult}
+			<div
+				class="flex max-w-80 items-center gap-2 rounded-full border bg-card py-0.5 pr-0.5 pl-3 text-xs shadow"
+				role="status"
+			>
+				<span>
+					{#if filterResult.matching}
+						{filterResult.matching} of {filterResult.total} match in this system
+					{:else}
+						No bodies in this system match the filters{#if filterResult.gateways.size}
+							· some of their moons do{/if}
+					{/if}
+				</span>
+				<Button
+					variant="ghost"
+					size="sm"
+					class="h-6 rounded-full px-2 text-xs"
+					onclick={() => mapState.clearFilters()}>Clear</Button
+				>
+			</div>
+		{/if}
+	</div>
 
 	{#if enterable}
-		<div class="absolute top-3 left-1/2 -translate-x-1/2">
+		<div bind:this={topCenter} class="absolute top-3 left-1/2 -translate-x-1/2">
 			<Button
 				variant="outline"
 				size="sm"
@@ -510,23 +665,54 @@
 	{/if}
 
 	{#if hoveredItem && hoverAnchor}
-		<MapHoverCard item={hoveredItem} x={hoverAnchor.x} y={hoverAnchor.y} {width} {height} />
+		<MapHoverCard
+			item={hoveredItem}
+			x={hoverAnchor.x}
+			y={hoverAnchor.y}
+			r={hoverAnchor.r}
+			{width}
+			{height}
+			{obstacles}
+		/>
 	{/if}
 
-	<div class="absolute bottom-3 left-3 flex flex-col gap-1" role="group" aria-label="Zoom">
-		<Button variant="outline" size="icon" aria-label="Zoom in" onclick={() => zoomBy(1.25)}>
-			<Plus />
-		</Button>
-		<Button variant="outline" size="icon" aria-label="Zoom out" onclick={() => zoomBy(0.8)}>
-			<Minus />
-		</Button>
-		<Button variant="outline" size="icon" aria-label="Fit system" onclick={() => fitAll()}>
-			<Maximize />
-		</Button>
+	<div bind:this={bottomLeft} class="absolute bottom-3 left-3 flex flex-col gap-1">
+		<Popover.Root>
+			<Popover.Trigger>
+				{#snippet child({ props })}
+					<Button {...props} variant="outline" size="icon" aria-label="Map controls help">
+						<CircleQuestionMark />
+					</Button>
+				{/snippet}
+			</Popover.Trigger>
+			<Popover.Content class="w-80 text-sm" side="right" align="end">
+				<h2 class="mb-2 font-semibold">Map controls</h2>
+				<dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+					{#each HELP as [keys, action] (keys)}
+						<dt><kbd class="rounded border bg-muted px-1 font-mono text-xs">{keys}</kbd></dt>
+						<dd class="text-muted-foreground">{action}</dd>
+					{/each}
+				</dl>
+			</Popover.Content>
+		</Popover.Root>
+		<div class="flex flex-col gap-1" role="group" aria-label="Zoom">
+			<Button variant="outline" size="icon" aria-label="Zoom in" onclick={() => zoomBy(1.25)}>
+				<Plus />
+			</Button>
+			<Button variant="outline" size="icon" aria-label="Zoom out" onclick={() => zoomBy(0.8)}>
+				<Minus />
+			</Button>
+			<Button variant="outline" size="icon" aria-label="Fit system" onclick={() => fitAll()}>
+				<Maximize />
+			</Button>
+		</div>
 	</div>
 
 	{#if data}
-		<div class="absolute bottom-3 left-1/2 max-w-[calc(100%-6rem)] -translate-x-1/2">
+		<div
+			bind:this={timeBar}
+			class="absolute bottom-3 left-1/2 max-w-[calc(100%-6rem)] -translate-x-1/2"
+		>
 			<TimeBar />
 		</div>
 	{/if}

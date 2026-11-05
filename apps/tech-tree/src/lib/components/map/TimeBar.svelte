@@ -4,6 +4,8 @@
 	import Play from '@lucide/svelte/icons/play';
 	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
 	import { Button } from '$lib/components/ui/button/index.js';
+	import { Input } from '$lib/components/ui/input/index.js';
+	import { untrack } from 'svelte';
 	import * as Select from '$lib/components/ui/select/index.js';
 	import { Slider } from '$lib/components/ui/slider/index.js';
 	import { DAY_MS, mapState } from './map-state.svelte';
@@ -23,6 +25,46 @@
 	const label = $derived(
 		Number.isFinite(mapState.time) ? new Date(mapState.time).toISOString().slice(0, 10) : '–'
 	);
+
+	const startLabel = $derived(new Date(mapState.start).toISOString().slice(0, 10));
+	const endLabel = $derived(
+		new Date(mapState.start + SPAN_DAYS * DAY_MS).toISOString().slice(0, 10)
+	);
+	let draft = $state('');
+	let editing = $state(false);
+	let status = $state('');
+
+	$effect(() => {
+		if (!editing) draft = label;
+	});
+
+	// Observe playback transitions only, including pauses from the map keyboard shortcut.
+	let wasPlaying = false;
+	$effect(() => {
+		const playing = mapState.playing;
+		if (wasPlaying && !playing) untrack(() => announce('Paused.'));
+		wasPlaying = playing;
+	});
+
+	function announce(prefix = '') {
+		status = `${prefix} Map date ${new Date(mapState.time).toISOString().slice(0, 10)}.`.trim();
+	}
+
+	function commitDate() {
+		if (!editing) return;
+		const parsed = Date.parse(`${draft}T00:00:00Z`);
+		if (
+			/^\d{4}-\d{2}-\d{2}$/.test(draft) &&
+			Number.isFinite(parsed) &&
+			new Date(parsed).toISOString().slice(0, 10) === draft
+		) {
+			mapState.playing = false;
+			setDay(Math.round((parsed - mapState.start) / DAY_MS));
+			announce();
+		}
+		draft = new Date(mapState.time).toISOString().slice(0, 10);
+		editing = false;
+	}
 
 	interface Step {
 		unit: 'day' | 'month' | 'year';
@@ -57,6 +99,7 @@
 					? shifted(y, m + n)
 					: shifted(y + n, m);
 		setDay(Math.round((next - mapState.start) / DAY_MS));
+		announce();
 	}
 
 	// Playback: advance by `speed` days per real second; stop at the end of the slider.
@@ -87,66 +130,99 @@
 {/snippet}
 
 <div
-	class="flex flex-wrap items-center gap-2 rounded-xl border bg-card px-2 py-1.5 shadow"
+	class="grid gap-1.5 rounded-xl border bg-card px-2 py-1.5 shadow"
 	role="group"
 	aria-label="Map date"
 >
-	{#each STEPS.slice(0, 3) as s (s.label)}
-		{@render stepButton(s)}
-	{/each}
-	<Button
-		variant="outline"
-		size="icon"
-		class="size-8"
-		aria-label={mapState.playing ? 'Pause' : 'Play'}
-		title={mapState.playing ? 'Pause' : 'Play'}
-		onclick={() => (mapState.playing = !mapState.playing)}
-	>
-		{#if mapState.playing}<Pause />{:else}<Play />{/if}
-	</Button>
-	{#each STEPS.slice(3) as s (s.label)}
-		{@render stepButton(s)}
-	{/each}
-	<span class="w-24 text-center font-mono text-sm tabular-nums" aria-live="off">{label}</span>
-	<Slider
-		type="single"
-		class="w-40 sm:w-64"
-		min={0}
-		max={SPAN_DAYS}
-		step={1}
-		value={day}
-		onValueChange={(v: number) => {
-			mapState.playing = false;
-			setDay(v);
-		}}
-		thumbLabel="Date"
-		thumbValueText={label}
-	/>
-	<Select.Root
-		type="single"
-		value={String(mapState.speed)}
-		onValueChange={(v) => v && (mapState.speed = Number(v))}
-	>
-		<Select.Trigger size="sm" aria-label="Playback speed" class="w-28">
-			{SPEEDS.find((s) => s.value === String(mapState.speed))?.label ?? `${mapState.speed} d/s`}
-		</Select.Trigger>
-		<Select.Content>
-			{#each SPEEDS as s (s.value)}
-				<Select.Item value={s.value} label={s.label}>{s.label}</Select.Item>
-			{/each}
-		</Select.Content>
-	</Select.Root>
-	<Button
-		variant="ghost"
-		size="icon"
-		class="size-8"
-		aria-label="Back to the start date"
-		title="Start date"
-		onclick={() => {
-			mapState.playing = false;
-			mapState.time = mapState.start;
-		}}
-	>
-		<RotateCcw />
-	</Button>
+	<div class="flex items-center justify-between gap-1">
+		{#each STEPS.slice(0, 3) as s (s.label)}
+			{@render stepButton(s)}
+		{/each}
+		<Button
+			variant="outline"
+			size="icon"
+			class="size-8"
+			aria-label={mapState.playing ? 'Pause' : 'Play'}
+			title={mapState.playing ? 'Pause' : 'Play'}
+			onclick={() => (mapState.playing = !mapState.playing)}
+		>
+			{#if mapState.playing}<Pause />{:else}<Play />{/if}
+		</Button>
+		{#each STEPS.slice(3) as s (s.label)}
+			{@render stepButton(s)}
+		{/each}
+		<Input
+			class="h-8 w-28 shrink-0 px-1 text-center font-mono text-sm tabular-nums"
+			aria-label="Map date, YYYY-MM-DD"
+			aria-live="off"
+			bind:value={draft}
+			onfocus={() => {
+				mapState.playing = false;
+				editing = true;
+			}}
+			onblur={commitDate}
+			onkeydown={(event) => {
+				if (event.key === 'Enter') {
+					commitDate();
+					event.currentTarget.blur();
+				}
+				if (event.key === 'Escape') {
+					editing = false;
+					draft = label;
+					event.currentTarget.blur();
+				}
+			}}
+		/>
+	</div>
+	<div class="flex items-center gap-2">
+		<div class="grid min-w-0 flex-1 gap-1">
+			<div class="flex justify-between text-[10px] text-muted-foreground" aria-hidden="true">
+				<span title={startLabel}>{startLabel.slice(0, 4)}</span>
+				<span title={endLabel}>{endLabel.slice(0, 4)}</span>
+			</div>
+			<Slider
+				type="single"
+				class="min-w-0"
+				min={0}
+				max={SPAN_DAYS}
+				step={1}
+				value={day}
+				onValueChange={(v: number) => {
+					mapState.playing = false;
+					setDay(v);
+				}}
+				thumbLabel="Date"
+				thumbValueText={label}
+			/>
+		</div>
+		<Select.Root
+			type="single"
+			value={String(mapState.speed)}
+			onValueChange={(v) => v && (mapState.speed = Number(v))}
+		>
+			<Select.Trigger size="sm" aria-label="Playback speed" class="w-28 shrink-0">
+				{SPEEDS.find((s) => s.value === String(mapState.speed))?.label ?? `${mapState.speed} d/s`}
+			</Select.Trigger>
+			<Select.Content>
+				{#each SPEEDS as s (s.value)}
+					<Select.Item value={s.value} label={s.label}>{s.label}</Select.Item>
+				{/each}
+			</Select.Content>
+		</Select.Root>
+		<Button
+			variant="ghost"
+			size="icon"
+			class="size-8"
+			aria-label="Back to the start date"
+			title="Start date"
+			onclick={() => {
+				mapState.playing = false;
+				mapState.time = mapState.start;
+				announce();
+			}}
+		>
+			<RotateCcw />
+		</Button>
+	</div>
+	<span class="sr-only" role="status" aria-live="polite" aria-atomic="true">{status}</span>
 </div>

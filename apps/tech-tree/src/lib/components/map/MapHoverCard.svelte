@@ -9,14 +9,76 @@
 		item,
 		x,
 		y,
+		r,
 		width,
-		height
-	}: { item: MapItem; x: number; y: number; width: number; height: number } = $props();
+		height,
+		obstacles
+	}: {
+		item: MapItem;
+		/** The item's screen position and dot radius. */
+		x: number;
+		y: number;
+		r: number;
+		width: number;
+		height: number;
+		/** Overlay controls to keep clear of. */
+		obstacles: DOMRect[];
+	} = $props();
 
 	const CARD_WIDTH = 248;
-	const left = $derived(x + 12 + CARD_WIDTH > width ? Math.max(8, x - CARD_WIDTH - 12) : x + 12);
+	const GAP = 12;
+	const MARGIN = 8;
 	let cardHeight = $state(0);
-	const top = $derived(Math.max(8, Math.min(y - 12, height - cardHeight - 8)));
+
+	const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(v, Math.max(lo, hi)));
+
+	/**
+	 * Beside, then above or below the item, clear of the item and the overlays: the candidate
+	 * covering the least of them, then the closest to the item.
+	 */
+	const position = $derived.by(() => {
+		const w = CARD_WIDTH;
+		const h = cardHeight;
+		const clampX = (v: number) => clamp(v, MARGIN, width - w - MARGIN);
+		const clampY = (v: number) => clamp(v, MARGIN, height - h - MARGIN);
+		const avoid = [...obstacles, new DOMRect(x - r, y - r, 2 * r, 2 * r)];
+		const sides = [
+			{ left: x + r + GAP, top: y - GAP },
+			{ left: x - r - GAP - w, top: y - GAP },
+			{ left: x - w / 2, top: y - r - GAP - h },
+			{ left: x - w / 2, top: y + r + GAP }
+		];
+		// Beside the item, also try sliding the card past each overlay vertically.
+		const candidates = sides.flatMap((c, i) => [
+			c,
+			...(i < 2
+				? obstacles.flatMap((o) => [
+						{ left: c.left, top: o.top - h - MARGIN },
+						{ left: c.left, top: o.bottom + MARGIN }
+					])
+				: [])
+		]);
+		let best = { left: 0, top: 0 };
+		let bestScore = Infinity;
+		for (const c of candidates) {
+			const left = clampX(c.left);
+			const top = clampY(c.top);
+			let overlap = 0;
+			for (const o of avoid) {
+				const ox = Math.min(left + w, o.right) - Math.max(left, o.left);
+				const oy = Math.min(top + h, o.bottom) - Math.max(top, o.top);
+				if (ox > 0 && oy > 0) overlap += ox * oy;
+			}
+			const dx = Math.max(left - x, 0, x - left - w);
+			const dy = Math.max(top - y, 0, y - top - h);
+			const score = overlap * 1000 + Math.hypot(dx, dy);
+			if (score < bestScore) {
+				best = { left, top };
+				bestScore = score;
+			}
+		}
+		return best;
+	});
 
 	const AU_KM = 149_597_870.7;
 	const info = $derived(item.point ? null : (item.body?.info ?? null));
@@ -45,7 +107,7 @@
 
 <div
 	class="pointer-events-none absolute z-10"
-	style="left: {left}px; top: {top}px; width: {CARD_WIDTH}px"
+	style="left: {position.left}px; top: {position.top}px; width: {CARD_WIDTH}px"
 	bind:clientHeight={cardHeight}
 	aria-hidden="true"
 >

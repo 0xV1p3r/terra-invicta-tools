@@ -73,6 +73,8 @@ export interface MapItem {
 	size: number;
 	/** Orbit around the center in world units (null for the center and Lagrange points). */
 	orbit: Path2D | null;
+	/** How prominent the orbit is: 0 major, 1 notable, 2 faint (fades in when zoomed), 3 only when emphasized. */
+	orbitTier: OrbitTier;
 	/** World position at the current date. */
 	wx: number;
 	wy: number;
@@ -81,6 +83,8 @@ export interface MapItem {
 	sy: number;
 	onScreen: boolean;
 }
+
+export type OrbitTier = 0 | 1 | 2 | 3;
 
 export interface SystemScene {
 	center: MapBody;
@@ -148,6 +152,24 @@ export const TYPE_LABELS: Record<ItemType, string> = {
 	comet: 'Comet',
 	lagrange: 'Lagrange point'
 };
+
+/** Planets and sizeable moons get full orbits; the dozens of small bodies stay in the background. */
+function orbitTier(info: SpaceBodyInfo): OrbitTier {
+	switch (info.bodyType) {
+		case 'star':
+		case 'planet':
+			return 0;
+		case 'planetaryMoon':
+			return info.radiusKm >= 150 ? 0 : 1;
+		case 'dwarfPlanet':
+			return info.radiusKm >= 700 ? 1 : 2;
+		case 'asteroidalMoon':
+		case 'comet':
+			return 2;
+		case 'asteroid':
+			return 3;
+	}
+}
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
@@ -217,6 +239,7 @@ export function buildSystem(center: MapBody, mode: MapScale): SystemScene {
 		color,
 		size,
 		orbit: null,
+		orbitTier: 3,
 		wx: 0,
 		wy: 0,
 		sx: 0,
@@ -248,6 +271,7 @@ export function buildSystem(center: MapBody, mode: MapScale): SystemScene {
 			BODY_COLORS[b.info.entity.dataName] ?? TYPE_COLORS[b.info.bodyType]
 		);
 		it.orbit = orbitToPath(orbitPath(b.info.orbit!, orbitSamples(b.info.bodyType)), scale);
+		it.orbitTier = orbitTier(b.info);
 		items.push(it);
 		const o = b.info.orbit!;
 		apoapses.push(scale(o.semiMajorAxisKm * (1 + o.eccentricity)));
