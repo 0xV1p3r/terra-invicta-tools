@@ -77,7 +77,7 @@
 			<Button
 				variant="ghost"
 				size="sm"
-				class="{pillItem} gap-1.5 px-2 text-xs"
+				class="{pillItem} gap-1.5 px-2 text-xs @max-[1800px]:size-8 @max-[1800px]:px-0 @max-[1800px]:has-[>svg]:px-0"
 				aria-label={`Full tree to filter${activeCount ? ` · ${activeCount}` : ''}`}
 				onclick={async () => {
 					app.showFullTree(app.selected ?? app.root);
@@ -88,8 +88,8 @@
 					techsButton?.focus();
 				}}
 			>
-				<Funnel /> Full tree to filter
-				{#if activeCount}<Badge class="h-4 min-w-4 justify-center px-1 tabular-nums"
+				<Funnel /> <span class="@max-[1800px]:hidden">Full tree to filter</span>
+				{#if activeCount}<Badge class="h-4 min-w-4 justify-center px-1 tabular-nums @max-[1800px]:hidden"
 						>{activeCount}</Badge
 					>{/if}
 			</Button>
@@ -142,7 +142,7 @@
 			{#each CATEGORY_ORDER as category (category)}
 				{@const on = shown.includes(category)}
 				<Tip
-					text={`${CATEGORIES[category].label}${on ? '' : ' (hidden)'}. Shift+click: ${shown.length === 1 && on ? 'show all' : 'only this'}`}
+					text={`${CATEGORIES[category].label} — ${on ? 'shown. Click to hide' : 'hidden. Click to show'} · Shift+click: ${shown.length === 1 && on ? 'show all' : 'only this'}`}
 				>
 					<ToggleGroup.Item
 						value={category}
@@ -156,7 +156,7 @@
 							size={22}
 							class={on
 								? 'transition'
-								: 'opacity-50 saturate-50 transition group-hover/category:opacity-100 group-hover/category:saturate-100'}
+								: 'opacity-75 saturate-[.6] transition group-hover/category:opacity-100 group-hover/category:saturate-100'}
 						/>
 						<span
 							aria-hidden="true"

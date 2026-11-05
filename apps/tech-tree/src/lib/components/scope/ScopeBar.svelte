@@ -11,7 +11,7 @@
 	// above the value names the field, so a chosen value ("Humanity First") still reads as a faction.
 	const trigger = `${pillItem} justify-between border-0 bg-transparent shadow-none hover:bg-accent dark:bg-transparent dark:hover:bg-accent/50 data-[size=sm]:h-8 data-[size=sm]:rounded-md`;
 	const caption =
-		'text-[0.625rem] font-medium tracking-[0.04em] text-muted-foreground uppercase select-none';
+		'text-[0.6875rem] leading-[0.6875rem] font-medium tracking-[0.04em] text-muted-foreground uppercase select-none';
 	const all = '__all__';
 	let listed = $derived(app.meta?.scenarios.filter((s) => s.listed) ?? []);
 	let other = $derived(app.meta?.scenarios.filter((s) => !s.listed) ?? []);
@@ -31,10 +31,13 @@
 		}}
 	>
 		<Tip text="Scenario: {scenarioLabel}">
-			<Select.Trigger size="sm" class="{trigger} w-32 @min-[1800px]:w-44" aria-label="Scenario"
+			<Select.Trigger
+				size="sm"
+				class="{trigger} w-32 @min-[1800px]:w-44"
+				aria-label="Scenario: {scenarioLabel}"
 				><span class="flex min-w-0 flex-col items-start leading-none"
 					><span class={caption} aria-hidden="true">Scenario</span><span
-						class="max-w-full truncate text-[0.8125rem] leading-4">{scenarioLabel}</span
+						class="max-w-full truncate text-[0.8125rem] leading-[0.875rem]">{scenarioLabel}</span
 					></span
 				></Select.Trigger
 			>
@@ -76,7 +79,10 @@
 		}}
 	>
 		<Tip text="Faction: {faction?.label ?? 'All factions'}">
-			<Select.Trigger size="sm" class="{trigger} w-40" aria-label="Faction"
+			<Select.Trigger
+				size="sm"
+				class="{trigger} w-40"
+				aria-label="Faction: {faction?.label ?? 'All factions'}"
 				><span class="flex min-w-0 items-center gap-1.5"
 					>{#if faction?.icon}<img
 							src={assetUrl(faction.icon) ?? undefined}
@@ -84,7 +90,7 @@
 							class="size-4 shrink-0 object-contain"
 						/>{/if}<span class="flex min-w-0 flex-col items-start leading-none"
 						><span class={caption} aria-hidden="true">Faction</span><span
-							class="max-w-full truncate text-[0.8125rem] leading-4"
+							class="max-w-full truncate text-[0.8125rem] leading-[0.875rem]"
 							>{faction?.label ?? 'All factions'}</span
 						></span
 					></span
