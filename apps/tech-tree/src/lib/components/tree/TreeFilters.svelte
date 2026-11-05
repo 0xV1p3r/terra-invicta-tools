@@ -6,6 +6,7 @@
 	import * as ToggleGroup from '$lib/components/ui/toggle-group/index.js';
 	import * as Tooltip from '$lib/components/ui/tooltip/index.js';
 	import { app } from '$lib/state.svelte';
+	import Pill from '$lib/components/toolbar/Pill.svelte';
 	import CategoryIcon from './CategoryIcon.svelte';
 	import PropertyFilter from './PropertyFilter.svelte';
 
@@ -23,7 +24,7 @@
 	}
 </script>
 
-<div class="flex items-center gap-2" role="group" aria-label="Tree filters">
+<Pill aria-label="Tree filters">
 	<ToggleGroup.Root
 		type="multiple"
 		size="sm"
@@ -76,7 +77,7 @@
 	</ToggleGroup.Root>
 
 	<PropertyFilter {disabled} />
-</div>
+</Pill>
 
 <style>
 	:global(.category-toggle[data-state='on']) {

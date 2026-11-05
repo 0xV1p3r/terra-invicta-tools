@@ -14,8 +14,8 @@
 	const HEIGHT = 150;
 	const PAD = 6;
 	const CORNER_CLASS: Record<Corner, string> = {
-		'top-left': 'top-3 left-3',
-		'top-right': 'top-3 right-3',
+		'top-left': 'top-[max(var(--toolbar-h,0px),0.75rem)] left-3',
+		'top-right': 'top-[max(var(--toolbar-h,0px),0.75rem)] right-3',
 		'bottom-left': 'bottom-3 left-3',
 		'bottom-right': 'right-3 bottom-3'
 	};

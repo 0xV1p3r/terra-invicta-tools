@@ -8,6 +8,7 @@
 	import * as ToggleGroup from '$lib/components/ui/toggle-group/index.js';
 	import { formatCost, formatCostFull } from '$lib/format';
 	import { app, type FullLayout, type ViewKind } from '$lib/state.svelte';
+	import Pill from '$lib/components/toolbar/Pill.svelte';
 	import CategoryIcon from './CategoryIcon.svelte';
 
 	let { graph }: { graph: TreeGraph | null } = $props();
@@ -43,26 +44,23 @@
 	}
 </script>
 
-<div
-	class="flex flex-wrap items-center gap-3 border-b bg-card/95 px-3 py-2 text-sm backdrop-blur"
-	role="toolbar"
-	aria-label="View"
->
+<Pill class="min-w-0 flex-wrap rounded-3xl" role="toolbar" aria-label="View">
 	{#if view.kind !== 'full'}
 		<Button
 			variant="default"
 			size="sm"
+			class="rounded-full"
 			title="Back to the full tree, centered on the selection"
 			onclick={() => app.showFullTree(app.selected ?? app.root)}
 		>
 			<Undo2 /> Back to full tree
 		</Button>
 	{/if}
-	<div class="flex gap-1">
+	<div class="flex">
 		<Button
 			variant="outline"
 			size="icon"
-			class="size-8"
+			class="size-8 rounded-full"
 			aria-label="Back"
 			title="Back (Alt+←)"
 			disabled={app.back.length === 0}
@@ -73,7 +71,7 @@
 		<Button
 			variant="outline"
 			size="icon"
-			class="size-8"
+			class="size-8 rounded-full"
 			aria-label="Forward"
 			title="Forward (Alt+→)"
 			disabled={app.forward.length === 0}
@@ -157,10 +155,13 @@
 	{/if}
 
 	{#if graph && view.kind !== 'full'}
-		<span class="ml-auto text-muted-foreground" title="{formatCostFull(graph.totalCost)} research">
+		<span
+			class="pr-2 whitespace-nowrap text-muted-foreground"
+			title="{formatCostFull(graph.totalCost)} research"
+		>
 			{#if view.kind === 'subtree'}{graph.nodes.length} items ·{/if}
 			research needed for root
 			<span class="font-semibold text-foreground">{formatCost(graph.totalCost)}</span>
 		</span>
 	{/if}
-</div>
+</Pill>

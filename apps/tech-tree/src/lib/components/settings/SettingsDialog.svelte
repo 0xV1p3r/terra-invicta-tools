@@ -5,11 +5,30 @@
 	import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
 	import Settings from '@lucide/svelte/icons/settings';
 	import { Button } from '$lib/components/ui/button/index.js';
+	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
-	import * as Popover from '$lib/components/ui/popover/index.js';
+	import * as Select from '$lib/components/ui/select/index.js';
 	import { Switch } from '$lib/components/ui/switch/index.js';
 	import * as ToggleGroup from '$lib/components/ui/toggle-group/index.js';
 	import { settings, type Corner } from '$lib/settings.svelte';
+	import { app } from '$lib/state.svelte';
+
+	const LANGUAGES: Record<string, string> = {
+		en: 'English',
+		deu: 'Deutsch',
+		fr: 'Français',
+		esp: 'Español',
+		ita: 'Italiano',
+		pol: 'Polski',
+		por: 'Português',
+		rus: 'Русский',
+		ukr: 'Українська',
+		cze: 'Čeština',
+		chs: '简体中文',
+		cht: '繁體中文',
+		jpn: '日本語',
+		kor: '한국어'
+	};
 
 	const CORNER_OPTIONS = [
 		{ value: 'top-left', label: 'Top left', icon: ArrowUpLeft },
@@ -19,16 +38,53 @@
 	] as const;
 </script>
 
-<Popover.Root>
-	<Popover.Trigger>
+<Dialog.Root>
+	<Dialog.Trigger>
 		{#snippet child({ props })}
-			<Button {...props} variant="outline" size="icon" aria-label="Settings" title="Settings">
+			<Button
+				{...props}
+				variant="ghost"
+				size="icon"
+				class="rounded-full"
+				aria-label="Settings"
+				title="Settings"
+			>
 				<Settings />
 			</Button>
 		{/snippet}
-	</Popover.Trigger>
-	<Popover.Content class="w-80" align="end">
+	</Dialog.Trigger>
+	<Dialog.Content class="max-h-[85vh] overflow-y-auto sm:max-w-md">
+		<Dialog.Header>
+			<Dialog.Title>Settings</Dialog.Title>
+			<Dialog.Description>
+				Terra Invicta Tech Tree{#if app.meta?.gameVersion}, game data v{app.meta.gameVersion}{/if}
+			</Dialog.Description>
+		</Dialog.Header>
 		<div class="grid gap-4 text-sm">
+			<h2 class="font-semibold">General</h2>
+			<div class="flex items-center justify-between gap-4">
+				<span id="setting-language" class="font-medium">Game text language</span>
+				<Select.Root
+					type="single"
+					value={app.scope.lang}
+					disabled={!app.meta}
+					onValueChange={(lang) => {
+						app.scope = { ...app.scope, lang };
+					}}
+				>
+					<Select.Trigger size="sm" aria-labelledby="setting-language"
+						>{LANGUAGES[app.scope.lang] ?? app.scope.lang}</Select.Trigger
+					>
+					<Select.Content
+						><Select.Group>
+							{#each app.meta?.languages ?? [] as lang (lang)}<Select.Item
+									value={lang}
+									label={LANGUAGES[lang] ?? lang}>{LANGUAGES[lang] ?? lang}</Select.Item
+								>{/each}
+						</Select.Group></Select.Content
+					>
+				</Select.Root>
+			</div>
 			<h2 class="font-semibold">Wiki</h2>
 			<div class="flex items-start justify-between gap-4">
 				<Label for="setting-wiki-spoilers" class="grid gap-1 font-normal"
@@ -101,5 +157,5 @@
 				</ToggleGroup.Root>
 			</div>
 		</div>
-	</Popover.Content>
-</Popover.Root>
+	</Dialog.Content>
+</Dialog.Root>

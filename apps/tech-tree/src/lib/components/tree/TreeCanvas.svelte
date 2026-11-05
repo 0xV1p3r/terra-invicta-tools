@@ -2,7 +2,7 @@
 	// The research tree view: one <canvas> drawn by `render.ts` from a camera, plus DOM
 	// overlays (controls, minimap, hover card, status). Performance-first replacement for
 	// xyflow, whose DOM cards made WebKitGTK (Tauri on Linux) stutter on pan and freeze on zoom.
-	import { onDestroy, onMount, untrack } from 'svelte';
+	import { onDestroy, onMount, untrack, type Snippet } from 'svelte';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import Maximize from '@lucide/svelte/icons/maximize';
 	import ScanSearch from '@lucide/svelte/icons/scan-search';
@@ -29,6 +29,9 @@
 	import { DETAIL_ZOOM, readTheme, render, type Theme } from './render';
 	import { buildScene, nodeAt, type SceneNode } from './scene';
 	import ViewBar from './ViewBar.svelte';
+
+	/** Floating toolbar pills placed before and after the view controls. */
+	let { leading, trailing }: { leading?: Snippet; trailing?: Snippet } = $props();
 
 	const NO_FILTER: TreeFilter = { techs: true, projects: true, categories: [], properties: [] };
 
@@ -129,6 +132,8 @@
 	let surface = $state<HTMLDivElement>();
 	let width = $state(0);
 	let height = $state(0);
+	/** Height of the floating toolbar; top-anchored overlays sit below it. */
+	let toolbarHeight = $state(0);
 	let dpr = $state(typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1);
 	let theme = $state.raw<Theme | null>(null);
 	let hovered = $state<EntityKey | null>(null);
@@ -515,11 +520,11 @@
 
 <svelte:window onkeydown={onwindowkeydown} onmouseup={onwindowmouseup} />
 
-<div class="relative flex h-full min-h-0 flex-col">
-	<ViewBar graph={ready ? graph : null} />
+<div class="relative h-full min-h-0">
 	<div
 		bind:this={container}
-		class="tree-surface relative min-h-0 flex-1 overflow-hidden bg-background"
+		class="tree-surface relative size-full overflow-hidden bg-background"
+		style:--toolbar-h="{toolbarHeight}px"
 		bind:clientWidth={width}
 		bind:clientHeight={height}
 	>
@@ -593,7 +598,7 @@
 
 		{#if matches}
 			<div
-				class="absolute top-3 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full border bg-card py-1 pr-1 pl-3 text-sm shadow"
+				class="absolute top-[max(var(--toolbar-h),0.75rem)] left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full border bg-card py-1 pr-1 pl-3 text-sm shadow"
 			>
 				<span class="text-muted-foreground">{matches.size} matching</span>
 				{#if matches.size}
@@ -608,9 +613,21 @@
 			<MiniMap {scene} {camera} />
 		{/if}
 
+		<!-- Floating toolbar; clicks between the pills reach the tree. -->
+		<div
+			class="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-wrap items-start gap-2 p-3"
+			bind:clientHeight={toolbarHeight}
+		>
+			{@render leading?.()}
+			<ViewBar graph={ready ? graph : null} />
+			<div class="ml-auto flex flex-wrap items-start justify-end gap-2">
+				{@render trailing?.()}
+			</div>
+		</div>
+
 		{#if loading}
 			<div
-				class="pointer-events-none absolute top-3 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full border bg-card px-3 py-1 text-sm text-muted-foreground shadow"
+				class="pointer-events-none absolute top-[max(var(--toolbar-h),0.75rem)] left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full border bg-card px-3 py-1 text-sm text-muted-foreground shadow"
 				role="status"
 			>
 				<LoaderCircle class="size-4 animate-spin" /> Loading tree…
