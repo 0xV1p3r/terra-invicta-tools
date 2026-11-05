@@ -16,9 +16,9 @@
 	let { graph }: { graph: TreeGraph | null } = $props();
 
 	const view = $derived(app.view);
-	/** Root for switching to a sub-tree/focus view: the current root, else the selected research. */
+	/** Root for switching to a sub-tree/focus view: the selected research, else the current root. */
 	const candidate = $derived(
-		app.root ?? (app.selected && app.treeKeys.has(app.selected) ? app.selected : null)
+		(app.selected && app.treeKeys.has(app.selected) ? app.selected : null) ?? app.root
 	);
 	const root = $derived(app.root ? graph?.nodes.find((n) => n.key === app.root) : undefined);
 
@@ -182,7 +182,7 @@
 					</Tip>
 				{/each}
 			</ToggleGroup.Root>
-			<Tip text="Include alternative prerequisites (altPrereq)">
+			<Tip text="Also show alternative prerequisites. Techs that can substitute for a requirement.">
 				<Toggle
 					size="sm"
 					class={pillToggle}

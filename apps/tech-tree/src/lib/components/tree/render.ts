@@ -79,8 +79,14 @@ const NAME_ZOOM = 0.18;
 export const OVERVIEW_ZOOM = 0.1;
 /** Most landmark labels in the overview. */
 const LANDMARKS = 40;
-/** Widest landmark label (screen px, padding included); longer names are ellipsized. */
+/** Widest one-line landmark label (screen px, padding included) where there is room. */
+const LANDMARK_WIDE = 250;
+/**
+ * Width (screen px, padding included) of two-line landmark labels and of the shortened
+ * one-line fallback where space is tight.
+ */
 const LANDMARK_WIDTH = 150;
+const LANDMARK_LINE = 14;
 /** Landmark candidates tried per frame, so dense views don't scan the whole ranking. */
 const LANDMARK_TRIES = 240;
 /**
@@ -89,8 +95,10 @@ const LANDMARK_TRIES = 240;
  * stays legible.
  */
 const DIM = 0.3;
-/** Opacity of the icon and badges of such cards. */
-const DIM_CONTENT = 0.55;
+/** Opacity of their border, kept higher so the card shapes stay apparent. */
+const DIM_BORDER = 0.75;
+/** Opacity of their icon and badges (secondary metadata, so dimmed further than the name). */
+const DIM_CONTENT = 0.4;
 
 const RADIUS = 14;
 const BIG_FONT_PX = 26;
@@ -149,14 +157,21 @@ export function render(
 	ctx.globalAlpha = 1;
 
 	// --- edges ---------------------------------------------------------------
-	// Plain edges stay quiet so bundles don't knot up; the hovered and selected paths stand out.
+	// Plain edges are bundled onto shared trunks and stay quiet so they don't knot up; only
+	// the hovered and selected nodes' own edges are drawn as strong individual curves.
 	const fade = Math.min(1, Math.max(0.2, z * 2)) * (overview ? 0.5 : 1);
-	ctx.globalAlpha = lineage ? 0.15 * fade : matches ? 0.3 * fade : 0.5 * fade;
-	strokeEdges(ctx, scene.edges, theme.muted, Math.max(1.5, 0.5 * px), px);
+	ctx.globalAlpha = (lineage ? 0.08 : matches ? 0.25 : 0.45) * fade;
+	strokeEdges(ctx, scene.bundled, theme.muted, Math.max(1.5, 0.5 * px), px);
 	if (lineage) {
-		// Lineages can be big (a sub-tree's root reaches everything): the bigger, the lighter.
-		ctx.globalAlpha = lineage.nodes.size > scene.nodes.length / 2 ? 0.35 : 0.6;
-		strokeEdges(ctx, lineage.edges, theme.foreground, Math.max(1.5, px), px);
+		if (lineage.nodes.size > scene.nodes.length / 2) {
+			// Big lineages (a sub-tree's root reaches everything) are the structure itself:
+			// bundled like plain edges, just a little stronger.
+			ctx.globalAlpha = 0.55 * fade;
+			strokeEdges(ctx, lineage.bundled, theme.muted, Math.max(1.5, 0.75 * px), px);
+		} else {
+			ctx.globalAlpha = 0.55;
+			strokeEdges(ctx, lineage.edges, theme.foreground, Math.max(1.5, px), px);
+		}
 	}
 	const highlight = lineage && state.selected ? scene.edgesOf.get(state.selected) : undefined;
 	if (highlight) {
@@ -208,11 +223,13 @@ export function render(
 			ctx.fillStyle = theme.card;
 			ctx.fill(body);
 			if (z > 0.12) {
+				if (outside) ctx.globalAlpha = DIM_BORDER;
 				ctx.strokeStyle = dashed && !outside ? theme.muted : theme.border;
 				ctx.lineWidth = px;
 				ctx.setLineDash(dashed ? [6 * px, 4 * px] : []);
 				ctx.stroke(body);
 				ctx.setLineDash([]);
+				if (outside) ctx.globalAlpha = DIM;
 			}
 			// Bars are narrower than the corner radius, so draw them as plain rects clipped to
 			// the card shapes (a rounded bar can't follow the card's corners and sticks out).
@@ -344,21 +361,49 @@ function drawBandLabels(
 	}
 }
 
+interface LandmarkLabel {
+	lines: string[];
+	/** Widest line (text only). */
+	width: number;
+}
+
 const rankingCache = new WeakMap<
 	Scene,
-	{ font: string; ranking: { node: SceneNode; label: string; width: number }[] }
+	{ font: string; ranking: { node: SceneNode; labels: LandmarkLabel[] }[] }
 >();
 
-/** Nodes by importance with their (ellipsized) label and its width in the current font. */
+/**
+ * Nodes by importance with their landmark label variants in the current font, most
+ * complete first: the whole name on one line, then on two lines, then shortened. A
+ * shortened label that would read the same as another node's keeps the name's end instead
+ * ("Antimatter…Reactor III").
+ */
 function landmarkRanking(ctx: CanvasRenderingContext2D, scene: Scene) {
 	const cached = rankingCache.get(scene);
 	if (cached?.font === ctx.font) return cached.ranking;
 	const importance = importanceOf(scene);
+	const label = (lines: string[]) => ({
+		lines,
+		width: Math.max(...lines.map((l) => ctx.measureText(l).width))
+	});
+	const short = new Map(scene.nodes.map((n) => [n, ellipsize(ctx, n, LANDMARK_WIDTH - 12)]));
+	const uses = new Map<string, number>();
+	for (const text of short.values()) uses.set(text, (uses.get(text) ?? 0) + 1);
 	const ranking = [...scene.nodes]
 		.sort((a, b) => (importance.get(b.key) ?? 0) - (importance.get(a.key) ?? 0))
 		.map((node) => {
-			const label = ellipsize(ctx, node, LANDMARK_WIDTH - 12);
-			return { node, label, width: ctx.measureText(label).width };
+			const name = node.item.name;
+			const full = label([name]);
+			if (full.width <= LANDMARK_WIDTH - 12) return { node, labels: [full] };
+			const labels: LandmarkLabel[] = [];
+			if (full.width <= LANDMARK_WIDE - 12) labels.push(full);
+			const lines = wrap(ctx, node, LANDMARK_WIDTH - 12, 2);
+			if (lines.join(' ') === name.replace(/\s+/g, ' ')) labels.push(label(lines));
+			const cut = short.get(node)!;
+			labels.push(
+				label([(uses.get(cut) ?? 0) > 1 ? middleEllipsize(ctx, name, LANDMARK_WIDTH - 12) : cut])
+			);
+			return { node, labels };
 		});
 	rankingCache.set(scene, { font: ctx.font, ranking });
 	return ranking;
@@ -402,50 +447,54 @@ function drawLandmarks(
 	const taken: Box[] = [];
 	const cw = scene.width * z;
 	const ch = scene.height * z;
-	const th = 20;
 	let count = 0;
 	let tries = 0;
-	for (const { node: n, label, width } of landmarkRanking(ctx, scene)) {
+	for (const { node: n, labels } of landmarkRanking(ctx, scene)) {
 		if (count >= LANDMARKS || tries >= LANDMARK_TRIES) break;
 		if (!shown.has(n) || dimmed(n)) continue;
 		tries++;
 		const card = { x: camera.x + n.x * z, y: camera.y + n.y * z, w: cw, h: ch };
 		const cx = card.x + cw / 2;
-		const tw = width + 12;
-		// Centred on the card, shifted inward at the canvas edges while still over the card.
-		const left = Math.min(
-			Math.max(cx - tw / 2, edge, card.x - tw + 12),
-			camera.width - edge - tw,
-			card.x + cw - 12
-		);
-		const candidates: [Box, number][] = [
-			[{ x: left, y: card.y + ch / 2 - th / 2, w: tw, h: th }, 0],
-			[{ x: left, y: card.y - th - 3, w: tw, h: th }, -1],
-			[{ x: left, y: card.y + ch + 3, w: tw, h: th }, 1]
-		];
-		let best: [Box, number] | null = null;
+		// The most complete label that covers no neighbouring card, else the one covering fewest.
+		let best: [Box, number, LandmarkLabel] | null = null;
 		let bestCovered = 3; // more covered neighbours than this: skip the label
-		for (const c of candidates) {
-			const [r] = c;
-			if (r.x < edge || r.y < edge || r.x + r.w > camera.width - edge) continue;
-			if (r.y + r.h > camera.height - edge) continue;
-			if (blocked.some((b) => overlaps(r, b, 4)) || taken.some((t) => overlaps(r, t, 4))) continue;
-			const world = {
-				x: (r.x - camera.x) / z,
-				y: (r.y - camera.y) / z,
-				width: r.w / z,
-				height: r.h / z
-			};
-			let covered = 0;
-			for (const m of nodesIn(scene, world)) if (m !== n) covered++;
-			if (covered < bestCovered) {
-				best = c;
-				bestCovered = covered;
-				if (!covered) break;
+		for (const label of labels) {
+			const tw = label.width + 12;
+			const th = label.lines.length * LANDMARK_LINE + 6;
+			// Centred on the card, shifted inward at the canvas edges while still over the card.
+			const left = Math.min(
+				Math.max(cx - tw / 2, edge, card.x - tw + 12),
+				camera.width - edge - tw,
+				card.x + cw - 12
+			);
+			const candidates: [Box, number][] = [
+				[{ x: left, y: card.y + ch / 2 - th / 2, w: tw, h: th }, 0],
+				[{ x: left, y: card.y - th - 3, w: tw, h: th }, -1],
+				[{ x: left, y: card.y + ch + 3, w: tw, h: th }, 1]
+			];
+			for (const [r, side] of candidates) {
+				if (r.x < edge || r.y < edge || r.x + r.w > camera.width - edge) continue;
+				if (r.y + r.h > camera.height - edge) continue;
+				if (blocked.some((b) => overlaps(r, b, 4)) || taken.some((t) => overlaps(r, t, 4)))
+					continue;
+				const world = {
+					x: (r.x - camera.x) / z,
+					y: (r.y - camera.y) / z,
+					width: r.w / z,
+					height: r.h / z
+				};
+				let covered = 0;
+				for (const m of nodesIn(scene, world)) if (m !== n) covered++;
+				if (covered < bestCovered) {
+					best = [r, side, label];
+					bestCovered = covered;
+					if (!covered) break;
+				}
 			}
+			if (best && !bestCovered) break;
 		}
 		if (!best) continue;
-		const [r, side] = best;
+		const [r, side, label] = best;
 		taken.push(r);
 		count++;
 		const color = accent(theme, n);
@@ -474,7 +523,9 @@ function drawLandmarks(
 		ctx.lineWidth = 1.5;
 		ctx.stroke();
 		ctx.fillStyle = theme.cardForeground;
-		ctx.fillText(label, r.x + 6, r.y + th / 2);
+		label.lines.forEach((line, i) =>
+			ctx.fillText(line, r.x + 6, r.y + 3 + (i + 0.5) * LANDMARK_LINE)
+		);
 	}
 }
 
@@ -540,9 +591,10 @@ function drawDetail(
 			ctx.lineWidth = 1;
 			ctx.stroke();
 		}
-		ctx.globalAlpha = 1;
+		ctx.globalAlpha = faded ? 0.7 : 1;
 		ctx.fillStyle = secondary ? theme.muted : filled ? theme.secondaryForeground : text;
 		ctx.fillText(label, bx + 8, by + 10.5);
+		ctx.globalAlpha = 1;
 		bx += width + 4;
 	};
 	badge(n.cost, true);
@@ -592,6 +644,23 @@ function ellipsize(ctx: CanvasRenderingContext2D, n: SceneNode, maxWidth: number
 	}
 	n.labels.set(cacheKey, [text]);
 	return text;
+}
+
+/** Name cut in the middle to `maxWidth`, keeping its first word and as much of its end as fits. */
+function middleEllipsize(ctx: CanvasRenderingContext2D, name: string, maxWidth: number) {
+	const words = name.split(/\s+/);
+	const fits = (text: string) => ctx.measureText(text).width <= maxWidth;
+	for (let i = 1; i < words.length; i++) {
+		const text = `${words[0]}…${words.slice(i).join(' ')}`;
+		if (fits(text)) return text;
+	}
+	// Even the last word is too long: keep as many of its last characters as fit.
+	const last = words[words.length - 1];
+	for (let i = 1; i < last.length; i++) {
+		const text = `${words[0]}…${last.slice(i)}`;
+		if (fits(text)) return text;
+	}
+	return `…${last.slice(-8)}`;
 }
 
 /** Name wrapped into at most `maxLines` lines (last one ellipsized; cached per node and font). */

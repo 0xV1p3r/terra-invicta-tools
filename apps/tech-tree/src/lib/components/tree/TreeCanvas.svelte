@@ -577,7 +577,10 @@
 		const n = app.selected ? scene?.byKey.get(app.selected) : undefined;
 		if (!n) return '';
 		const category = CATEGORIES[n.item.category]?.label ?? n.item.category;
-		return `${n.item.name}, ${n.kind}, ${category}, cost ${n.cost}`;
+		// The same flags and dimming the card shows, in words.
+		const notes = n.flags.map((f) => f.label);
+		if (matches && !matches.has(n.key)) notes.push('Outside the active filters');
+		return [`${n.item.name}, ${n.kind}, ${category}, cost ${n.cost}`, ...notes].join('. ');
 	});
 
 	// --- hover card -------------------------------------------------------------------

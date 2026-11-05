@@ -18,7 +18,7 @@
 
 <Card.Content
 	class="grid size-9 shrink-0 place-items-center rounded-md p-0 {gameIcon
-		? `bg-zinc-800 ring-1 ${tone.ring}`
+		? `bg-icon-bg ring-1 ${tone.ring}`
 		: tone.tile}"
 	title={tone.label || undefined}
 >

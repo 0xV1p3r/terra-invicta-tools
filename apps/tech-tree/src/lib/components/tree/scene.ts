@@ -32,6 +32,8 @@ export interface SceneEdge {
 	to: EntityKey;
 	alternative: boolean;
 	path: Path2D;
+	/** The same edge routed through the shared trunks of the gaps it crosses. */
+	bundled: Path2D;
 }
 
 export interface SceneOptions {
@@ -42,6 +44,8 @@ export interface SceneOptions {
 export interface Lineage {
 	nodes: Set<EntityKey>;
 	edges: EdgePaths;
+	/** `edges` as bundles (see `Scene.bundled`). */
+	bundled: EdgePaths;
 }
 
 export interface Scene {
@@ -53,6 +57,11 @@ export interface Scene {
 	bounds: Rect;
 	/** Edges drawn normally (without hidden redundant ones). */
 	edges: EdgePaths;
+	/**
+	 * `edges` bundled: in each gap between columns they turn onto one vertical trunk, so
+	 * edges sharing a gap are drawn as one line there instead of a band of crossing curves.
+	 */
+	bundled: EdgePaths;
 	edgeList: SceneEdge[];
 	/** Edges touching a node (for highlighting the selection). */
 	edgesOf: Map<EntityKey, EdgePaths>;
@@ -81,6 +90,35 @@ function edgePath(sx: number, sy: number, tx: number, ty: number, points: [numbe
 		[x, y] = [px, py];
 	}
 	return new Path2D(d);
+}
+
+/** Corner radius of bundled edges where they turn onto and off a trunk. */
+const TURN = 16;
+
+/**
+ * Like `edgePath`, but each gap is crossed orthogonally through the gap's middle, where it
+ * meets every other edge crossing the same gap (backward hops keep their curve).
+ */
+function bundledPath(sx: number, sy: number, tx: number, ty: number, points: [number, number][]) {
+	const p = new Path2D();
+	p.moveTo(sx, sy);
+	let [x, y] = [sx, sy];
+	for (const [px, py] of [...points, [tx, ty] as [number, number]]) {
+		if (py === y) {
+			p.lineTo(px, py);
+		} else if (px <= x) {
+			const offset = 0.25 * 25 * Math.sqrt(x - px);
+			p.bezierCurveTo(x + offset, y, px - offset, py, px, py);
+		} else {
+			const mid = (x + px) / 2;
+			const r = Math.min(TURN, Math.abs(py - y) / 2, (px - x) / 2);
+			p.arcTo(mid, y, mid, py, r);
+			p.arcTo(mid, py, px, py, r);
+			p.lineTo(px, py);
+		}
+		[x, y] = [px, py];
+	}
+	return p;
 }
 
 export function buildScene(graph: TreeGraph, options: SceneOptions): Scene {
@@ -136,16 +174,22 @@ export function buildScene(graph: TreeGraph, options: SceneOptions): Scene {
 		: { x: 0, y: 0, width: 1, height: 1 };
 
 	const edges: EdgePaths = { solid: new Path2D(), dashed: new Path2D() };
+	const bundled: EdgePaths = { solid: new Path2D(), dashed: new Path2D() };
 	const edgesOf = new Map<EntityKey, EdgePaths>();
 	const edgeList: SceneEdge[] = [];
 	for (const e of graph.edges) {
 		const from = byKey.get(e.from);
 		const to = byKey.get(e.to);
 		if (!from || !to) continue;
-		const path = edgePath(from.x + w, from.y + h / 2, to.x, to.y + h / 2, e.points);
-		edgeList.push({ from: e.from, to: e.to, alternative: e.alternative, path });
+		const ends = [from.x + w, from.y + h / 2, to.x, to.y + h / 2] as const;
+		const path = edgePath(...ends, e.points);
+		const trunked = bundledPath(...ends, e.points);
+		edgeList.push({ from: e.from, to: e.to, alternative: e.alternative, path, bundled: trunked });
 		const kind = e.alternative ? 'dashed' : 'solid';
-		if (!(e.redundant && options.hideRedundant)) edges[kind].addPath(path);
+		if (!(e.redundant && options.hideRedundant)) {
+			edges[kind].addPath(path);
+			bundled[kind].addPath(trunked);
+		}
 		for (const key of [e.from, e.to]) {
 			let p = edgesOf.get(key);
 			if (!p) edgesOf.set(key, (p = { solid: new Path2D(), dashed: new Path2D() }));
@@ -153,14 +197,27 @@ export function buildScene(graph: TreeGraph, options: SceneOptions): Scene {
 		}
 	}
 
-	return { graph, nodes, byKey, width: w, height: h, bounds, edges, edgeList, edgesOf, grid };
+	return {
+		graph,
+		nodes,
+		byKey,
+		width: w,
+		height: h,
+		bounds,
+		edges,
+		bundled,
+		edgeList,
+		edgesOf,
+		grid
+	};
 }
 
 /** Walk each direction separately to keep unrelated branches out of the lineage. */
 export function lineageOf(scene: Scene, key: EntityKey): Lineage {
 	const nodes = new Set<EntityKey>();
 	const edges: EdgePaths = { solid: new Path2D(), dashed: new Path2D() };
-	if (!scene.byKey.has(key)) return { nodes, edges };
+	const bundled: EdgePaths = { solid: new Path2D(), dashed: new Path2D() };
+	if (!scene.byKey.has(key)) return { nodes, edges, bundled };
 	const incoming = new Map<EntityKey, SceneEdge[]>();
 	const outgoing = new Map<EntityKey, SceneEdge[]>();
 	for (const edge of scene.edgeList) {
@@ -190,8 +247,12 @@ export function lineageOf(scene: Scene, key: EntityKey): Lineage {
 			}
 		}
 	}
-	for (const edge of traversed) edges[edge.alternative ? 'dashed' : 'solid'].addPath(edge.path);
-	return { nodes, edges };
+	for (const edge of traversed) {
+		const kind = edge.alternative ? 'dashed' : 'solid';
+		edges[kind].addPath(edge.path);
+		bundled[kind].addPath(edge.bundled);
+	}
+	return { nodes, edges, bundled };
 }
 
 const importanceCache = new WeakMap<Scene, Map<EntityKey, number>>();

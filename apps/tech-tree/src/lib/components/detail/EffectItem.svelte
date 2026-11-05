@@ -56,7 +56,7 @@
 					<img
 						src={url}
 						alt=""
-						class="size-4 self-center rounded-sm bg-zinc-800 object-contain p-px"
+						class="size-4 self-center rounded-sm bg-icon-bg object-contain p-px"
 						draggable="false"
 					/>
 				{:else if sprite}
@@ -93,12 +93,12 @@
 			{/if}
 			<div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
 				{#if line.target}
-					<Badge variant="secondary" class="h-5 px-1.5 text-[11px]">{line.target}</Badge>
+					<Badge variant="secondary" class="h-5 px-1.5">{line.target}</Badge>
 				{/if}
 				<Button
 					variant="link"
 					type="button"
-					class="truncate font-mono text-[11px] text-muted-foreground/70 underline-offset-2 hover:text-foreground hover:underline"
+					class="truncate font-mono text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
 					title="Open effect record"
 					onclick={() => navigate(line.entity)}
 				>
