@@ -4,8 +4,9 @@
 	import * as Select from '$lib/components/ui/select';
 	import { Badge } from '$lib/components/ui/badge';
 	import Pill, { pillItem } from '$lib/components/toolbar/Pill.svelte';
-	// Borderless triggers, like the other toolbar controls.
-	const trigger = `${pillItem} border-0 bg-transparent shadow-none hover:bg-accent dark:bg-transparent dark:hover:bg-accent/50 data-[size=sm]:h-8 data-[size=sm]:rounded-md`;
+	// Borderless triggers, like the other toolbar controls. A fixed width keeps the toolbar from
+	// reflowing when a long scenario or faction name is chosen; the label truncates instead.
+	const trigger = `${pillItem} justify-between @min-[1800px]:w-40 border-0 bg-transparent shadow-none hover:bg-accent dark:bg-transparent dark:hover:bg-accent/50 data-[size=sm]:h-8 data-[size=sm]:rounded-md`;
 	const all = '__all__';
 	let listed = $derived(app.meta?.scenarios.filter((s) => s.listed) ?? []);
 	let other = $derived(app.meta?.scenarios.filter((s) => !s.listed) ?? []);
@@ -24,8 +25,8 @@
 			app.scope = { ...app.scope, scenario: value === all ? null : value };
 		}}
 	>
-		<Select.Trigger size="sm" class={trigger} aria-label="Scenario"
-			><span class="max-w-48 truncate">{scenarioLabel}</span></Select.Trigger
+		<Select.Trigger size="sm" class="{trigger} w-32" aria-label="Scenario"
+			><span class="min-w-0 truncate">{scenarioLabel}</span></Select.Trigger
 		>
 		<Select.Content>
 			<Select.Group>
@@ -63,13 +64,13 @@
 			app.scope = { ...app.scope, faction: value === all ? null : value };
 		}}
 	>
-		<Select.Trigger size="sm" class={trigger} aria-label="Faction"
-			><span class="flex max-w-48 items-center gap-2 truncate"
+		<Select.Trigger size="sm" class="{trigger} w-36" aria-label="Faction"
+			><span class="flex min-w-0 items-center gap-2"
 				>{#if faction?.icon}<img
 						src={assetUrl(faction.icon) ?? undefined}
 						alt=""
-						class="size-4 object-contain"
-					/>{/if}{faction?.label ?? 'All factions'}</span
+						class="size-4 shrink-0 object-contain"
+					/>{/if}<span class="truncate">{faction?.label ?? 'All factions'}</span></span
 			></Select.Trigger
 		>
 		<Select.Content

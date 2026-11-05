@@ -244,7 +244,8 @@
 				class="h-8"
 				disabled={!app.meta}
 				onclick={() => wiki.show()}
-				aria-keyshortcuts="Control+Shift+k Meta+Shift+k"><BookOpen /> Wiki</Button
+				aria-keyshortcuts="Control+Shift+k Meta+Shift+k"
+				><BookOpen /><span class="sr-only @min-[1800px]:not-sr-only">Wiki</span></Button
 			>{/snippet}</Tooltip.Trigger
 	><Tooltip.Content>Browse the wiki (Ctrl/Cmd+Shift+K)</Tooltip.Content></Tooltip.Root
 >

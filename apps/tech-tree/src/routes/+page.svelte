@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
+	import PanelRightClose from '@lucide/svelte/icons/panel-right-close';
 	import PanelRightOpen from '@lucide/svelte/icons/panel-right-open';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 	import { api, mockMode, type TreeGraph } from '$lib/api';
@@ -22,6 +23,8 @@
 
 	/** The tree on screen, for the view controls (null while a new view loads). */
 	let treeGraph = $state.raw<TreeGraph | null>(null);
+	/** Width of the toolbar's utility cluster, reserved on its first row. */
+	let utilitiesWidth = $state(0);
 
 	onMount(() => {
 		api.getMeta().then(
@@ -56,34 +59,52 @@
 	{:else}
 		<div class="flex h-screen flex-col overflow-hidden">
 			<h1 class="sr-only">Terra Invicta Tech Tree</h1>
-			<!-- Toolbar band across the window, so the details panel doesn't squeeze it. -->
+			<!--
+				Toolbar band across the window, so the details panel doesn't squeeze it. The utilities sit
+				at the right of the first row (last in the DOM, so last in Tab order) over a floated
+				spacer; the other groups flow around it as inline blocks, so a second row gets the full
+				width and the filters wrap as one cluster. Each group's -ml-px pushes its divider under
+				the clip (no left padding, so that is the window edge) when it starts a row, so dividers
+				never dangle.
+			-->
 			<div
-				class="z-10 flex shrink-0 flex-wrap items-center divide-x border-b bg-muted/60 px-1 py-1 [&>:last-child]:ml-auto"
-				role="toolbar"
+				class="@container relative z-10 shrink-0 overflow-hidden border-b bg-muted/60 py-1 pr-1 text-[0px]"
+				role="region"
 				aria-label="Tree toolbar"
 			>
+				<div class="float-right h-10" style:width="{utilitiesWidth}px" aria-hidden="true"></div>
 				<ViewBar graph={treeGraph} />
 				<ScopeBar />
-				<TreeFilters />
-				<Pill aria-label="Search and settings">
-					<SearchPalette />
-					<WikiDialog />
-					<PillDivider />
-					{#if !app.panelOpen}
-						<Tip text="Show details panel">
+				<div role="group" aria-label="Filters" class="-ml-px inline-flex align-middle">
+					<TreeFilters />
+				</div>
+				<div class="absolute top-1 right-1" bind:clientWidth={utilitiesWidth}>
+					<Pill class="ml-0 before:hidden" aria-label="Search and settings">
+						<SearchPalette />
+						<WikiDialog />
+						<PillDivider />
+						<Tip
+							text={app.selected
+								? app.panelOpen
+									? 'Hide details panel'
+									: 'Show details panel'
+								: 'Select a tech or project to see its details'}
+						>
 							<Button
 								variant="ghost"
 								size="icon"
 								class="size-8"
-								aria-label="Show details panel"
-								onclick={() => (app.panelOpen = true)}
+								aria-label="Details panel"
+								aria-pressed={app.panelOpen}
+								disabled={!app.selected}
+								onclick={() => (app.panelOpen = !app.panelOpen)}
 							>
-								<PanelRightOpen />
+								{#if app.panelOpen}<PanelRightClose />{:else}<PanelRightOpen />{/if}
 							</Button>
 						</Tip>
-					{/if}
-					<SettingsDialog />
-				</Pill>
+						<SettingsDialog />
+					</Pill>
+				</div>
 			</div>
 			<div class="flex min-h-0 flex-1">
 				<main class="min-w-0 flex-1">
