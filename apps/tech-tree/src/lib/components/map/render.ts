@@ -57,6 +57,87 @@ function layersOf(scene: SystemScene, state: MapRenderState) {
 	return paths;
 }
 
+/** Star and planets closer than this (screen px) are crowded: labels move out on leaders. */
+const CROWDED = 12;
+/** Bodies this close to a crowded one join its cluster. */
+const JOIN = 18;
+/** Minor markers this close to a crowded body are hidden. */
+const CLUSTER = 30;
+
+/**
+ * Star and planets drawn on top of each other (linear scale, zoomed out): every major body
+ * within `JOIN` px of a pair closer than `CROWDED` px. Empty when nothing is crowded.
+ * Needs screen positions (call after `render`).
+ */
+function innerCluster(scene: SystemScene): MapItem[] {
+	const big = scene.items.filter(
+		(it) => it.onScreen && (it.type === 'star' || it.type === 'planet')
+	);
+	const near = (a: MapItem, b: MapItem, d: number) => Math.hypot(a.sx - b.sx, a.sy - b.sy) < d;
+	const out = big.filter((a) => big.some((b) => a !== b && near(a, b, CROWDED)));
+	if (!out.length) return out;
+	for (let i = 0; i < out.length; i++)
+		for (const b of big) if (!out.includes(b) && near(out[i], b, JOIN)) out.push(b);
+	return out;
+}
+
+/** Whether the star and planets are drawn too close together to tell apart (after `render`). */
+export function crowdedInner(scene: SystemScene): boolean {
+	return innerCluster(scene).length > 0;
+}
+
+/**
+ * Leader angles fanning the cluster's labels out around its center in the bodies' own angular
+ * order (so leaders don't cross); bodies right on the center take the widest gaps.
+ */
+function fanAngles(cluster: MapItem[], cx: number, cy: number): Map<MapItem, number> {
+	const known: [MapItem, number][] = [];
+	const rest: MapItem[] = [];
+	for (const it of cluster) {
+		if (Math.hypot(it.sx - cx, it.sy - cy) > 2)
+			known.push([it, Math.atan2(it.sy - cy, it.sx - cx)]);
+		else rest.push(it);
+	}
+	known.sort((a, b) => a[1] - b[1]);
+	for (const it of rest) {
+		if (!known.length) {
+			known.push([it, -Math.PI / 2]);
+			continue;
+		}
+		let best = 0;
+		let gap = -1;
+		for (let i = 0; i < known.length; i++) {
+			const next = i + 1 < known.length ? known[i + 1][1] : known[0][1] + 2 * Math.PI;
+			if (next - known[i][1] > gap) [best, gap] = [i, next - known[i][1]];
+		}
+		known.splice(best + 1, 0, [it, known[best][1] + gap / 2]);
+	}
+	// Push neighbors apart to a minimum separation (keeps the order).
+	const n = known.length;
+	const min = Math.min(0.55, ((2 * Math.PI) / n) * 0.9);
+	for (let pass = 0; pass < 30 && n > 1; pass++) {
+		for (let i = 0; i < n; i++) {
+			const j = (i + 1) % n;
+			const gap = known[j][1] - known[i][1] + (j === 0 ? 2 * Math.PI : 0);
+			if (gap >= min) continue;
+			known[i][1] -= (min - gap) / 2;
+			known[j][1] += (min - gap) / 2;
+		}
+	}
+	return new Map(known);
+}
+
+/** Whether Lagrange points belong to more than one body (labels then need the body's name). */
+const pointOwners = new WeakMap<SystemScene, number>();
+function ownersOfPoints(scene: SystemScene) {
+	let n = pointOwners.get(scene);
+	if (n === undefined) {
+		n = new Set(scene.items.flatMap((it) => (it.point ? [it.body] : []))).size;
+		pointOwners.set(scene, n);
+	}
+	return n;
+}
+
 /** Label order: by priority, then larger first (stable per scene). */
 const labelOrders = new WeakMap<SystemScene, MapItem[]>();
 function labelOrder(scene: SystemScene) {
@@ -141,15 +222,23 @@ export function render(
 	for (const it of scene.items) {
 		it.sx = camera.x + it.wx * z;
 		it.sy = camera.y + it.wy * z;
+		it.labelBox = null;
 		it.onScreen =
 			!hidden(it) && it.sx > -margin && it.sy > -margin && it.sx < w + margin && it.sy < h + margin;
 		if (it.onScreen && it.priority <= 1) majors.push(it);
 	}
-	// Small fry right on top of the Sun or a planet (zoomed out, linear scale) isn't drawn.
+	// Small fry right on top of the Sun or a planet (zoomed out, linear scale) isn't drawn, nor
+	// minor markers around crowded planets (they'd blur which dot is which).
+	const cluster = innerCluster(scene);
+	const minor = (it: MapItem) => it.priority >= 3 || it.type === 'dwarfPlanet';
 	const covered = (it: MapItem) =>
-		it.priority >= 3 &&
 		!emphasized(it) &&
-		majors.some((m) => Math.abs(it.sx - m.sx) + Math.abs(it.sy - m.sy) < m.size + it.size + 3);
+		((it.priority >= 3 &&
+			majors.some((m) => Math.abs(it.sx - m.sx) + Math.abs(it.sy - m.sy) < m.size + it.size + 3)) ||
+			(minor(it) &&
+				cluster.some((m) => Math.abs(it.sx - m.sx) + Math.abs(it.sy - m.sy) < CLUSTER)));
+	// What isn't drawn can't be hovered either.
+	for (const it of scene.items) if (it.onScreen && covered(it)) it.onScreen = false;
 
 	// Dots batched by color and alpha (the asteroid belt is one fill); minor batches first.
 	const batches = new Map<string, MapItem[]>();
@@ -264,7 +353,7 @@ export function render(
 	}
 	ctx.globalAlpha = 1;
 
-	drawLabels(ctx, scene, state, dim, w, h);
+	drawLabels(ctx, scene, state, dim, w, h, cluster);
 }
 
 function diamond(ctx: CanvasRenderingContext2D, x: number, y: number, r: number) {
@@ -287,6 +376,8 @@ const LEADER_DIRS = [
 	[-1, 0]
 ];
 const LEADER_DISTS = [22, 40, 60];
+/** Distances from a crowded cluster's center tried for its fanned-out labels. */
+const FAN_DISTS = [46, 62, 82];
 
 /**
  * Greedy labels: important ones first, each trying right, left, above and below its body
@@ -299,9 +390,16 @@ function drawLabels(
 	state: MapRenderState,
 	dim: (it: MapItem) => boolean,
 	w: number,
-	h: number
+	h: number,
+	cluster: MapItem[]
 ) {
 	const { theme, hovered, selected } = state;
+	// Crowded star and planets: labels fan out around the cluster on leaders in the body's color.
+	const hub = cluster.includes(scene.items[0]) ? scene.items[0] : cluster[0];
+	const fan = cluster.length ? fanAngles(cluster, hub.sx, hub.sy) : null;
+	// Drilled into a moon system, Lagrange points are few enough to name at any zoom.
+	const pointLabels = state.minorLabels || scene.center.info.bodyType !== 'star';
+	const severalOwners = ownersOfPoints(scene) > 1;
 	const grid = new Map<number, number[]>();
 	const rects: number[] = []; // x1, y1, x2, y2 per rect
 	const cols = Math.ceil(w / CELL) + 2;
@@ -358,16 +456,26 @@ function drawLabels(
 	for (const it of [...first, ...labelOrder(scene)]) {
 		if (!it || placed.has(it) || !it.onScreen) continue;
 		const forced = it.key === hovered || it.key === selected;
-		if (!forced && (dim(it) || (it.priority >= 4 && !state.minorLabels))) continue;
+		const gated = it.type === 'lagrange' ? !pointLabels : !state.minorLabels;
+		if (!forced && (dim(it) || (it.priority >= 4 && gated))) continue;
 		if (!forced && (it.sx < 0 || it.sy < 0 || it.sx > w || it.sy > h)) continue;
 		// L1/L2 hugging their body would read as a second name for it.
 		const owner = it.point && scene.byKey.get(it.point.body);
 		if (!forced && owner && Math.hypot(it.sx - owner.sx, it.sy - owner.sy) < 30) continue;
 		const major = it.priority <= 1;
 		const font = `${major ? '600 12px' : it.type === 'lagrange' ? '10px' : '11px'} ${theme.font}`;
-		// Lagrange points read as "Earth L4" (or just "L4" when crowded) unless hovered or selected.
+		// Lagrange points read as "Earth L4" (or just "L4" when crowded) unless hovered or selected;
+		// at fitted zoom just "L4" if only one body has points, else always with the body.
 		const body = it.point && it.body ? it.body.info.entity.name : null;
-		const texts = it.point && !forced ? [`${body} ${it.point.point}`, it.point.point] : [it.name];
+		const full = it.point ? `${body} ${it.point.point}` : it.name;
+		const texts =
+			!it.point || forced
+				? [it.name]
+				: state.minorLabels
+					? [full, it.point.point]
+					: severalOwners
+						? [full]
+						: [it.point.point];
 		const r = Math.max(it.size, 2) + LABEL_GAP;
 		let spot = -1;
 		let text = texts[0];
@@ -375,10 +483,25 @@ function drawLabels(
 		for (const t of texts) {
 			tw = textWidth(ctx, font, t);
 			cand.length = 0;
+			const angle = fan?.get(it);
+			if (angle !== undefined) {
+				const cos = Math.cos(angle);
+				const sin = Math.sin(angle);
+				for (const d of FAN_DISTS) {
+					const ax = hub.sx + cos * d;
+					const ay = hub.sy + sin * d;
+					if (cos > 0.35) add(ax + 3, ay, ax, ay);
+					else if (cos < -0.35) add(ax - tw - 3, ay, ax, ay);
+					else add(ax - tw / 2, ay + Math.sign(sin) * 9, ax, ay);
+				}
+			}
+			const fanned = cand.length;
 			add(it.sx + r, it.sy);
 			add(it.sx - r - tw, it.sy);
 			add(it.sx - tw / 2, it.sy - r - 7);
 			add(it.sx - tw / 2, it.sy + r + 7);
+			// Next to a crowded body a name is ambiguous: only leaders.
+			if (fanned) cand.splice(fanned, 16);
 			if (major || forced) {
 				for (const d of LEADER_DISTS)
 					for (const [dx, dy] of LEADER_DIRS) {
@@ -410,20 +533,28 @@ function drawLabels(
 		}
 		const [x, y, lx, ly] = cand.slice(spot, spot + 4);
 		occupy(x - 2, y - 8, x + tw + 2, y + 8);
+		it.labelBox = [x - 2, y - 8, x + tw + 2, y + 8];
 		placed.add(it);
 		ctx.globalAlpha = dim(it) ? 0.6 : 1;
 		if (!Number.isNaN(lx)) {
-			// Leader from the dot's edge to the displaced label.
+			// Leader from the dot's edge to the displaced label; fanned ones in the body's color.
 			const d = Math.hypot(lx - it.sx, ly - it.sy) || 1;
 			const k = (Math.max(it.size, 2) + 2) / d;
-			ctx.lineWidth = 1;
-			ctx.strokeStyle = theme.foreground;
-			ctx.globalAlpha *= 0.55;
+			const own = fan?.has(it) === true;
+			ctx.lineWidth = own ? 1.25 : 1;
+			ctx.strokeStyle = own ? it.color : theme.foreground;
+			ctx.globalAlpha *= own ? 0.9 : 0.55;
 			ctx.beginPath();
 			ctx.moveTo(it.sx + (lx - it.sx) * k, it.sy + (ly - it.sy) * k);
 			ctx.lineTo(lx, ly);
 			ctx.stroke();
 			ctx.globalAlpha = dim(it) ? 0.6 : 1;
+			// Keep later labels off the leader.
+			for (let t = 0.5; t < d; t += 10) {
+				const px = it.sx + ((lx - it.sx) * t) / d;
+				const py = it.sy + ((ly - it.sy) * t) / d;
+				occupy(px - 1, py - 1, px + 1, py + 1);
+			}
 		}
 		ctx.font = font;
 		// Halo in the background color keeps labels readable over orbits.

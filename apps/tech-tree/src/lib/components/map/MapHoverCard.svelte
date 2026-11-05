@@ -12,7 +12,11 @@
 		r,
 		width,
 		height,
-		obstacles
+		obstacles,
+		gatewayMatches = null,
+		onpointerenter,
+		onpointerleave,
+		onwheel
 	}: {
 		item: MapItem;
 		/** The item's screen position and dot radius. */
@@ -23,7 +27,15 @@
 		height: number;
 		/** Overlay controls to keep clear of. */
 		obstacles: DOMRect[];
+		/** For a body kept only because satellites below it match the filters: those matches. */
+		gatewayMatches?: { bodies: number; points: number } | null;
+		onpointerenter?: () => void;
+		onpointerleave?: () => void;
+		/** Wheel over the card, forwarded to the map. */
+		onwheel?: (e: WheelEvent) => void;
 	} = $props();
+
+	const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 	const CARD_WIDTH = 248;
 	const GAP = 12;
@@ -105,11 +117,15 @@
 	} as const;
 </script>
 
+<!-- Hovering the card keeps it open; the map's keyboard help covers what it shows. -->
 <div
-	class="pointer-events-none absolute z-10"
+	class="absolute z-10"
 	style="left: {position.left}px; top: {position.top}px; width: {CARD_WIDTH}px"
 	bind:clientHeight={cardHeight}
 	aria-hidden="true"
+	{onpointerenter}
+	{onpointerleave}
+	{onwheel}
 >
 	<Card.Root class="gap-2 py-3 shadow-lg">
 		<Card.Header class="flex items-center gap-2 px-3">
@@ -128,6 +144,14 @@
 			</div>
 		</Card.Header>
 		<Card.Content class="grid gap-1.5 px-3 text-xs">
+			{#if gatewayMatches}
+				<p class="font-medium">
+					Doesn’t match itself — {gatewayMatches.bodies
+						? plural(gatewayMatches.bodies, 'matching moon', 'matching moons')
+						: plural(gatewayMatches.points, 'matching Lagrange point', 'matching Lagrange points')}
+					in its system
+				</p>
+			{/if}
 			{#if info}
 				<dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
 					<dt class="text-muted-foreground">Radius</dt>

@@ -12,10 +12,11 @@ pub(super) fn stats(view: &View<'_>, texts: &Texts, id: EntityId, spoilers: &Has
             let system = System::load(view);
             let body = system.body(&view.dataset().entity(id).data_name)?;
             let d = &body.data;
-            for (key, prefix) in [("objectType", "TISpaceBodyTemplate.ObjectType."), ("atmosphere", "TISpaceBodyTemplate.Atmosphere.")] {
-                if let Some(v) = map.get(key) {
-                    b.field(&f(key, "", Fmt::TagEnum(prefix), ""), v, map);
-                }
+            if let Some(v) = map.get("objectType") {
+                b.field(&f("objectType", "", Fmt::TagEnum("TISpaceBodyTemplate.ObjectType."), ""), v, map);
+            }
+            if let Some(value) = map.get("atmosphere").and_then(Value::as_str).filter(|s| !s.is_empty()) {
+                b.stats.tags.push(format!("Atmosphere: {}", b.enum_text("TISpaceBodyTemplate.Atmosphere.", value)));
             }
             let size = match d.max_hab_size {
                 1 => "Outpost",

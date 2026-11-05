@@ -84,7 +84,8 @@
 					</div>
 				</div>
 				<p class="text-xs text-muted-foreground">
-					Planets: individual colors. Marker sizes are illustrative, not to scale.
+					Major bodies use their own colors; others are colored by type. Marker sizes are
+					illustrative, not to scale.
 				</p>
 				<div class="flex items-center justify-between gap-4">
 					<Label for="map-hab-sites" class="font-medium">Has hab sites</Label>
