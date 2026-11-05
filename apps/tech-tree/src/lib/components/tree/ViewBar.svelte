@@ -7,7 +7,6 @@
 	import { Switch } from '$lib/components/ui/switch/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
 	import * as ToggleGroup from '$lib/components/ui/toggle-group/index.js';
-	import { formatCost, formatCostFull } from '$lib/format';
 	import { app, type FullLayout, type ViewKind } from '$lib/state.svelte';
 	import Pill, { pillItem, pillToggle } from '$lib/components/toolbar/Pill.svelte';
 	import PillDivider from '$lib/components/toolbar/PillDivider.svelte';
@@ -200,16 +199,5 @@
 				</div>
 			</Tip>
 		</Pill>
-	{/if}
-
-	{#if graph && view.kind !== 'full'}
-		<div
-			class="pointer-events-auto flex flex-wrap items-center gap-x-4 gap-y-1 px-2 text-xs text-muted-foreground"
-		>
-			<span>{graph.nodes.length} items</span>
-			<span title="{rootName} + requirements: {formatCostFull(graph.totalCost)} research">
-				{rootName} + requirements: {formatCost(graph.totalCost)} research
-			</span>
-		</div>
 	{/if}
 </div>
