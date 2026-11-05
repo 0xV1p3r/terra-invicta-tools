@@ -363,13 +363,13 @@
 		{/if}
 		{#if detail.researchCost != null || detail.totalCost != null}
 			<Card.Content class="mt-4 grid grid-cols-2 gap-2 px-0">
-				<Card.Content class="rounded-lg bg-muted/50 p-2 px-0">
+				<Card.Content class="rounded-lg bg-muted/50 px-3 py-2">
 					<Card.Content class="px-0 text-xs text-muted-foreground">Research cost</Card.Content>
 					<Card.Content class="px-0 font-semibold" title={formatCostFull(detail.researchCost)}>
 						{formatCost(detail.researchCost)}
 					</Card.Content>
 				</Card.Content>
-				<Card.Content class="rounded-lg bg-muted/50 p-2 px-0">
+				<Card.Content class="rounded-lg bg-muted/50 px-3 py-2">
 					<Card.Content class="px-0 text-xs text-muted-foreground"
 						>Total incl. requirements</Card.Content
 					>
