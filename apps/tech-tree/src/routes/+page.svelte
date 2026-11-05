@@ -161,14 +161,17 @@
 								: 'Show details panel'
 							: 'Select a tech or project to see its details'}
 					>
+						<!-- aria-disabled rather than disabled, so keyboard users can reach the explanation. -->
 						<Button
 							variant="ghost"
 							size="icon"
-							class="size-8"
+							class="size-8 aria-disabled:cursor-default aria-disabled:opacity-50 aria-disabled:hover:bg-transparent"
 							aria-label="Details panel"
 							aria-pressed={app.panelOpen}
-							disabled={!app.selected}
-							onclick={() => (app.panelOpen = !app.panelOpen)}
+							aria-disabled={!app.selected}
+							onclick={() => {
+								if (app.selected) app.panelOpen = !app.panelOpen;
+							}}
 						>
 							{#if app.panelOpen}<PanelRightClose />{:else}<PanelRightOpen />{/if}
 						</Button>

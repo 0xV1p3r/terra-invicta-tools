@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { tick } from 'svelte';
 	import Funnel from '@lucide/svelte/icons/funnel';
+	import Undo2 from '@lucide/svelte/icons/undo-2';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import Check from '@lucide/svelte/icons/check';
 	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
@@ -23,20 +24,29 @@
 	/** A persistent underline distinguishes shown categories from hidden ones. */
 	const categoryToggle = `${pillItem} group/category relative disabled:opacity-100 size-8 min-w-8 border-0 px-0 hover:bg-accent/60 data-[state=on]:bg-transparent data-[state=on]:hover:bg-accent/60 focus-visible:ring-offset-0`;
 
-	const collapsedReason = 'Filters apply to the full tree. Click to return to the full tree.';
 	const componentId = $props.id();
 	const descriptionId = `${componentId}-filters-description`;
 	const collapsed = $derived(app.mode !== 'full');
+	// `app.categories` lists the shown categories (empty: all), so count the hidden ones.
 	const activeCount = $derived(
 		Number(!app.showTechs) +
 			Number(!app.showProjects) +
-			app.categories.length +
+			(app.categories.length ? CATEGORY_ORDER.length - app.categories.length : 0) +
 			app.properties.length
+	);
+	const collapsedReason = $derived(
+		`Back to the full tree to filter${activeCount ? ` · ${activeCount} active` : ''}. Filters apply to the full tree only.`
 	);
 	const kinds = $derived<Kind[]>([
 		...(app.showTechs ? ['techs' as const] : []),
 		...(app.showProjects ? ['projects' as const] : [])
 	]);
+
+	/** Tooltip for a kind toggle: its state and what a click does; the last shown kind stays on. */
+	function kindTip(label: string, on: boolean) {
+		if (on && kinds.length === 1) return `${label} — at least one kind stays shown`;
+		return on ? `${label} shown — click to hide` : `${label} hidden — click to show`;
+	}
 
 	function setKinds(value: string[]) {
 		if (value.length === 0) return;
@@ -88,8 +98,15 @@
 					techsButton?.focus();
 				}}
 			>
-				<Funnel /> <span class="@max-[1800px]:hidden">Full tree to filter</span>
-				{#if activeCount}<Badge class="h-4 min-w-4 justify-center px-1 tabular-nums @max-[1800px]:hidden"
+				<!-- Icon-only below 1800px: a return arrow on the funnel, and the count as a corner badge. -->
+				<span class="relative inline-flex" aria-hidden="true"
+					><Funnel /><Undo2
+						class="absolute -bottom-1 -left-1.5 size-2.5! rounded-sm bg-muted stroke-3 @min-[1800px]:hidden"
+					/></span
+				>
+				<span class="@max-[1800px]:hidden">Full tree to filter</span>
+				{#if activeCount}<Badge
+						class="h-4 min-w-4 justify-center px-1 tabular-nums @max-[1800px]:absolute @max-[1800px]:top-0.5 @max-[1800px]:right-0.5 @max-[1800px]:h-3.5 @max-[1800px]:min-w-3.5 @max-[1800px]:px-0.5 @max-[1800px]:text-[0.625rem] @max-[1800px]:leading-none"
 						>{activeCount}</Badge
 					>{/if}
 			</Button>
@@ -107,7 +124,7 @@
 			bind:value={() => kinds, setKinds}
 			aria-label="Research kinds"
 		>
-			<Tip text="Show techs. At least one kind stays shown.">
+			<Tip text={kindTip('Techs', app.showTechs)}>
 				<ToggleGroup.Item
 					bind:ref={techsButton}
 					value="techs"
@@ -118,7 +135,7 @@
 					{#if app.showTechs}<Check />{:else}<FlaskConical />{/if} Techs
 				</ToggleGroup.Item>
 			</Tip>
-			<Tip text="Show projects. At least one kind stays shown.">
+			<Tip text={kindTip('Projects', app.showProjects)}>
 				<ToggleGroup.Item
 					value="projects"
 					aria-label="Show projects"
@@ -141,8 +158,10 @@
 		>
 			{#each CATEGORY_ORDER as category (category)}
 				{@const on = shown.includes(category)}
+				{@const last = on && shown.length === 1}
+				<!-- The last shown category can't be hidden (setShown keeps it on). -->
 				<Tip
-					text={`${CATEGORIES[category].label} — ${on ? 'shown. Click to hide' : 'hidden. Click to show'} · Shift+click: ${shown.length === 1 && on ? 'show all' : 'only this'}`}
+					text={`${CATEGORIES[category].label} — ${last ? 'the only category shown' : on ? 'shown. Click to hide' : 'hidden. Click to show'} · Shift+click: ${last ? 'show all' : 'only this'}`}
 				>
 					<ToggleGroup.Item
 						value={category}
@@ -168,16 +187,17 @@
 				</Tip>
 			{/each}
 		</ToggleGroup.Root>
-		<Tip text="Show all categories">
+		<!-- Subdued but focusable while every category is shown, so the slot never reads as a gap. -->
+		<Tip text={app.categories.length ? 'Show all categories' : 'All categories shown'}>
 			<Button
 				variant="ghost"
 				size="icon"
-				class="{pillItem} size-8 px-0 text-muted-foreground disabled:opacity-100 {app.categories
-					.length
-					? ''
-					: 'invisible'}"
+				class="{pillItem} size-8 px-0 text-muted-foreground aria-disabled:cursor-default aria-disabled:opacity-40 aria-disabled:hover:bg-transparent aria-disabled:hover:text-muted-foreground"
 				aria-label="Show all categories"
-				onclick={() => (app.categories = [])}
+				aria-disabled={!app.categories.length}
+				onclick={() => {
+					if (app.categories.length) app.categories = [];
+				}}
 			>
 				<RotateCcw />
 			</Button>
