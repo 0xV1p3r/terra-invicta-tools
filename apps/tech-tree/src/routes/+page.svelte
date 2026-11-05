@@ -11,7 +11,7 @@
 	import WikiDialog from '$lib/components/wiki/WikiDialog.svelte';
 	import SearchPalette from '$lib/components/search/SearchPalette.svelte';
 	import SettingsDialog from '$lib/components/settings/SettingsDialog.svelte';
-	import Pill from '$lib/components/toolbar/Pill.svelte';
+	import Pill, { pillIcon } from '$lib/components/toolbar/Pill.svelte';
 	import PillDivider from '$lib/components/toolbar/PillDivider.svelte';
 	import Tip from '$lib/components/toolbar/Tip.svelte';
 	import TreeCanvas from '$lib/components/tree/TreeCanvas.svelte';
@@ -43,6 +43,7 @@
 		};
 		const place = () => {
 			const style = getComputedStyle(toolbar);
+			const gap = parseFloat(style.columnGap) || 0;
 			let room =
 				toolbar.clientWidth -
 				parseFloat(style.paddingLeft) -
@@ -51,7 +52,7 @@
 			let before: Element | null = null;
 			for (const group of toolbar.children) {
 				if (group === utilities) continue;
-				room -= outer(group);
+				room -= outer(group) + gap;
 				// Half a pixel of slack for subpixel widths.
 				if (room < -0.5) {
 					before = group;
@@ -136,21 +137,24 @@
 				Toolbar band across the window, so the details panel doesn't squeeze it. The groups wrap
 				as wholes, and the utilities stay at the right end of the first row: `pinUtilities` moves
 				them in the DOM to just after the last group that fits beside them, so Tab order follows
-				the rows. Each group's -ml-px pushes its divider under the clip (no left padding, so that
-				is the window edge) when it starts a row, so dividers never dangle.
+				the rows.
 			-->
 			<div
-				class="@container relative z-10 flex shrink-0 flex-wrap items-center overflow-hidden border-b bg-muted/60 py-1 pr-1"
+				class="@container relative z-10 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-b bg-card px-3 py-1.5 shadow-sm"
 				role="region"
 				aria-label="Tree toolbar"
 				{@attach pinUtilities}
 			>
 				<ViewBar graph={treeGraph} />
 				<ScopeBar />
-				<div role="group" aria-label="Filters" class="-ml-px flex max-w-full flex-wrap">
+				<div
+					role="group"
+					aria-label="Filters"
+					class="flex max-w-full flex-wrap items-center gap-x-3 gap-y-1.5"
+				>
 					<TreeFilters />
 				</div>
-				<Pill class="ml-auto before:hidden" aria-label="Search and settings" data-utilities>
+				<Pill class="ml-auto gap-0.5" aria-label="Search and settings" data-utilities>
 					<SearchPalette />
 					<WikiDialog />
 					<PillDivider />
@@ -165,7 +169,7 @@
 						<Button
 							variant="ghost"
 							size="icon"
-							class="size-8 aria-disabled:cursor-default aria-disabled:opacity-50 aria-disabled:hover:bg-transparent"
+							class="{pillIcon} aria-disabled:cursor-default aria-disabled:opacity-50 aria-disabled:hover:bg-transparent"
 							aria-label="Details panel"
 							aria-pressed={app.panelOpen}
 							aria-disabled={!app.selected}

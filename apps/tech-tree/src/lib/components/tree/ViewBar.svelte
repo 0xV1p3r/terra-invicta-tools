@@ -7,7 +7,12 @@
 	import { Label } from '$lib/components/ui/label/index.js';
 	import * as ToggleGroup from '$lib/components/ui/toggle-group/index.js';
 	import { app, type FullLayout, type ViewKind } from '$lib/state.svelte';
-	import Pill, { pillToggle } from '$lib/components/toolbar/Pill.svelte';
+	import Pill, {
+		groupLabel,
+		pillIcon,
+		pillToggle,
+		segmented
+	} from '$lib/components/toolbar/Pill.svelte';
 	import PillDivider from '$lib/components/toolbar/PillDivider.svelte';
 	import Tip from '$lib/components/toolbar/Tip.svelte';
 	import CategoryIcon from './CategoryIcon.svelte';
@@ -29,8 +34,6 @@
 
 	// Group captions; the toggles are labelled for assistive tech anyway. "Layout" always shows, so
 	// the two mode sets don't read as one; "View" only where the toolbar has room to spare.
-	const groupLabel =
-		'translate-y-px pr-0.5 pl-1 text-[0.6875rem] font-medium tracking-[0.04em] text-muted-foreground uppercase select-none';
 
 	const KINDS: { value: ViewKind; label: string; title: string }[] = [
 		{ value: 'full', label: 'Full tree', title: 'Full tree: every tech and project' },
@@ -85,7 +88,7 @@
 		<Button
 			variant="ghost"
 			size="icon"
-			class="size-8"
+			class={pillIcon}
 			aria-label="Back"
 			aria-keyshortcuts="Alt+ArrowLeft"
 			disabled={app.back.length === 0}
@@ -98,7 +101,7 @@
 		<Button
 			variant="ghost"
 			size="icon"
-			class="size-8"
+			class={pillIcon}
 			aria-label="Forward"
 			aria-keyshortcuts="Alt+ArrowRight"
 			disabled={app.forward.length === 0}
@@ -108,12 +111,12 @@
 		</Button>
 	</Tip>
 
-	<PillDivider />
-	<span class="{groupLabel} hidden @min-[1800px]:inline" aria-hidden="true">View</span>
+	<span class="{groupLabel} ml-1 hidden @min-[1800px]:inline" aria-hidden="true">View</span>
 	<ToggleGroup.Root
 		type="single"
 		size="sm"
 		spacing={0.5}
+		class={segmented}
 		bind:value={() => view.kind, (v) => v && setKind(v as ViewKind)}
 		aria-label="View: what is shown"
 	>
@@ -132,12 +135,12 @@
 	</ToggleGroup.Root>
 
 	{#if view.kind === 'full'}
-		<PillDivider />
-		<span class={groupLabel} aria-hidden="true">Layout</span>
+		<span class="{groupLabel} ml-2" aria-hidden="true">Layout</span>
 		<ToggleGroup.Root
 			type="single"
 			size="sm"
 			spacing={0.5}
+			class={segmented}
 			value={view.layout}
 			onValueChange={(v) => v && app.update({ kind: 'full', layout: v as FullLayout })}
 			aria-label="Layout: how the tree is arranged"
@@ -174,6 +177,7 @@
 			type="single"
 			size="sm"
 			spacing={0.5}
+			class={segmented}
 			value={sub.direction}
 			onValueChange={(v) => {
 				if (v) app.update({ ...sub, direction: v as Direction });
@@ -187,7 +191,7 @@
 			{/each}
 		</ToggleGroup.Root>
 		<Tip text="Include alternative prerequisites">
-			<div class="flex h-8 items-center gap-2 px-2">
+			<div class="flex h-8 items-center gap-2 rounded-md border border-input px-2.5">
 				<Switch
 					id="subtree-alternatives"
 					size="sm"
