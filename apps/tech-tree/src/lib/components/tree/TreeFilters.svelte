@@ -12,17 +12,22 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as ToggleGroup from '$lib/components/ui/toggle-group/index.js';
 	import { app } from '$lib/state.svelte';
-	import Pill, { pillItem, pillToggle } from '$lib/components/toolbar/Pill.svelte';
+	import Pill, {
+		pillIcon,
+		pillItem,
+		pillToggle,
+		segmented
+	} from '$lib/components/toolbar/Pill.svelte';
 	import Tip from '$lib/components/toolbar/Tip.svelte';
 	import CategoryIcon from './CategoryIcon.svelte';
 	import PropertyFilter from './PropertyFilter.svelte';
 
 	type Kind = 'techs' | 'projects';
 
-	const segment = `${pillToggle} focus-visible:outline-none focus-visible:ring-2! focus-visible:ring-ring! focus-visible:ring-offset-2 focus-visible:ring-offset-background`;
+	const segment = `${pillToggle} focus-visible:outline-none`;
 	let techsButton = $state<HTMLButtonElement | null>(null);
-	/** A persistent underline distinguishes shown categories from hidden ones. */
-	const categoryToggle = `${pillItem} group/category relative disabled:opacity-100 size-8 min-w-8 border-0 px-0 hover:bg-accent/60 data-[state=on]:bg-transparent data-[state=on]:hover:bg-accent/60 focus-visible:ring-offset-0`;
+	/** Shown categories sit on a raised tile in full colour; hidden ones are dimmed and grey. */
+	const categoryToggle = `${pillToggle} group/category size-[1.625rem] px-0 has-[>svg]:px-0`;
 
 	const componentId = $props.id();
 	const descriptionId = `${componentId}-filters-description`;
@@ -118,7 +123,7 @@
 	<Pill aria-label="Tree filters">
 		<Tip text={collapsedReason}>
 			<Button
-				variant="ghost"
+				variant="outline"
 				size="sm"
 				class="{pillItem} gap-1 text-xs {activeCount
 					? 'w-10 justify-start pr-1 pl-1.5'
@@ -136,7 +141,7 @@
 				<!-- Icon-only while the label doesn't fit: a return arrow on the funnel, the count beside it. -->
 				<span class="relative inline-flex" aria-hidden="true"
 					><Funnel /><Undo2
-						class="absolute -bottom-1 -left-1.5 size-2.5! rounded-sm bg-muted stroke-3 {labelled.undo}"
+						class="absolute -bottom-1 -left-1.5 size-2.5! rounded-sm bg-card stroke-3 {labelled.undo}"
 					/></span
 				>
 				<span class="hidden {labelled.label}">Full tree filters</span>
@@ -157,6 +162,7 @@
 			type="multiple"
 			size="sm"
 			spacing={0.5}
+			class={segmented}
 			bind:value={() => kinds, setKinds}
 			aria-label="Research kinds"
 		>
@@ -184,11 +190,12 @@
 		</ToggleGroup.Root>
 	</Pill>
 
-	<Pill aria-label="Categories">
+	<Pill aria-label="Categories" class="gap-0.5">
 		<ToggleGroup.Root
 			type="multiple"
 			size="sm"
 			spacing={0.5}
+			class={segmented}
 			bind:value={() => shown, setShown}
 			aria-label="Categories shown"
 		>
@@ -208,17 +215,11 @@
 					>
 						<CategoryIcon
 							{category}
-							size={22}
+							size={20}
 							class={on
 								? 'transition'
-								: 'opacity-75 saturate-[.6] transition group-hover/category:opacity-100 group-hover/category:saturate-100'}
+								: 'opacity-35 grayscale transition group-hover/category:opacity-80 group-hover/category:grayscale-0'}
 						/>
-						<span
-							aria-hidden="true"
-							class="absolute bottom-0.5 h-0.5 w-3 rounded-full bg-foreground {on
-								? ''
-								: 'invisible'}"
-						></span>
 					</ToggleGroup.Item>
 				</Tip>
 			{/each}
@@ -228,7 +229,7 @@
 			<Button
 				variant="ghost"
 				size="icon"
-				class="{pillItem} size-8 px-0 text-muted-foreground aria-disabled:cursor-default aria-disabled:opacity-40 aria-disabled:hover:bg-transparent aria-disabled:hover:text-muted-foreground"
+				class="{pillIcon} aria-disabled:cursor-default aria-disabled:opacity-40 aria-disabled:hover:bg-transparent aria-disabled:hover:text-muted-foreground"
 				aria-label="Show all categories"
 				aria-disabled={!app.categories.length}
 				onclick={() => {

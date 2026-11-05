@@ -3,4 +3,4 @@
 	import { Separator } from '$lib/components/ui/separator/index.js';
 </script>
 
-<Separator orientation="vertical" class="mx-0.5 h-5! w-px self-center!" />
+<Separator orientation="vertical" class="mx-1 h-5! w-px self-center! bg-border" />

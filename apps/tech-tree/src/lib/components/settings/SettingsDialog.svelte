@@ -13,6 +13,7 @@
 	import * as ToggleGroup from '$lib/components/ui/toggle-group/index.js';
 	import { settings, type Corner } from '$lib/settings.svelte';
 	import { app } from '$lib/state.svelte';
+	import { pillIcon } from '$lib/components/toolbar/Pill.svelte';
 
 	const LANGUAGES: Record<string, string> = {
 		en: 'English',
@@ -43,7 +44,7 @@
 	<Tip text="Settings">
 		<Dialog.Trigger>
 			{#snippet child({ props })}
-				<Button {...props} variant="ghost" size="icon" class="size-8" aria-label="Settings">
+				<Button {...props} variant="ghost" size="icon" class={pillIcon} aria-label="Settings">
 					<Settings />
 				</Button>
 			{/snippet}

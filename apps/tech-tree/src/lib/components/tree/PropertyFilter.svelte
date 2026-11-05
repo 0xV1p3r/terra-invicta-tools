@@ -121,7 +121,7 @@
 			{#snippet child({ props })}
 				<Button
 					{...props}
-					variant="ghost"
+					variant="outline"
 					size="sm"
 					class="{pillItem} {disabled ? 'grayscale' : ''}"
 					aria-describedby={descriptionId}
