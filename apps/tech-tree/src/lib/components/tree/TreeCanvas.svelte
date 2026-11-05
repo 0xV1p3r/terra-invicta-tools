@@ -32,6 +32,7 @@
 	import { DETAIL_ZOOM, readTheme, render, type Theme } from './render';
 	import { buildScene, nodeAt, type SceneNode } from './scene';
 	import ViewBar from './ViewBar.svelte';
+	import ViewStats from './ViewStats.svelte';
 
 	/** Floating toolbar pills placed before and after the view controls. */
 	let { leading, trailing }: { leading?: Snippet; trailing?: Snippet } = $props();
@@ -714,18 +715,25 @@
 			</Popover.Root>
 		</div>
 
-		{#if matches}
-			<div
-				class="absolute top-[max(var(--toolbar-h),0.75rem)] left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full border bg-card py-1 pr-1 pl-3 text-sm shadow"
-			>
-				<span class="text-muted-foreground">{matches.size} matching</span>
-				{#if matches.size}
-					<Button variant="ghost" size="sm" class="h-7 rounded-full" onclick={fitMatches}>
-						<ScanSearch /> Zoom to matches
-					</Button>
-				{/if}
-			</div>
-		{/if}
+		<div
+			class="pointer-events-none absolute top-[max(var(--toolbar-h),0.75rem)] left-1/2 flex -translate-x-1/2 flex-col items-center gap-2"
+		>
+			{#if ready && graph && app.view.kind !== 'full'}
+				<ViewStats {graph} />
+			{/if}
+			{#if matches}
+				<div
+					class="pointer-events-auto flex items-center gap-2 rounded-full border bg-card py-1 pr-1 pl-3 text-sm shadow"
+				>
+					<span class="text-muted-foreground">{matches.size} matching</span>
+					{#if matches.size}
+						<Button variant="ghost" size="sm" class="h-7 rounded-full" onclick={fitMatches}>
+							<ScanSearch /> Zoom to matches
+						</Button>
+					{/if}
+				</div>
+			{/if}
+		</div>
 
 		{#if scene?.nodes.length}
 			{#if theme}
@@ -739,8 +747,8 @@
 			data-overlay-group
 			bind:clientHeight={toolbarHeight}
 		>
-			{@render leading?.()}
 			<ViewBar graph={ready ? graph : null} />
+			{@render leading?.()}
 			{@render trailing?.()}
 		</div>
 
