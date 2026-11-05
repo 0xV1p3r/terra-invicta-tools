@@ -239,11 +239,12 @@
 	<Button
 		variant="ghost"
 		size="sm"
-		class="h-8"
+		class="size-8 gap-2 px-0 @min-[1800px]:w-auto @min-[1800px]:border @min-[1800px]:border-input @min-[1800px]:bg-input/30 @min-[1800px]:px-2.5 @min-[1800px]:shadow-2xs @min-[1800px]:dark:hover:bg-input/50"
 		disabled={!app.meta}
 		onclick={() => wiki.show()}
+		aria-label="Browse the wiki"
 		aria-keyshortcuts="Control+Shift+k Meta+Shift+k"
-		><BookOpen /><span class="sr-only @min-[1800px]:not-sr-only">Wiki</span></Button
+		><BookOpen /><span class="hidden @min-[1800px]:inline">Wiki</span></Button
 	>
 </Tip>
 <Dialog.Root bind:open={wiki.open}>

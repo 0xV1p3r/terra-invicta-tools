@@ -46,6 +46,7 @@
 			{#if app.selected}<Button
 					variant="ghost"
 					size="sm"
+					class="h-8 gap-2 border border-input bg-input/30 px-2.5 shadow-2xs dark:hover:bg-input/50"
 					onclick={() => app.selected && wiki.openEntity(app.selected)}
 					><BookOpen /> Open in wiki</Button
 				>{/if}
