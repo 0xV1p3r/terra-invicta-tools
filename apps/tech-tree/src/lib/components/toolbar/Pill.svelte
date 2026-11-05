@@ -4,11 +4,11 @@
 	/**
 	 * A toolbar toggle. While on it is a raised tile (like a segmented control) rather than a
 	 * primary fill, which glared against the muted toolbar. The tile alone is low contrast, so an on
-	 * toggle also gets a bright underline, like the category toggles; focus on an on toggle swaps
+	 * toggle also gets a short centred underline, the same marker as the category toggles; focus on an on toggle swaps
 	 * the tile's hairline for the toolbar's usual focus ring. aria-disabled toggles look disabled
 	 * but stay focusable, so their tooltip explains why.
 	 */
-	export const pillToggle = `${pillItem} relative border-0 after:absolute after:inset-x-2.5 after:bottom-0.5 after:h-0.5 after:rounded-full after:bg-foreground after:opacity-0 data-[state=on]:after:opacity-100 font-normal text-muted-foreground hover:bg-accent/60 data-[state=on]:bg-background data-[state=on]:font-medium data-[state=on]:text-foreground data-[state=on]:shadow-xs data-[state=on]:ring-1 data-[state=on]:ring-border data-[state=on]:hover:bg-background data-[state=on]:hover:text-foreground dark:data-[state=on]:bg-input dark:data-[state=on]:hover:bg-input data-[state=on]:focus-visible:ring-2 data-[state=on]:focus-visible:ring-ring aria-disabled:cursor-default aria-disabled:opacity-50 aria-disabled:hover:bg-transparent aria-disabled:hover:text-muted-foreground`;
+	export const pillToggle = `${pillItem} relative border-0 after:absolute after:bottom-0.5 after:left-1/2 after:h-0.5 after:w-3 after:-translate-x-1/2 after:rounded-full after:bg-foreground after:opacity-0 data-[state=on]:after:opacity-100 font-normal text-muted-foreground hover:bg-accent/60 data-[state=on]:bg-background data-[state=on]:font-medium data-[state=on]:text-foreground data-[state=on]:shadow-xs data-[state=on]:ring-1 data-[state=on]:ring-border data-[state=on]:hover:bg-background data-[state=on]:hover:text-foreground dark:data-[state=on]:bg-input dark:data-[state=on]:hover:bg-input data-[state=on]:focus-visible:ring-2 data-[state=on]:focus-visible:ring-ring aria-disabled:cursor-default aria-disabled:opacity-50 aria-disabled:hover:bg-transparent aria-disabled:hover:text-muted-foreground`;
 </script>
 
 <script lang="ts">

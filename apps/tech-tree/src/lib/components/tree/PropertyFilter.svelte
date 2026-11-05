@@ -19,6 +19,7 @@
 
 <script lang="ts">
 	import Check from '@lucide/svelte/icons/check';
+	import { Command as CommandPrimitive } from 'bits-ui';
 	import Tip from '$lib/components/toolbar/Tip.svelte';
 	import Funnel from '@lucide/svelte/icons/funnel';
 	import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
@@ -203,56 +204,64 @@
 					{/each}
 				</div>
 			{/if}
-			<Command.List class="max-h-96">
-				{#if error}
-					<p class="p-4 text-sm text-destructive">{error}</p>
-				{:else}
-					<Command.Empty>No matching properties.</Command.Empty>
-				{/if}
-				{#each byGroup as g (g.group)}
-					<Command.Group value={g.group} heading="{g.heading} · {g.items.length}">
-						{#each g.items as p (p.id)}
-							{@const Direction = directionIcon(p)}
-							{@const tone = SENTIMENT[p.sentiment] ?? SENTIMENT.neutral}
-							<Command.Item
-								value={p.id}
-								keywords={[p.label, p.example ?? '']}
-								data-checked={selected.has(p.id)}
-								aria-checked={selected.has(p.id)}
-								class="gap-2.5 data-[checked=true]:bg-primary/10"
-								onSelect={() => toggle(p.id)}
-							>
-								<Check
-									class="size-4 shrink-0 {selected.has(p.id) ? '' : 'invisible'}"
-									aria-hidden="true"
-								/>
-								<PropertyIcon property={p} />
-								<div class="flex min-w-0 flex-1 flex-col">
-									<span class="flex items-center gap-1">
-										{#if Direction}
-											<Direction
-												class="size-3.5! {tone.text}"
-												aria-label={tone.label || undefined}
-											/>
-										{/if}
-										<span class="truncate">{p.label}</span>
-									</span>
-									{#if p.example}
-										<span class="truncate text-xs text-muted-foreground" title={p.example}
-											>{p.example}</span
-										>
-									{/if}
-								</div>
-								<span
-									class="rounded-full bg-muted px-1.5 text-[11px] text-muted-foreground tabular-nums"
-									title="{p.count} techs/projects"
+			<Command.List class="max-h-96" aria-multiselectable="true">
+				<!-- bits only points the input's aria-activedescendant at the highlight inside a Viewport. -->
+				<CommandPrimitive.Viewport>
+					{#if error}
+						<p class="p-4 text-sm text-destructive">{error}</p>
+					{:else}
+						<Command.Empty>No matching properties.</Command.Empty>
+					{/if}
+					{#each byGroup as g (g.group)}
+						<Command.Group value={g.group} heading="{g.heading} · {g.items.length}">
+							{#each g.items as p (p.id)}
+								{@const Direction = directionIcon(p)}
+								{@const tone = SENTIMENT[p.sentiment] ?? SENTIMENT.neutral}
+								<!-- A persistent multi-select: aria-selected reports applied options (bits sets it on the
+							     keyboard highlight, which it tracks by data-selected and aria-activedescendant). -->
+								<Command.Item
+									value={p.id}
+									keywords={[p.label, p.example ?? '']}
+									data-checked={selected.has(p.id)}
+									class="gap-2.5 data-[checked=true]:bg-primary/10"
+									onSelect={() => toggle(p.id)}
 								>
-									{p.count}
-								</span>
-							</Command.Item>
-						{/each}
-					</Command.Group>
-				{/each}
+									{#snippet child({ props })}
+										<div {...props} aria-selected={selected.has(p.id) ? 'true' : 'false'}>
+											<Check
+												class="size-4 shrink-0 {selected.has(p.id) ? '' : 'invisible'}"
+												aria-hidden="true"
+											/>
+											<PropertyIcon property={p} />
+											<div class="flex min-w-0 flex-1 flex-col">
+												<span class="flex items-center gap-1">
+													{#if Direction}
+														<Direction
+															class="size-3.5! {tone.text}"
+															aria-label={tone.label || undefined}
+														/>
+													{/if}
+													<span class="truncate">{p.label}</span>
+												</span>
+												{#if p.example}
+													<span class="truncate text-xs text-muted-foreground" title={p.example}
+														>{p.example}</span
+													>
+												{/if}
+											</div>
+											<span
+												class="rounded-full bg-muted px-1.5 text-[11px] text-muted-foreground tabular-nums"
+												title="{p.count} techs/projects"
+											>
+												{p.count}
+											</span>
+										</div>
+									{/snippet}
+								</Command.Item>
+							{/each}
+						</Command.Group>
+					{/each}
+				</CommandPrimitive.Viewport>
 			</Command.List>
 		</Command.Root>
 	</Popover.Content>
