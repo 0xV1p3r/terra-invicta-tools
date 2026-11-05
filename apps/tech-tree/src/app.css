@@ -4,77 +4,10 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Dark only. The `dark` class on <html> keeps shadcn's `dark:` variants active. */
 :root {
+	color-scheme: dark;
 	--radius: 0.625rem;
-	--background: oklch(1 0 0);
-	--foreground: oklch(0.141 0.005 285.823);
-	--card: oklch(1 0 0);
-	--card-foreground: oklch(0.141 0.005 285.823);
-	--popover: oklch(1 0 0);
-	--popover-foreground: oklch(0.141 0.005 285.823);
-	--primary: oklch(0.21 0.006 285.885);
-	--primary-foreground: oklch(0.985 0 0);
-	--secondary: oklch(0.967 0.001 286.375);
-	--secondary-foreground: oklch(0.21 0.006 285.885);
-	--muted: oklch(0.967 0.001 286.375);
-	/* Darker than shadcn's zinc: >= 4.5:1 on --muted and on --warning-subtle. */
-	--muted-foreground: oklch(0.53 0.016 285.938);
-	--accent: oklch(0.967 0.001 286.375);
-	--accent-foreground: oklch(0.21 0.006 285.885);
-	--destructive: oklch(0.577 0.245 27.325);
-	--border: oklch(0.92 0.004 286.32);
-	--input: oklch(0.92 0.004 286.32);
-	--ring: oklch(0.552 0.016 285.938);
-	--chart-1: oklch(0.646 0.222 41.116);
-	--chart-2: oklch(0.6 0.118 184.704);
-	--chart-3: oklch(0.398 0.07 227.392);
-	--chart-4: oklch(0.828 0.189 84.429);
-	--chart-5: oklch(0.769 0.188 70.08);
-	--sidebar: oklch(0.985 0 0);
-	--sidebar-foreground: oklch(0.141 0.005 285.823);
-	--sidebar-primary: oklch(0.21 0.006 285.885);
-	--sidebar-primary-foreground: oklch(0.985 0 0);
-	--sidebar-accent: oklch(0.967 0.001 286.375);
-	--sidebar-accent-foreground: oklch(0.21 0.006 285.885);
-	--sidebar-border: oklch(0.92 0.004 286.32);
-	--sidebar-ring: oklch(0.705 0.015 286.067);
-
-	--category-energy: #ff6c00;
-	--category-information: #e75a73;
-	--category-life: #3cc273;
-	--category-materials: #fdc549;
-	--category-military: #688c73;
-	--category-social: #8cd8f4;
-	--category-space: #0092de;
-	--category-xenology: #896bde;
-
-	/* Category colours for text: >= 4.5:1 on the background and muted surfaces. */
-	--category-energy-fg: #b84e00;
-	--category-information-fg: #b9485c;
-	--category-life-fg: #267c4a;
-	--category-materials-fg: #866827;
-	--category-military-fg: #56745f;
-	--category-social-fg: #4a7281;
-	--category-space-fg: #0073af;
-	--category-xenology-fg: #775dc1;
-
-	/* Effect sentiment, warnings and links: text >= 4.5:1 on its subtle background and on muted surfaces. */
-	--success: #047857;
-	--success-subtle: #ecfdf5;
-	--success-border: #059669;
-	--detrimental: #be123c;
-	--detrimental-subtle: #fff1f2;
-	--detrimental-border: #e11d48;
-	--link: #0369a1;
-	--warning: #92400e;
-	--warning-subtle: #fffbeb;
-	--warning-border: #d97706;
-
-	/* Backdrop for the game's white icon sprites; dark in both themes so they stay legible. */
-	--icon-bg: oklch(0.37 0.013 285.805);
-}
-
-.dark {
 	--background: oklch(0.141 0.005 285.823);
 	--foreground: oklch(0.985 0 0);
 	--card: oklch(0.21 0.006 285.885);
@@ -116,6 +49,7 @@
 	--category-space: #0092de;
 	--category-xenology: #896bde;
 
+	/* Category colours for text: readable on the background and muted surfaces. */
 	--category-energy-fg: #ff6c00;
 	--category-information-fg: #e8647b;
 	--category-life-fg: #3cc273;
@@ -136,6 +70,7 @@
 	--warning-subtle: #2a1d06;
 	--warning-border: #b45309;
 
+	/* Backdrop for the game's white icon sprites. */
 	--icon-bg: oklch(0.274 0.006 286.033);
 }
 
@@ -224,20 +159,14 @@
 
 /* Dot grid behind the tree, quieter while a selection or search dims the rest. */
 .tree-surface {
-	--dot: 18%;
+	--dot: 26%;
 	background-image: radial-gradient(
 		circle,
 		color-mix(in oklab, var(--muted-foreground) var(--dot), transparent) 1px,
 		transparent 1.2px
 	);
 }
-.dark .tree-surface {
-	--dot: 26%;
-}
 .tree-surface.quiet {
-	--dot: 9%;
-}
-.dark .tree-surface.quiet {
 	--dot: 14%;
 }
 

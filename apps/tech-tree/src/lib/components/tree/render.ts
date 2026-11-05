@@ -25,7 +25,7 @@ export interface Theme {
 	secondary: string;
 	secondaryForeground: string;
 	destructive: string;
-	/** Category colors for small marks and text (darker in the light theme). */
+	/** Category colors for small marks and text. */
 	categories: Partial<Record<TechCategory, string>>;
 	font: string;
 }
@@ -54,7 +54,7 @@ export function readTheme(el: Element): Theme {
 	};
 }
 
-/** Category color of a card for small marks and text in the current theme. */
+/** Category color of a card for small marks and text. */
 const accent = (theme: Theme, n: SceneNode) => theme.categories[n.item.category] ?? n.color;
 
 export interface RenderState {
