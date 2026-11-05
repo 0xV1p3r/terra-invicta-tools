@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { SvelteMap } from 'svelte/reactivity';
-	import type { RefGroup } from '$lib/api';
+	import type { EntityKey, RefGroup } from '$lib/api';
+	import { templateLabel } from '$lib/format';
 	import { wiki } from '$lib/wiki.svelte';
 	import * as Card from '$lib/components/ui/card';
 	import { Button } from '$lib/components/ui/button';
@@ -8,19 +9,27 @@
 	let {
 		title,
 		groups,
-		technical = false
-	}: { title: string; groups: RefGroup[]; technical?: boolean } = $props();
+		technical = false,
+		exclude
+	}: {
+		title: string;
+		groups: RefGroup[];
+		technical?: boolean;
+		/** Entities the panel already shows elsewhere (requirements, unlocks…): left out unless technical. */
+		exclude?: ReadonlySet<EntityKey>;
+	} = $props();
 	const displayGroups = $derived.by(() => {
 		if (technical) return groups;
 		const merged = new SvelteMap<string, RefGroup>();
 		for (const group of groups) {
 			const target = merged.get(group.template) ?? { ...group, field: '', entities: [] };
+			const entities = group.entities.filter((e) => !exclude?.has(e.key));
 			target.entities = [
-				...new SvelteMap([...target.entities, ...group.entities].map((e) => [e.key, e])).values()
+				...new SvelteMap([...target.entities, ...entities].map((e) => [e.key, e])).values()
 			];
 			merged.set(group.template, target);
 		}
-		return [...merged.values()];
+		return [...merged.values()].filter((g) => g.entities.length);
 	});
 	let expanded = $state<Record<string, boolean>>({});
 	$effect(() => {
@@ -29,7 +38,7 @@
 	});
 </script>
 
-{#if groups.length}
+{#if displayGroups.length}
 	<Card.Root class="mt-5 gap-2 border-0 bg-transparent py-0 shadow-none ring-0">
 		<Card.Header class="px-0"
 			><Card.Title class="text-xs text-muted-foreground uppercase">{title}</Card.Title></Card.Header
@@ -37,7 +46,10 @@
 		{#each displayGroups as group, i (`${i}:${group.template}:${group.field}`)}
 			<Card.Content class="px-0"
 				><Card.Description
-					>{wiki.label(group.template)}{#if technical}
+					>{templateLabel(
+						group.template,
+						wiki.sections.find((s) => s.template === group.template)?.label
+					)}{#if technical}
 						· {group.field} ({group.entities.length}){/if}</Card.Description
 				>
 				{#each expanded[i] ? group.entities : group.entities.slice(0, 25) as entity, j (`${j}:${entity.key}`)}<EntityLink

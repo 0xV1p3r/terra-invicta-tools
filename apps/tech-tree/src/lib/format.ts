@@ -1,5 +1,5 @@
 // Small display formatters shared by tree and detail views.
-import type { EntityKind, UnlockKind } from '$lib/api';
+import type { EntityKey, EntityKind, RequirementGroup, UnlockKind } from '$lib/api';
 
 /** Compact research cost: 950 → "950", 12500 → "12.5k", 2_000_000 → "2M". */
 export function formatCost(cost: number | null | undefined): string {
@@ -49,4 +49,47 @@ export const UNLOCK_LABELS: Record<UnlockKind, string> = {
 /** Techs and projects live in the tree; everything else only in the detail panel. */
 export function isResearch(kind: EntityKind): boolean {
 	return kind === 'tech' || kind === 'project';
+}
+
+/**
+ * Requirement groups are all required; any one entry of a group satisfies it (prereqs give
+ * single-entry groups, altPrereqN adds alternatives).
+ */
+export const REQUIREMENT_LABELS = { all: 'All required', any: 'Any one of' };
+
+/** Entries in a requirement group, including ones this scope can't complete. */
+export function requirementChoices(group: RequirementGroup): number {
+	return group.options.length + group.hidden.length + group.unresolved.length;
+}
+
+/** "FusionRockets" → "Fusion Rockets". */
+function humanize(name: string): string {
+	return name.replace(/_/g, ' ').replace(/([a-z0-9])([A-Z])/g, '$1 $2');
+}
+
+/** Readable stand-in for an entity name when only its key is known: "TITechTemplate:AdAstra" → "Ad Astra". */
+export function readableKey(key: EntityKey): string {
+	return humanize(key.slice(key.indexOf(':') + 1).replace(/^Project_/, ''));
+}
+
+/** Player-facing names for templates the wiki names technically or has no section for. */
+const TEMPLATE_LABELS: Record<string, string> = {
+	TINarrativeEventTemplate: 'Story Events',
+	TITimeEventTemplate: 'Timed Events',
+	TIStartTimeTemplate: 'Scenarios',
+	TIMetaTemplate: 'Game Rules',
+	TIGlobalConfig: 'Game Rules',
+	TIPlayerTemplate: 'Players',
+	TIBilateralTemplate: 'Bilateral Relations',
+	TIPriorityPresetTemplate: 'Priority Presets',
+	TICouncilorAppearanceTemplate: 'Councilor Appearances',
+	TIMapGroupVisualizerTemplate: 'Map Visuals'
+};
+
+/** Template name for players, like the wiki's: overrides, the section label, else "TIFooBarTemplate" → "Foo Bars". */
+export function templateLabel(template: string, sectionLabel?: string): string {
+	if (TEMPLATE_LABELS[template]) return TEMPLATE_LABELS[template];
+	if (sectionLabel) return sectionLabel;
+	const words = humanize(template.replace(/^TI/, '').replace(/Template$/, ''));
+	return words.endsWith('s') ? words : `${words}s`;
 }

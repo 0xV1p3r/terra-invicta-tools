@@ -3,7 +3,7 @@
 // costs about the same whether 30 or 900 cards are visible.
 import type { EntityKey, TechCategory } from '$lib/api';
 import { CATEGORIES } from '$lib/categories';
-import type { Camera } from './camera';
+import type { Camera, Rect } from './camera';
 import {
 	importanceOf,
 	lineageOf,
@@ -79,6 +79,10 @@ const NAME_ZOOM = 0.18;
 export const OVERVIEW_ZOOM = 0.1;
 /** Most landmark labels in the overview. */
 const LANDMARKS = 40;
+/** Widest landmark label (screen px, padding included); longer names are ellipsized. */
+const LANDMARK_WIDTH = 150;
+/** Landmark candidates tried per frame, so dense views don't scan the whole ranking. */
+const LANDMARK_TRIES = 240;
 /**
  * Opacity of the fill, border and category bar of cards outside the selection's lineage
  * or the filter matches. Their text switches to the muted color instead of fading, so it
@@ -145,18 +149,29 @@ export function render(
 	ctx.globalAlpha = 1;
 
 	// --- edges ---------------------------------------------------------------
+	// Plain edges stay quiet so bundles don't knot up; the hovered and selected paths stand out.
 	const fade = Math.min(1, Math.max(0.2, z * 2)) * (overview ? 0.5 : 1);
-	ctx.globalAlpha = lineage ? 0.15 * fade : matches ? 0.4 * fade : fade;
+	ctx.globalAlpha = lineage ? 0.15 * fade : matches ? 0.3 * fade : 0.5 * fade;
 	strokeEdges(ctx, scene.edges, theme.muted, Math.max(1.5, 0.5 * px), px);
 	if (lineage) {
-		ctx.globalAlpha = 1;
-		strokeEdges(ctx, lineage.edges, theme.foreground, Math.max(2, px), px);
+		// Lineages can be big (a sub-tree's root reaches everything): the bigger, the lighter.
+		ctx.globalAlpha = lineage.nodes.size > scene.nodes.length / 2 ? 0.35 : 0.6;
+		strokeEdges(ctx, lineage.edges, theme.foreground, Math.max(1.5, px), px);
 	}
 	const highlight = lineage && state.selected ? scene.edgesOf.get(state.selected) : undefined;
 	if (highlight) {
 		ctx.globalAlpha = 1;
 		strokeEdges(ctx, highlight, theme.foreground, Math.max(3, 1.5 * px), px);
 	}
+	const hoverEdges =
+		state.hovered && state.hovered !== state.selected
+			? scene.edgesOf.get(state.hovered)
+			: undefined;
+	if (hoverEdges) {
+		ctx.globalAlpha = 0.9;
+		strokeEdges(ctx, hoverEdges, theme.foreground, Math.max(2, px), px);
+	}
+	ctx.globalAlpha = 1;
 
 	// --- card bodies, borders and category bars (batched per style) -----------
 	const bar = detail ? 4 : 12;
@@ -331,22 +346,39 @@ function drawBandLabels(
 
 const rankingCache = new WeakMap<
 	Scene,
-	{ font: string; ranking: { node: SceneNode; width: number }[] }
+	{ font: string; ranking: { node: SceneNode; label: string; width: number }[] }
 >();
 
-/** Nodes by importance with their label width in the current font (cached per scene). */
+/** Nodes by importance with their (ellipsized) label and its width in the current font. */
 function landmarkRanking(ctx: CanvasRenderingContext2D, scene: Scene) {
 	const cached = rankingCache.get(scene);
 	if (cached?.font === ctx.font) return cached.ranking;
 	const importance = importanceOf(scene);
 	const ranking = [...scene.nodes]
 		.sort((a, b) => (importance.get(b.key) ?? 0) - (importance.get(a.key) ?? 0))
-		.map((node) => ({ node, width: ctx.measureText(node.item.name).width }));
+		.map((node) => {
+			const label = ellipsize(ctx, node, LANDMARK_WIDTH - 12);
+			return { node, label, width: ctx.measureText(label).width };
+		});
 	rankingCache.set(scene, { font: ctx.font, ranking });
 	return ranking;
 }
 
-/** Labels of the most important visible research, skipping ones that would overlap. */
+interface Box {
+	x: number;
+	y: number;
+	w: number;
+	h: number;
+}
+
+const overlaps = (a: Box, b: Box, pad: number) =>
+	a.x < b.x + b.w + pad && a.x + a.w + pad > b.x && a.y < b.y + b.h + pad && a.y + a.h + pad > b.y;
+
+/**
+ * Labels of the most important visible research. Each sits on its card, or just above or
+ * below it with a short leader, wherever it covers the fewest neighbouring cards; labels
+ * that would overlap another label, an overlay or the canvas edge are skipped.
+ */
 function drawLandmarks(
 	ctx: CanvasRenderingContext2D,
 	camera: Camera,
@@ -360,41 +392,89 @@ function drawLandmarks(
 	ctx.font = `600 12px ${theme.font}`;
 	ctx.textBaseline = 'middle';
 	const shown = new Set(visible);
-	const taken: { x: number; y: number; w: number; h: number }[] = [];
+	const edge = 6;
+	const blocked: Box[] = camera.overlays.map((r: Rect) => ({
+		x: r.x,
+		y: r.y,
+		w: r.width,
+		h: r.height
+	}));
+	const taken: Box[] = [];
+	const cw = scene.width * z;
+	const ch = scene.height * z;
+	const th = 20;
 	let count = 0;
-	for (const { node: n, width } of landmarkRanking(ctx, scene)) {
-		if (count >= LANDMARKS) break;
+	let tries = 0;
+	for (const { node: n, label, width } of landmarkRanking(ctx, scene)) {
+		if (count >= LANDMARKS || tries >= LANDMARK_TRIES) break;
 		if (!shown.has(n) || dimmed(n)) continue;
-		const label = n.item.name;
+		tries++;
+		const card = { x: camera.x + n.x * z, y: camera.y + n.y * z, w: cw, h: ch };
+		const cx = card.x + cw / 2;
 		const tw = width + 12;
-		const th = 20;
-		const cx = camera.x + (n.x + scene.width / 2) * z;
-		const cy = camera.y + (n.y + scene.height / 2) * z;
-		const r = { x: cx - tw / 2, y: cy - th / 2, w: tw, h: th };
-		const pad = 4;
-		if (
-			taken.some(
-				(t) =>
-					r.x < t.x + t.w + pad &&
-					r.x + r.w + pad > t.x &&
-					r.y < t.y + t.h + pad &&
-					r.y + r.h + pad > t.y
-			)
-		)
-			continue;
+		// Centred on the card, shifted inward at the canvas edges while still over the card.
+		const left = Math.min(
+			Math.max(cx - tw / 2, edge, card.x - tw + 12),
+			camera.width - edge - tw,
+			card.x + cw - 12
+		);
+		const candidates: [Box, number][] = [
+			[{ x: left, y: card.y + ch / 2 - th / 2, w: tw, h: th }, 0],
+			[{ x: left, y: card.y - th - 3, w: tw, h: th }, -1],
+			[{ x: left, y: card.y + ch + 3, w: tw, h: th }, 1]
+		];
+		let best: [Box, number] | null = null;
+		let bestCovered = 3; // more covered neighbours than this: skip the label
+		for (const c of candidates) {
+			const [r] = c;
+			if (r.x < edge || r.y < edge || r.x + r.w > camera.width - edge) continue;
+			if (r.y + r.h > camera.height - edge) continue;
+			if (blocked.some((b) => overlaps(r, b, 4)) || taken.some((t) => overlaps(r, t, 4))) continue;
+			const world = {
+				x: (r.x - camera.x) / z,
+				y: (r.y - camera.y) / z,
+				width: r.w / z,
+				height: r.h / z
+			};
+			let covered = 0;
+			for (const m of nodesIn(scene, world)) if (m !== n) covered++;
+			if (covered < bestCovered) {
+				best = c;
+				bestCovered = covered;
+				if (!covered) break;
+			}
+		}
+		if (!best) continue;
+		const [r, side] = best;
 		taken.push(r);
 		count++;
+		const color = accent(theme, n);
+		if (side) {
+			// Leader from the label to the middle of its card.
+			const from = side < 0 ? r.y + r.h : r.y;
+			const to = side < 0 ? card.y + Math.min(ch / 2, 4) : card.y + ch - Math.min(ch / 2, 4);
+			ctx.strokeStyle = color;
+			ctx.lineWidth = 1.5;
+			ctx.beginPath();
+			ctx.moveTo(cx, from);
+			ctx.lineTo(cx, to);
+			ctx.stroke();
+			ctx.fillStyle = color;
+			ctx.beginPath();
+			ctx.arc(cx, to, 2.5, 0, 2 * Math.PI);
+			ctx.fill();
+		}
 		ctx.globalAlpha = 0.92;
 		ctx.fillStyle = theme.card;
 		ctx.beginPath();
 		ctx.roundRect(r.x, r.y, r.w, r.h, 6);
 		ctx.fill();
 		ctx.globalAlpha = 1;
-		ctx.strokeStyle = accent(theme, n);
+		ctx.strokeStyle = color;
 		ctx.lineWidth = 1.5;
 		ctx.stroke();
 		ctx.fillStyle = theme.cardForeground;
-		ctx.fillText(label, r.x + 6, cy);
+		ctx.fillText(label, r.x + 6, r.y + th / 2);
 	}
 }
 
@@ -482,8 +562,8 @@ function drawDetail(
 		}
 		const glyph = state.glyphs.get(f.key);
 		if (!glyph) continue;
+		// Glyphs carry meaning: full contrast even on faded cards (like the text).
 		ctx.save();
-		ctx.globalAlpha = marks;
 		ctx.translate(bx + 3, by + 3);
 		ctx.scale(14 / 24, 14 / 24);
 		ctx.strokeStyle = f.inverted ? theme.destructive : theme.muted;

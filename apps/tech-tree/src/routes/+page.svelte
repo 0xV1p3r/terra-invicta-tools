@@ -78,7 +78,9 @@
 								</Tip>
 							{/if}
 							<SettingsDialog />
-							<LightSwitch variant="ghost" class="size-8 rounded-full" />
+							<Tip text="Toggle light/dark theme">
+								<LightSwitch variant="ghost" class="size-8 rounded-full" />
+							</Tip>
 						</Pill>
 					{/snippet}
 				</TreeCanvas>

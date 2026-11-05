@@ -24,6 +24,7 @@
 	let hits = $state<SearchHit[]>([]);
 	let loading = $state(false);
 	let error = $state<string | null>(null);
+	let retry = $state(0);
 	const icons = {
 		tech: FlaskConical,
 		project: Wrench,
@@ -49,6 +50,7 @@
 		Xenology: 'xenology'
 	};
 	$effect(() => {
+		void retry;
 		const text = query.trim();
 		const scope = { ...app.scope };
 		const enabled = open && !!app.meta;
@@ -119,7 +121,12 @@
 	<Command.Input bind:value={query} placeholder="Search entities…" aria-label="Search entities" />
 	<Command.List aria-busy={loading}>
 		{#if error}
-			<div role="alert" class="px-4 py-6 text-sm text-destructive">Search failed: {error}</div>
+			<div class="flex flex-col items-start gap-3 px-4 py-6">
+				<p role="alert" class="text-sm text-destructive">
+					Could not search for “{query.trim()}”. Try again.
+				</p>
+				<Button variant="outline" size="sm" onclick={() => retry++}>Retry</Button>
+			</div>
 		{:else if loading}
 			<div role="status" class="px-4 py-6 text-sm text-muted-foreground">Searching…</div>
 		{:else if !hits.length}

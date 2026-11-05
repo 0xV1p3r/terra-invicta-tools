@@ -11,7 +11,12 @@
 	import { Separator } from '$lib/components/ui/separator/index.js';
 	import { Skeleton } from '$lib/components/ui/skeleton/index.js';
 	import { SENTIMENT } from '$lib/effect-style';
-	import { formatCostFull, UNLOCK_LABELS } from '$lib/format';
+	import {
+		formatCostFull,
+		REQUIREMENT_LABELS,
+		requirementChoices,
+		UNLOCK_LABELS
+	} from '$lib/format';
 	import { app } from '$lib/state.svelte';
 	import CategoryIcon from './CategoryIcon.svelte';
 	import { cachedDetail, loadDetail } from './hover-detail';
@@ -90,9 +95,12 @@
 	});
 </script>
 
-{#snippet section(title: string)}
-	<div class="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
+{#snippet section(title: string, hint?: string)}
+	<div
+		class="flex items-baseline justify-between gap-2 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase"
+	>
 		{title}
+		{#if hint}<span class="font-normal tracking-normal normal-case">{hint}</span>{/if}
 	</div>
 {/snippet}
 
@@ -144,20 +152,30 @@
 
 				{#if detail.requirements.length}
 					<Separator class="my-0.5" />
-					{@render section('Requirements')}
+					{@render section(
+						'Requirements',
+						detail.requirements.length > 1 ? REQUIREMENT_LABELS.all : undefined
+					)}
 					{#each detail.requirements.slice(0, MAX_REQUIREMENTS) as group, i (i)}
-						<div class="flex flex-wrap items-center gap-x-1 gap-y-0.5">
+						{@const choice = requirementChoices(group) > 1}
+						<div
+							class="flex flex-wrap items-center gap-x-1 gap-y-0.5 {choice
+								? 'rounded-md border border-dashed px-1.5 py-1'
+								: ''}"
+						>
+							{#if choice}
+								<span class="w-full text-muted-foreground">{REQUIREMENT_LABELS.any}</span>
+							{/if}
 							{#each group.options as option, j (j)}
 								{#if j > 0}<span class="text-muted-foreground">or</span>{/if}
 								<span class="inline-flex min-w-0 items-center gap-1 font-medium">
 									<EntityIcon entity={option} size={14} />
 									<span class="truncate">{option.name}</span>
 								</span>
-								{#if group.alternative[j]}
-									<span class="text-muted-foreground">(alternative)</span>
-								{/if}
 							{/each}
 							{#each group.hidden as hidden, j (j)}
+								{#if j > 0 || group.options.length}<span class="text-muted-foreground">or</span
+									>{/if}
 								<span class="inline-flex min-w-0 items-center gap-1 opacity-60">
 									<EntityIcon entity={hidden} size={14} />
 									<span class="truncate">{hidden.name}</span>
