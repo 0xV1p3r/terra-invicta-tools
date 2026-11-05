@@ -21,6 +21,14 @@ export type ViewSpec =
 
 export type ViewKind = ViewSpec['kind'];
 
+/** A history step: the view and the entity selected in it. */
+interface HistoryEntry {
+	view: ViewSpec;
+	selected: EntityKey | null;
+	/** The selection was a node of the tree, so restoring it centers on it again. */
+	inTree: boolean;
+}
+
 const sameView = (a: ViewSpec, b: ViewSpec) => JSON.stringify(a) === JSON.stringify(b);
 const HISTORY_LIMIT = 100;
 
@@ -67,9 +75,9 @@ class AppState {
 
 	/** Current view; change it through `go`/`update` so history stays consistent. */
 	view = $state<ViewSpec>({ kind: 'full', layout: 'layered' });
-	/** Views before/after the current one (most recent last). */
-	back = $state<ViewSpec[]>([]);
-	forward = $state<ViewSpec[]>([]);
+	/** Steps before/after the current one (most recent last): view changes and followed entity links. */
+	back = $state<HistoryEntry[]>([]);
+	forward = $state<HistoryEntry[]>([]);
 	/** Remembered so leaving a sub-tree returns to the same full-tree layout. */
 	private fullLayout: FullLayout = 'layered';
 	private subtreeAlternatives = true;
@@ -86,8 +94,7 @@ class AppState {
 	/** Show `next`, recording the current view in the history. */
 	go(next: ViewSpec) {
 		if (sameView(next, this.view)) return;
-		this.back = [...this.back.slice(-HISTORY_LIMIT + 1), $state.snapshot(this.view)];
-		this.forward = [];
+		this.record();
 		this.setView(next);
 	}
 
@@ -99,7 +106,7 @@ class AppState {
 	goBack() {
 		const prev = this.back.at(-1);
 		if (!prev) return;
-		this.forward = [...this.forward, $state.snapshot(this.view)];
+		this.forward = [...this.forward, this.current()];
 		this.back = this.back.slice(0, -1);
 		this.restore(prev);
 	}
@@ -107,9 +114,24 @@ class AppState {
 	goForward() {
 		const next = this.forward.at(-1);
 		if (!next) return;
-		this.back = [...this.back, $state.snapshot(this.view)];
+		this.back = [...this.back, this.current()];
 		this.forward = this.forward.slice(0, -1);
 		this.restore(next);
+	}
+
+	private current(): HistoryEntry {
+		const selected = this.selected;
+		return {
+			view: $state.snapshot(this.view),
+			selected,
+			inTree: selected !== null && this.treeKeys.has(selected)
+		};
+	}
+
+	/** Start a new history step from the current state. */
+	private record() {
+		this.back = [...this.back.slice(-HISTORY_LIMIT + 1), this.current()];
+		this.forward = [];
 	}
 
 	private setView(next: ViewSpec) {
@@ -118,13 +140,12 @@ class AppState {
 		this.view = next;
 	}
 
-	/** History navigation: also select the root again, like when the view was opened. */
-	private restore(spec: ViewSpec) {
-		this.setView(spec);
-		if (spec.kind !== 'full') {
-			this.selected = spec.root;
-			this.focus = spec.root;
-		}
+	/** History navigation: also select the entity again and center the tree on it (or the view's root). */
+	private restore({ view, selected, inTree }: HistoryEntry) {
+		this.setView(view);
+		this.selected = selected;
+		if (selected) this.panelOpen = true;
+		this.focus = inTree ? selected : view.kind === 'full' ? null : view.root;
 	}
 
 	/** Entity shown in the detail panel. */
@@ -137,15 +158,18 @@ class AppState {
 	/** Detail panel visibility. */
 	panelOpen = $state(true);
 
-	/** Follow an entity reference: show it in the panel; techs/projects are also focused in the tree. */
+	/**
+	 * Follow an entity reference: show it in the panel; techs/projects are also focused in the tree.
+	 * A history step, so Back returns to the previous entity (selecting on the canvas is not).
+	 */
 	navigate(ref: Pick<EntityRef, 'key' | 'kind'>) {
-		this.selected = ref.key;
+		const research = ref.kind === 'tech' || ref.kind === 'project';
 		this.panelOpen = true;
-		if (ref.kind === 'tech' || ref.kind === 'project') {
-			if (this.view.kind === 'focus') return this.openFocus(ref.key);
-			if (this.view.kind !== 'full' && !this.treeKeys.has(ref.key)) this.showFullTree();
-			this.focus = ref.key;
-		}
+		if (research && this.view.kind === 'focus') return this.openFocus(ref.key);
+		if (research && this.view.kind !== 'full' && !this.treeKeys.has(ref.key)) this.showFullTree();
+		else if (ref.key !== this.selected) this.record();
+		this.selected = ref.key;
+		if (research) this.focus = ref.key;
 	}
 
 	openSubtree(root: EntityKey, direction: Direction = 'up') {

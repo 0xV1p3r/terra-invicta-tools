@@ -169,12 +169,13 @@
 				<Button
 					{...props}
 					variant="outline"
-					size="icon"
-					class="size-8"
+					size="sm"
+					class="h-8 w-full"
 					aria-label={label}
 					{onclick}
 				>
 					<Icon />
+					{label}
 				</Button>
 			{/snippet}
 		</Tooltip.Trigger>
@@ -320,11 +321,11 @@
 			>
 		{/if}
 		{#if research}
-			<Card.Content class="mt-4 flex gap-2 px-0">
+			<Card.Content class="mt-4 grid grid-cols-2 gap-2 px-0">
 				<Button
 					variant="outline"
 					size="sm"
-					class="flex-1"
+					class="w-full"
 					onclick={() => treeAction(() => app.openSubtree(entity.key, 'up'))}
 				>
 					<ArrowUpToLine /> Requirements tree
@@ -347,13 +348,13 @@
 					<Tooltip.Content>Everything this unlocks, all the way down</Tooltip.Content>
 				</Tooltip.Root>
 				{@render iconAction(
-					'Focus view',
+					'Focus',
 					'Focus: direct requirements and unlocks',
 					() => treeAction(() => app.openFocus(entity.key)),
 					Focus
 				)}
 				{@render iconAction(
-					'Center in tree',
+					'Center',
 					'Center in tree',
 					() => treeAction(() => app.navigate(entity)),
 					Crosshair

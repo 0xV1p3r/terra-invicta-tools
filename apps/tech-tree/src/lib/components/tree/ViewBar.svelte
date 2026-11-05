@@ -4,7 +4,8 @@
 	import Undo2 from '@lucide/svelte/icons/undo-2';
 	import type { Direction, TreeGraph } from '$lib/api';
 	import { Button } from '$lib/components/ui/button/index.js';
-	import { Toggle } from '$lib/components/ui/toggle/index.js';
+	import { Switch } from '$lib/components/ui/switch/index.js';
+	import { Label } from '$lib/components/ui/label/index.js';
 	import * as ToggleGroup from '$lib/components/ui/toggle-group/index.js';
 	import { formatCost, formatCostFull } from '$lib/format';
 	import { app, type FullLayout, type ViewKind } from '$lib/state.svelte';
@@ -182,16 +183,18 @@
 					</Tip>
 				{/each}
 			</ToggleGroup.Root>
-			<Tip text="Also show alternative prerequisites. Techs that can substitute for a requirement.">
-				<Toggle
-					size="sm"
-					class={pillToggle}
-					bind:pressed={
-						() => sub.alternatives, (alternatives) => app.update({ ...sub, alternatives })
-					}
-				>
-					Alternatives
-				</Toggle>
+			<PillDivider />
+			<Tip text="Include alternative prerequisites">
+				<div class="flex h-8 items-center gap-2 px-2">
+					<Switch
+						id="subtree-alternatives"
+						size="sm"
+						bind:checked={
+							() => sub.alternatives, (alternatives) => app.update({ ...sub, alternatives })
+						}
+					/>
+					<Label for="subtree-alternatives">Alternatives</Label>
+				</div>
 			</Tip>
 		</Pill>
 	{/if}
