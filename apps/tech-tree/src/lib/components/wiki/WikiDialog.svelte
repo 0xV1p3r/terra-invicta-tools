@@ -495,24 +495,3 @@
 		</Card.Content>
 	</Dialog.Content>
 </Dialog.Root>
-
-<style>
-	/* WebKitGTK rasterizes translated/zoomed dialog layers at fractional pixels. */
-	:global(.wiki-dialog) {
-		transform: none;
-		--tw-enter-scale: 1;
-		--tw-exit-scale: 1;
-		animation-name: wiki-fade;
-	}
-	:global(.wiki-dialog[data-state='closed']) {
-		animation-direction: reverse;
-	}
-	@keyframes wiki-fade {
-		from {
-			opacity: 0;
-		}
-		to {
-			opacity: 1;
-		}
-	}
-</style>

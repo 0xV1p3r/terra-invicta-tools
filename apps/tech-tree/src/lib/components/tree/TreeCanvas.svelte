@@ -735,15 +735,13 @@
 
 		<!-- Floating toolbar; clicks between the pills reach the tree. -->
 		<div
-			class="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-wrap items-start gap-2 p-3"
+			class="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-wrap items-start justify-center gap-2 p-3"
 			data-overlay-group
 			bind:clientHeight={toolbarHeight}
 		>
 			{@render leading?.()}
 			<ViewBar graph={ready ? graph : null} />
-			<div class="ml-auto flex flex-wrap items-start justify-end gap-2" data-overlay-group>
-				{@render trailing?.()}
-			</div>
+			{@render trailing?.()}
 		</div>
 
 		{#if loading}
@@ -789,23 +787,3 @@
 		{/if}
 	</div>
 </div>
-
-<style>
-	.tree-surface {
-		--dot: 18%;
-		background-image: radial-gradient(
-			circle,
-			color-mix(in oklab, var(--muted-foreground) var(--dot), transparent) 1px,
-			transparent 1.2px
-		);
-	}
-	:global(.dark) .tree-surface {
-		--dot: 26%;
-	}
-	.tree-surface.quiet {
-		--dot: 9%;
-	}
-	:global(.dark) .tree-surface.quiet {
-		--dot: 14%;
-	}
-</style>
