@@ -82,6 +82,8 @@ export interface MapItem {
 	sx: number;
 	sy: number;
 	onScreen: boolean;
+	/** Screen box (CSS px: x1, y1, x2, y2) of the label drawn this frame, or null. */
+	labelBox: [number, number, number, number] | null;
 }
 
 export type OrbitTier = 0 | 1 | 2 | 3;
@@ -244,7 +246,8 @@ export function buildSystem(center: MapBody, mode: MapScale): SystemScene {
 		wy: 0,
 		sx: 0,
 		sy: 0,
-		onScreen: false
+		onScreen: false,
+		labelBox: null
 	});
 
 	const centerItem = item(

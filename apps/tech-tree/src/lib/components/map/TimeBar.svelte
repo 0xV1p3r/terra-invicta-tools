@@ -32,10 +32,12 @@
 	);
 	let draft = $state('');
 	let editing = $state(false);
+	let dateError = $state(false);
+	const dateErrorId = $props.id();
 	let status = $state('');
 
 	$effect(() => {
-		if (!editing) draft = label;
+		if (!editing && !dateError) draft = label;
 	});
 
 	// Observe playback transitions only, including pauses from the map keyboard shortcut.
@@ -54,14 +56,19 @@
 		if (!editing) return;
 		const parsed = Date.parse(`${draft}T00:00:00Z`);
 		if (
-			/^\d{4}-\d{2}-\d{2}$/.test(draft) &&
-			Number.isFinite(parsed) &&
-			new Date(parsed).toISOString().slice(0, 10) === draft
+			!/^\d{4}-\d{2}-\d{2}$/.test(draft) ||
+			!Number.isFinite(parsed) ||
+			new Date(parsed).toISOString().slice(0, 10) !== draft ||
+			parsed < mapState.start ||
+			parsed > mapState.start + SPAN_DAYS * DAY_MS
 		) {
-			mapState.playing = false;
-			setDay(Math.round((parsed - mapState.start) / DAY_MS));
-			announce();
+			dateError = true;
+			return;
 		}
+		dateError = false;
+		mapState.playing = false;
+		setDay(Math.round((parsed - mapState.start) / DAY_MS));
+		announce();
 		draft = new Date(mapState.time).toISOString().slice(0, 10);
 		editing = false;
 	}
@@ -130,10 +137,19 @@
 {/snippet}
 
 <div
-	class="grid gap-1.5 rounded-xl border bg-card px-2 py-1.5 shadow"
+	class="relative grid gap-1.5 rounded-xl border bg-card px-2 py-1.5 shadow"
 	role="group"
 	aria-label="Map date"
 >
+	{#if dateError}
+		<p
+			id={dateErrorId}
+			role="alert"
+			class="absolute right-0 bottom-full mb-2 max-w-full rounded-md border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md"
+		>
+			Use YYYY-MM-DD between {startLabel} and {endLabel}.
+		</p>
+	{/if}
 	<div class="flex items-center justify-between gap-1">
 		{#each STEPS.slice(0, 3) as s (s.label)}
 			{@render stepButton(s)}
@@ -155,6 +171,8 @@
 			class="h-8 w-28 shrink-0 px-1 text-center font-mono text-sm tabular-nums"
 			aria-label="Map date, YYYY-MM-DD"
 			aria-live="off"
+			aria-invalid={dateError}
+			aria-describedby={dateError ? dateErrorId : undefined}
 			bind:value={draft}
 			onfocus={() => {
 				mapState.playing = false;
@@ -167,6 +185,7 @@
 					event.currentTarget.blur();
 				}
 				if (event.key === 'Escape') {
+					dateError = false;
 					editing = false;
 					draft = label;
 					event.currentTarget.blur();

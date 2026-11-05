@@ -185,8 +185,13 @@
 
 {#if !entityKey}
 	<Card.Content class="px-0 text-sm text-muted-foreground">
-		Select a node in the tree or search (Ctrl+K) to see its details. Double-click a node to show its
-		requirements tree.
+		{#if app.page === 'map'}
+			Click a body or Lagrange point to see its stats. Double-click a body, or use “Enter system”,
+			to open its system of moons; the breadcrumb or Backspace goes back up. Search with Ctrl+K.
+		{:else}
+			Select a node in the tree or search (Ctrl+K) to see its details. Double-click a node to show
+			its requirements tree.
+		{/if}
 	</Card.Content>
 {:else if error}
 	<Card.Content class="flex items-start gap-3 px-0" role="alert">

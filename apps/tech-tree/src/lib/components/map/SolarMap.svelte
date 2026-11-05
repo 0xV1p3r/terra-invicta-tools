@@ -1,13 +1,14 @@
 <script lang="ts">
 	// The solar system map: one system (a body and its satellites) at a time, drawn on one
 	// <canvas> by `render.ts`, with DOM overlays for the breadcrumb, date and zoom controls.
-	import { onDestroy, onMount, untrack } from 'svelte';
+	import { onDestroy, onMount, tick, untrack } from 'svelte';
 	import CircleQuestionMark from '@lucide/svelte/icons/circle-question-mark';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import LogIn from '@lucide/svelte/icons/log-in';
 	import Maximize from '@lucide/svelte/icons/maximize';
 	import Minus from '@lucide/svelte/icons/minus';
 	import Plus from '@lucide/svelte/icons/plus';
+	import ZoomIn from '@lucide/svelte/icons/zoom-in';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 	import { api, assetUrl, type EntityKey, type SolarSystem } from '$lib/api';
 	import { readTheme, type Theme } from '$lib/components/tree/render';
@@ -20,7 +21,7 @@
 	import { parseDate } from './kepler';
 	import MapHoverCard from './MapHoverCard.svelte';
 	import { mapState } from './map-state.svelte';
-	import { clearTextCache, render } from './render';
+	import { clearTextCache, crowdedInner, render } from './render';
 	import {
 		buildIndex,
 		buildSystem,
@@ -101,9 +102,21 @@
 		const gateways = new Set(
 			failing.filter((it) => !it.point && it.body && hasMatch(it.body)).map((it) => it.key)
 		);
+		// Matches below each gateway, for its hover card.
+		const below = (body: MapBody, acc = { bodies: 0, points: 0 }) => {
+			for (const c of body.children) {
+				if (mapState.matches(c.info.bodyType, c.info)) acc.bodies++;
+				if (mapState.matches('lagrange', null)) acc.points += c.points.length;
+				below(c, acc);
+			}
+			return acc;
+		};
 		return {
 			filtered: new Set(failing.filter((it) => !gateways.has(it.key)).map((it) => it.key)),
 			gateways,
+			gatewayMatches: new Map(
+				[...gateways].map((key) => [key, below(scene.byKey.get(key)!.body!)] as const)
+			),
 			matching: scene.items.length - failing.length - 1,
 			total: scene.items.length - 1
 		};
@@ -169,6 +182,8 @@
 	let theme = $state.raw<Theme | null>(null);
 	let hovered = $state<EntityKey | null>(null);
 	let fontVersion = $state(0);
+	/** Linear scale with the star and planets drawn on top of each other. */
+	let innerCrowded = $state(false);
 
 	let frame = 0;
 	function requestRender() {
@@ -196,6 +211,8 @@
 			minorLabels: !!scene && camera.zoom >= fitZoom(scene) * 2.5,
 			icons
 		});
+		const crowded = settings.mapScale === 'linear' && !!scene && crowdedInner(scene);
+		if (crowded !== innerCrowded) innerCrowded = crowded;
 		updateHoverAnchor();
 	}
 
@@ -279,6 +296,22 @@
 		if (scene) camera.animateTo(camera.centered(0, 0, fitZoom(scene)), motion(duration));
 	}
 
+	/** Fits the orbits of the four innermost planets (Mercury to Mars). */
+	function zoomToInner() {
+		if (!scene) return;
+		const reach = scene.items
+			.flatMap((it) => {
+				const orbit = it.type === 'planet' && !it.point ? it.body?.info.orbit : null;
+				return orbit ? [orbit.semiMajorAxisKm * (1 + orbit.eccentricity)] : [];
+			})
+			.sort((a, b) => a - b)
+			.slice(0, 4)
+			.at(-1);
+		if (!reach) return;
+		const zoom = (Math.min(width, height - 140) / 2 / scene.scale(reach)) * 0.95;
+		camera.animateTo(camera.centered(0, 0, zoom), motion(400));
+	}
+
 	function centerOn(it: MapItem, zoom = camera.zoom, duration = 400) {
 		camera.animateTo(camera.centered(it.wx, it.wy, zoom), motion(duration));
 	}
@@ -328,6 +361,15 @@
 		app.mapSystem = body === index?.root ? null : key;
 	}
 
+	/** Runs an overlay control's action; if that removed the focused control, the map takes focus. */
+	function keepFocus(action: () => void) {
+		action();
+		tick().then(() => {
+			const el = document.activeElement;
+			if (!el || el === document.body) surface?.focus({ preventScroll: true });
+		});
+	}
+
 	function goUp() {
 		const parent = scene?.center.parent;
 		if (parent) app.mapSystem = parent === index?.root ? null : parent.key;
@@ -338,6 +380,8 @@
 	let pointer: { id: number; x: number; y: number; moved: boolean } | null = null;
 	let lastPointer: { clientX: number; clientY: number } | null = null;
 	let dragging = $state(false);
+	/** Pointer over an item right now (the hover card lingers, the cursor doesn't). */
+	let overItem = $state(false);
 
 	function local(e: { clientX: number; clientY: number }) {
 		const r = canvas!.getBoundingClientRect();
@@ -353,12 +397,19 @@
 		for (const it of scene.items) {
 			if (!it.onScreen) continue;
 			const d = Math.hypot(it.sx - p.x, it.sy - p.y);
-			if (d <= Math.max(it.size + 4, 8) && d < bestDist) {
+			if (d <= Math.max(it.size + 4, 12) && d < bestDist) {
 				best = it;
 				bestDist = d;
 			}
 		}
-		return best;
+		if (best) return best;
+		// Otherwise its label.
+		return (
+			scene.items.find((it) => {
+				const b = it.onScreen ? it.labelBox : null;
+				return b && p.x >= b[0] && p.x <= b[2] && p.y >= b[1] && p.y <= b[3];
+			}) ?? null
+		);
 	}
 
 	function onpointerdown(e: PointerEvent) {
@@ -382,14 +433,30 @@
 			return;
 		}
 		lastPointer = { clientX: e.clientX, clientY: e.clientY };
-		hovered = hit(e)?.key ?? null;
+		setHovered(hit(e)?.key ?? null);
 	}
+
+	/** Pending un-hover: the hover card stays briefly so the pointer can move onto it. */
+	let unhover: ReturnType<typeof setTimeout> | undefined;
+	function setHovered(key: EntityKey | null) {
+		overItem = !!key;
+		if (key) {
+			clearTimeout(unhover);
+			unhover = undefined;
+			hovered = key;
+		} else if (hovered && !unhover) {
+			unhover = setTimeout(() => {
+				unhover = undefined;
+				hovered = null;
+			}, 150);
+		}
+	}
+	onDestroy(() => clearTimeout(unhover));
 
 	// Bodies move under a resting pointer (zoom, playback): hover what is there now.
 	function rehover() {
 		if (!lastPointer || dragging) return;
-		const key = hit(lastPointer)?.key ?? null;
-		if (key !== hovered) hovered = key;
+		setHovered(hit(lastPointer)?.key ?? null);
 	}
 	$effect(() => camera.subscribe(() => requestAnimationFrame(rehover)));
 	$effect(() => {
@@ -495,7 +562,7 @@
 	// Measured whenever the overlays may have moved: the hover card and the label placer avoid them.
 	$effect(() => {
 		if (!container) return;
-		void [width, height, hoveredItem, crumbs, enterable, filterResult, data];
+		void [width, height, hoveredItem, crumbs, enterable, innerCrowded, filterResult, data];
 		const origin = container.getBoundingClientRect();
 		obstacles = [topLeft, topCenter, bottomLeft, timeBar].flatMap((el) => {
 			const r = el?.getBoundingClientRect();
@@ -575,7 +642,7 @@
 	<div
 		bind:this={surface}
 		class="absolute inset-0 touch-none outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-		class:cursor-pointer={hovered && !dragging}
+		class:cursor-pointer={overItem && !dragging}
 		class:cursor-grabbing={dragging}
 		tabindex="0"
 		role="application"
@@ -588,7 +655,7 @@
 		onpointercancel={onpointerup}
 		onpointerleave={() => {
 			lastPointer = null;
-			hovered = null;
+			setHovered(null);
 		}}
 		{ondblclick}
 		{onwheel}
@@ -618,7 +685,7 @@
 										href="#{body.info.entity.dataName}"
 										onclick={(e: MouseEvent) => {
 											e.preventDefault();
-											app.mapSystem = i === 0 ? null : body.key;
+											keepFocus(() => (app.mapSystem = i === 0 ? null : body.key));
 										}}>{body.info.entity.name}</Breadcrumb.Link
 									>
 								{/if}
@@ -630,7 +697,7 @@
 		{/if}
 		{#if filterResult}
 			<div
-				class="flex max-w-80 items-center gap-2 rounded-full border bg-card py-0.5 pr-0.5 pl-3 text-xs shadow"
+				class="flex max-w-md items-center gap-2 rounded-full border bg-card py-0.5 pr-0.5 pl-3 text-xs shadow"
 				role="status"
 			>
 				<span>
@@ -641,26 +708,58 @@
 							· some of their moons do{/if}
 					{/if}
 				</span>
+				{#if filterResult.gateways.size}
+					<!-- Key to the canvas's gateway marker (see render.ts). -->
+					<span class="flex shrink-0 items-center gap-1 text-muted-foreground">
+						<svg viewBox="0 0 16 16" class="size-4" aria-hidden="true">
+							<circle cx="8" cy="8" r="2.5" fill="currentColor" />
+							<circle
+								cx="8"
+								cy="8"
+								r="6.5"
+								fill="none"
+								stroke="currentColor"
+								stroke-dasharray="2 2"
+							/>
+						</svg>
+						contains matches
+					</span>
+				{/if}
 				<Button
 					variant="ghost"
 					size="sm"
 					class="h-6 rounded-full px-2 text-xs"
-					onclick={() => mapState.clearFilters()}>Clear</Button
+					onclick={() => keepFocus(() => mapState.clearFilters())}>Clear</Button
 				>
 			</div>
 		{/if}
 	</div>
 
-	{#if enterable}
-		<div bind:this={topCenter} class="absolute top-3 left-1/2 -translate-x-1/2">
-			<Button
-				variant="outline"
-				size="sm"
-				class="rounded-full shadow"
-				onclick={() => enterSystem(enterable.key)}
-			>
-				<LogIn /> Enter {enterable.name} system
-			</Button>
+	{#if enterable || innerCrowded}
+		<div
+			bind:this={topCenter}
+			class="absolute top-3 left-1/2 flex -translate-x-1/2 flex-col items-center gap-2"
+		>
+			{#if enterable}
+				<Button
+					variant="outline"
+					size="sm"
+					class="rounded-full shadow"
+					onclick={() => keepFocus(() => enterSystem(enterable.key))}
+				>
+					<LogIn /> Enter {enterable.name} system
+				</Button>
+			{/if}
+			{#if innerCrowded}
+				<Button
+					variant="outline"
+					size="sm"
+					class="rounded-full shadow"
+					onclick={() => keepFocus(zoomToInner)}
+				>
+					<ZoomIn /> Zoom to inner planets
+				</Button>
+			{/if}
 		</div>
 	{/if}
 
@@ -673,6 +772,10 @@
 			{width}
 			{height}
 			{obstacles}
+			gatewayMatches={filterResult?.gatewayMatches.get(hoveredItem.key) ?? null}
+			onpointerenter={() => hoveredItem && setHovered(hoveredItem.key)}
+			onpointerleave={() => setHovered(null)}
+			{onwheel}
 		/>
 	{/if}
 
