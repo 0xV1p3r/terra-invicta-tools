@@ -17,6 +17,26 @@ pub(super) fn stats(view: &View<'_>, texts: &Texts, id: EntityId, spoilers: &Has
                     b.field(&f(key, "", Fmt::TagEnum(prefix), ""), v, map);
                 }
             }
+            let size = match d.max_hab_size {
+                1 => "Outpost",
+                2 => "Settlement",
+                3 => "Colony",
+                _ => "",
+            };
+            let size = if size.is_empty() {
+                d.max_hab_size.to_string()
+            } else {
+                b.texts.get(&format!("UI.Habs.Tier{}Base", d.max_hab_size)).map(plain).unwrap_or_else(|| size.into())
+            };
+            b.space_text("Habitation", "maxHabSize", "Max hab size", size);
+            b.space_number("Habitation", "habSites", "Hab sites", d.hab_sites.len() as f64, "");
+            b.space_text("Habitation", "solarMultiplier", "Solar power", pct(system.solar_multiplier(body, None)));
+            for r in Resource::ALL {
+                if let Some(rating) = system.body_rating(body, r) {
+                    b.space_resource("Resources", r, humanize(rating.name()), None);
+                }
+            }
+            b.space_names("Hab sites", game::HAB_SITE, &d.hab_sites);
             if d.dimension_x_km.is_some() {
                 b.space_text(
                     "Physical",
@@ -28,7 +48,7 @@ pub(super) fn stats(view: &View<'_>, texts: &Texts, id: EntityId, spoilers: &Has
                 b.space_number("Physical", "meanRadius_km", "Diameter", d.mean_radius() * 2.0, " km");
             }
             if let Some(mass) = d.mass_kg {
-                b.space_text("Physical", "mass_kg", "Mass", format!("{mass:.3e} kg"));
+                b.space_text("Physical", "mass_kg", "Mass", mass_kg(mass));
             }
             b.space_number("Physical", "density_gcm3", "Density", d.density(), " g/cm³");
             // Without size or mass the game's fallbacks (0 km, ε kg) would show as measured zeros.
@@ -37,13 +57,13 @@ pub(super) fn stats(view: &View<'_>, texts: &Texts, id: EntityId, spoilers: &Has
                 b.space_number("Physical", "escapeVelocity_kps", "Escape velocity", d.escape_velocity_mps() / 1000.0, " km/s");
             }
             if let Some(hours) = system.rotation_period_hours(body) {
-                let locked = if d.rotation_period_hours.as_deref() == Some("Lock") { " (tidally locked)" } else { "" };
-                b.space_text("Physical", "rotationPeriod_strHours", "Rotation period", format!("{} hours{locked}", num(hours)));
-            } else if d.rotation_period_hours.as_deref() == Some("Lock") {
-                b.space_text("Physical", "rotationPeriod_strHours", "Rotation period", "Tidally locked".into());
+                b.space_text("Physical", "rotationPeriod_strHours", "Rotation period", duration(hours, 72.0, 24.0, "hour", "day"));
+            }
+            if d.rotation_period_hours.as_deref() == Some("Lock") {
+                b.space_text("Physical", "tidallyLocked", "Tidally locked", "Yes".into());
             }
             if let Some(tilt) = d.tilt_deg {
-                b.space_number("Physical", "tilt_Deg", "Axial tilt", tilt, "°");
+                b.space_number("Physical", "tilt_Deg", "Axial tilt", (tilt * 100.0).round() / 100.0, "°");
             }
             if let Some(parent) = system.parent(body) {
                 b.space_text("Orbit", "barycenterName", "Parent", view.name(texts, parent.id));
@@ -54,36 +74,18 @@ pub(super) fn stats(view: &View<'_>, texts: &Texts, id: EntityId, spoilers: &Has
                 }
             }
             if let Some(seconds) = system.orbital_period_s(body) {
-                let years = seconds >= game::JULIAN_YEAR_S;
-                b.space_number(
+                b.space_text(
                     "Orbit",
                     "orbitalPeriod",
                     "Orbital period",
-                    seconds / if years { game::JULIAN_YEAR_S } else { 86400.0 },
-                    if years { " years" } else { " days" },
+                    duration(seconds / 86400.0, game::JULIAN_YEAR_S / 86400.0, game::JULIAN_YEAR_S / 86400.0, "day", "year"),
                 );
             }
             b.space_number("Orbit", "eccentricity", "Eccentricity", d.eccentricity(), "");
             if let Some(v) = d.inclination_deg {
-                b.space_number("Orbit", "inclination_Deg", "Inclination", v, "°");
-            }
-            let size = match d.max_hab_size {
-                1 => "Outpost",
-                2 => "Settlement",
-                3 => "Colony",
-                _ => "",
-            };
-            let size = if size.is_empty() { d.max_hab_size.to_string() } else { b.texts.get(&format!("UI.Habs.Tier{}Base", d.max_hab_size)).map(plain).unwrap_or_else(|| size.into()) };
-            b.space_text("Habitation", "maxHabSize", "Max hab size", size);
-            b.space_number("Habitation", "habSites", "Hab sites", d.hab_sites.len() as f64, "");
-            b.space_text("Habitation", "solarMultiplier", "Solar power", pct(system.solar_multiplier(body, None)));
-            for r in Resource::ALL {
-                if let Some(rating) = system.body_rating(body, r) {
-                    b.space_resource("Resources", r, humanize(rating.name()), None);
-                }
+                b.space_number("Orbit", "inclination_Deg", "Inclination", (v * 100.0).round() / 100.0, "°");
             }
             b.space_links("Moons", system.bodies.iter().filter(|m| system.parent(m).is_some_and(|p| p.id == id)).map(|m| m.id).collect());
-            b.space_names("Hab sites", game::HAB_SITE, &d.hab_sites);
             b.space_names("Orbits", game::ORBIT, &d.orbits);
             b.space_links("Lagrange points", system.lagrange_points.iter().filter(|(_, p)| p.related_object == d.data_name).map(|(id, _)| *id).collect());
             if let Some(name) = record.get("effectToExplore").and_then(Value::as_str) {
@@ -111,8 +113,8 @@ pub(super) fn stats(view: &View<'_>, texts: &Texts, id: EntityId, spoilers: &Has
                         b.space_resource(
                             "Expected output / month",
                             r,
-                            format!("{} ({}–{})", amount(out.expected), amount(out.min), amount(out.max)),
-                            Some(humanize(rating.name())),
+                            amount(out.expected),
+                            Some(format!("{} · {}–{}", humanize(rating.name()), amount(out.min), amount(out.max))),
                         );
                     }
                 }
@@ -124,8 +126,22 @@ pub(super) fn stats(view: &View<'_>, texts: &Texts, id: EntityId, spoilers: &Has
             }
             for (key, label, v) in [("latitude", "Latitude", site.latitude), ("longitude", "Longitude", site.longitude)] {
                 match v {
-                    Some(v) => b.space_number("Location", key, label, v, "°"),
+                    Some(v) => b.space_number("Location", key, label, (v * 100.0).round() / 100.0, "°"),
                     None => b.space_text("Location", key, label, "Random".into()),
+                }
+            }
+        }
+        game::NAVIGABLE => {
+            let point: game::LagrangePoint = model::parse(record);
+            let system = System::load(view);
+            b.space_number("Habitation", "maxHabSize", "Max hab tier", point.max_hab_size as f64, "");
+            b.space_text("Location", "lagrangeValue", "Lagrange point", point.lagrange_value);
+            if let Some(body) = system.body(&point.related_object) {
+                b.space_text("Location", "relatedObject", "Body", view.name(texts, body.id));
+                b.space_links("Body", vec![body.id]);
+                if let Some(parent) = system.parent(body) {
+                    b.space_text("Location", "barycenterName", "Parent", view.name(texts, parent.id));
+                    b.space_links("Parent body", vec![parent.id]);
                 }
             }
         }
@@ -197,4 +213,33 @@ impl Builder<'_, '_> {
     fn space_names(&mut self, label: &str, template: &str, names: &[String]) {
         self.space_links(label, names.iter().filter_map(|n| self.view.find(template, n)).collect());
     }
+}
+
+fn duration(value: f64, threshold: f64, divisor: f64, small: &str, large: &str) -> String {
+    let (value, unit) = if value.abs() >= threshold { (value / divisor, large) } else { (value, small) };
+    let displayed = num((value * 10.0).round() / 10.0);
+    format!("{displayed} {unit}{}", if displayed == "1" { "" } else { "s" })
+}
+
+fn mass_kg(mass: f64) -> String {
+    let scientific = format!("{mass:.2e}");
+    let (mantissa, exponent) = scientific.split_once('e').unwrap();
+    let superscript: String = exponent
+        .chars()
+        .map(|c| match c {
+            '-' => '⁻',
+            '0' => '⁰',
+            '1' => '¹',
+            '2' => '²',
+            '3' => '³',
+            '4' => '⁴',
+            '5' => '⁵',
+            '6' => '⁶',
+            '7' => '⁷',
+            '8' => '⁸',
+            '9' => '⁹',
+            _ => c,
+        })
+        .collect();
+    format!("{mantissa} × 10{superscript} kg")
 }
