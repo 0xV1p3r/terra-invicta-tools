@@ -459,9 +459,9 @@ function drawLabels(
 		const gated = it.type === 'lagrange' ? !pointLabels : !state.minorLabels;
 		if (!forced && (dim(it) || (it.priority >= 4 && gated))) continue;
 		if (!forced && (it.sx < 0 || it.sy < 0 || it.sx > w || it.sy > h)) continue;
-		// L1/L2 hugging their body would read as a second name for it.
+		// Points hugging their body need leaders to distinguish their labels from its name.
 		const owner = it.point && scene.byKey.get(it.point.body);
-		if (!forced && owner && Math.hypot(it.sx - owner.sx, it.sy - owner.sy) < 30) continue;
+		const closePoint = owner && Math.hypot(it.sx - owner.sx, it.sy - owner.sy) < 30;
 		const major = it.priority <= 1;
 		const font = `${major ? '600 12px' : it.type === 'lagrange' ? '10px' : '11px'} ${theme.font}`;
 		// Lagrange points read as "Earth L4" (or just "L4" when crowded) unless hovered or selected;
@@ -501,8 +501,8 @@ function drawLabels(
 			add(it.sx - tw / 2, it.sy - r - 7);
 			add(it.sx - tw / 2, it.sy + r + 7);
 			// Next to a crowded body a name is ambiguous: only leaders.
-			if (fanned) cand.splice(fanned, 16);
-			if (major || forced) {
+			if (fanned || closePoint) cand.splice(fanned, 16);
+			if (major || forced || closePoint) {
 				for (const d of LEADER_DISTS)
 					for (const [dx, dy] of LEADER_DIRS) {
 						const ax = it.sx + dx * d;
