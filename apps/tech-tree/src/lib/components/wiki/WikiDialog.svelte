@@ -263,6 +263,7 @@
 				aria-describedby="wiki-search-hint"
 				placeholder="Search all entity types…"
 				aria-label="Search all wiki entities"
+				class="focus-visible:border-ring focus-visible:ring-0 focus-visible:ring-offset-0"
 			/>
 			<Card.Description id="wiki-search-hint" class="text-xs"
 				>↑↓ to move, Enter to open</Card.Description
@@ -407,8 +408,11 @@
 							<Button
 								title={entity.dataName}
 								id={`wiki-entry-${i}`}
-								variant={wiki.selected === entity.key || cursor === i ? 'secondary' : 'ghost'}
-								class="h-auto min-h-16 w-full justify-start gap-3 px-3 py-2.5 text-left whitespace-normal"
+								variant={wiki.selected === entity.key ? 'secondary' : 'ghost'}
+								class="h-auto min-h-16 w-full justify-start gap-3 px-3 py-2.5 text-left whitespace-normal {cursor ===
+									i && wiki.selected !== entity.key
+									? 'outline outline-1 -outline-offset-1 outline-ring'
+									: ''}"
 								aria-current={wiki.selected === entity.key ? 'page' : undefined}
 								onclick={() => {
 									cursor = i;
@@ -436,6 +440,8 @@
 									{#if entry.subtitle && !entry.effect}<Card.Description
 											class="mt-0.5 truncate text-xs"
 											title={entry.subtitle}>{entry.subtitle}</Card.Description
+										>{/if}{#if cursor === i && wiki.selected !== entity.key}<Card.Description
+											class="mt-1 text-xs">Enter to open</Card.Description
 										>{/if}{#if global}<Card.Description class="text-xs"
 											>{KIND_LABELS[entity.kind]} · {wiki.label(entity.template)}</Card.Description
 										>{/if}</Card.Content

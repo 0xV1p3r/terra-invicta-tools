@@ -154,21 +154,27 @@
 					{#each chips as chip (chip.id)}
 						<Badge
 							variant="secondary"
-							class="h-6 max-w-full gap-1 pr-0.5 pl-0.5 {chip.shown ? '' : 'opacity-50'}"
+							class="h-6 max-w-full gap-1 pr-0.5 pl-0.5 {chip.shown
+								? ''
+								: 'bg-muted text-muted-foreground'}"
 							title={chip.shown ? undefined : 'No research in the filtered tree has this'}
 						>
 							{#if chip.info}
 								<PropertyIcon property={chip.info} size={18} />
 							{/if}
 							<span class="truncate">{chip.info?.label ?? chip.id}</span>
-							<button
-								type="button"
-								class="grid size-5 place-items-center rounded-sm hover:bg-foreground/10 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+							{#if !chip.shown}<span class="sr-only"
+									>No research in the filtered tree has this property.</span
+								>{/if}
+							<Button
+								variant="ghost"
+								size="icon"
+								class="grid size-6 shrink-0 place-items-center rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
 								aria-label="Remove {chip.info?.label ?? chip.id}"
 								onclick={() => toggle(chip.id)}
 							>
 								<X class="size-3" />
-							</button>
+							</Button>
 						</Badge>
 					{/each}
 				</div>

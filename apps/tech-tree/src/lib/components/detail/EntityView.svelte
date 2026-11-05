@@ -15,6 +15,7 @@
 		assetUrl,
 		type EntityKey,
 		type EntityDetail,
+		type EntityRef,
 		type UnlockItem,
 		type UnlockKind
 	} from '$lib/api';
@@ -94,8 +95,6 @@
 
 	// Some projects unlock well over a thousand items (e.g. territorial claims).
 	const UNLOCK_PREVIEW = 25;
-	// Unlock cards with stats start expanded only in small groups (drive families have up to 6 variants).
-	const OPEN_CARDS = 6;
 	let expanded = $state<Partial<Record<UnlockKind, boolean>>>({});
 	$effect(() => {
 		void entityKey;
@@ -135,7 +134,15 @@
 	import SpoilerChip from './SpoilerChip.svelte';
 	import DataTree from './DataTree.svelte';
 	import ReferenceGroups from './ReferenceGroups.svelte';
-	let { entityKey, inWiki = false }: { entityKey: EntityKey | null; inWiki?: boolean } = $props();
+	let {
+		entityKey,
+		inWiki = false,
+		shown = $bindable(null)
+	}: { entityKey: EntityKey | null; inWiki?: boolean; shown?: EntityRef | null } = $props();
+	// Lets the host name the loaded entity (e.g. in a sticky header).
+	$effect(() => {
+		shown = entity;
+	});
 	function treeAction(action: () => void) {
 		if (inWiki) wiki.open = false;
 		action();
@@ -257,7 +264,7 @@
 						</Badge>
 					{/if}
 					{#if ann?.dlc}
-						<Badge variant="outline" class="border-amber-500/70">DLC</Badge>
+						<Badge variant="outline" class="border-warning-border">DLC</Badge>
 					{/if}
 					{#if ann?.factions.length}
 						<Badge variant="outline" class="h-auto text-wrap">
@@ -282,7 +289,7 @@
 				Varies by scenario
 				<Tooltip.Root>
 					<Tooltip.Trigger
-						class="grid size-5 place-items-center rounded-sm hover:bg-warning/10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background focus-visible:outline-none"
+						class="grid size-6 place-items-center rounded-sm hover:bg-warning/10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background focus-visible:outline-none"
 						aria-label="Why this varies"
 					>
 						<Info class="size-3.5" />
@@ -390,10 +397,13 @@
 						{#each group.hidden as hidden, j (j)}
 							{@render or(j > 0 || group.options.length > 0)}
 							<Card.Content
-								class="inline px-0 opacity-60"
+								class="inline px-0"
 								title="Exists, but can't be researched in this scope (restricted to other factions)"
 							>
 								<EntityLink entity={hidden} />
+								<Card.Content class="inline px-0 text-xs text-muted-foreground"
+									>(not in this scope)</Card.Content
+								>
 							</Card.Content>
 						{/each}
 						{#each group.unresolved as name, j (j)}
@@ -434,11 +444,7 @@
 							{#each expanded[kind] ? items : items.slice(0, UNLOCK_PREVIEW) as item, i (`${i}:${item.entity.key}`)}
 								<Card.Content class="px-0">
 									{#if item.stats}
-										<UnlockCard
-											entity={item.entity}
-											stats={item.stats}
-											open={items.length <= OPEN_CARDS}
-										/>
+										<UnlockCard entity={item.entity} stats={item.stats} />
 									{:else}
 										<EntityLink entity={item.entity} />
 									{/if}
@@ -482,7 +488,7 @@
 		{#if detail.quote || (detail.description && !detail.effect) || (!inWiki && imageUrl && !imageFailed)}
 			{#key entity.key}<Collapsible.Root class="mt-6" open={false}>
 					<Collapsible.Trigger
-						class="group flex items-center gap-1 rounded-sm text-xs font-semibold tracking-wider text-muted-foreground uppercase hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
+						class="group flex items-center gap-1 rounded-sm py-1 text-xs font-semibold tracking-wider text-muted-foreground uppercase hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
 						><ChevronRight class="size-4 transition-transform group-data-[state=open]:rotate-90" /> Lore</Collapsible.Trigger
 					>
 					<Collapsible.Content class="flex flex-col gap-3 pt-3">
@@ -520,7 +526,7 @@
 		/>
 		{#key entity.key}<Collapsible.Root class="mt-6" open={false}>
 				<Collapsible.Trigger
-					class="group flex items-center gap-1 rounded-sm text-xs font-semibold tracking-wider text-muted-foreground uppercase hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
+					class="group flex items-center gap-1 rounded-sm py-1 text-xs font-semibold tracking-wider text-muted-foreground uppercase hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
 					><ChevronRight class="size-4 transition-transform group-data-[state=open]:rotate-90" /> Technical
 					details</Collapsible.Trigger
 				>

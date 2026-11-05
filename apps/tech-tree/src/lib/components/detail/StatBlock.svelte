@@ -4,37 +4,43 @@
 	import { SENTIMENT } from '$lib/effect-style';
 	import EntityLink from './EntityLink.svelte';
 
-	let { stats, wide = false }: { stats: EntityStats; wide?: boolean } = $props();
+	// `tags` is off where the caller already shows them (unlock card headers).
+	let {
+		stats,
+		wide = false,
+		tags = true
+	}: { stats: EntityStats; wide?: boolean; tags?: boolean } = $props();
 </script>
 
 <div class="space-y-3">
-	{#if stats.tags.length}
+	{#if tags && stats.tags.length}
 		<div class="flex flex-wrap gap-1">
 			{#each stats.tags as tag (tag)}
-				<Badge variant="secondary" class="h-5 px-1.5 text-[11px]">{tag}</Badge>
+				<Badge variant="secondary" class="h-5 px-1.5">{tag}</Badge>
 			{/each}
 		</div>
 	{/if}
 
 	{#each stats.groups as group (group.label)}
 		<section>
-			<h5 class="mb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+			<h5 class="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
 				{group.label}
 			</h5>
 			<dl
-				class="grid gap-2 {wide
-					? 'grid-cols-[repeat(auto-fill,minmax(9rem,1fr))]'
-					: 'grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))]'}"
+				class="grid gap-2 {wide ? 'grid-cols-[repeat(auto-fill,minmax(9rem,1fr))]' : 'grid-cols-2'}"
 			>
 				{#each group.stats as stat (stat.field)}
 					{@const url = assetUrl(stat.icon)}
-					<div class="min-w-0 rounded-md bg-muted/50 px-2 py-1" title="{stat.label} · {stat.field}">
-						<dt class="flex items-center gap-1 truncate text-[11px] text-muted-foreground">
+					<div
+						class="min-w-0 rounded-md bg-muted/50 px-2 py-1.5"
+						title="{stat.label} · {stat.field}"
+					>
+						<dt class="flex items-center gap-1 truncate text-xs text-muted-foreground">
 							{#if url}
 								<img
 									src={url}
 									alt=""
-									class="size-3.5 shrink-0 rounded-sm bg-zinc-800 object-contain p-px"
+									class="size-4 shrink-0 rounded-sm bg-icon-bg object-contain p-px"
 									draggable="false"
 								/>
 							{/if}
@@ -48,7 +54,7 @@
 							{stat.value}
 						</dd>
 						{#if stat.detail}
-							<dd class="truncate text-[10px] text-muted-foreground" title={stat.detail}>
+							<dd class="truncate text-xs text-muted-foreground" title={stat.detail}>
 								{stat.detail}
 							</dd>
 						{/if}
@@ -68,7 +74,7 @@
 
 	{#each stats.links as link (link.label)}
 		<div class="text-sm">
-			<h5 class="mb-0.5 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+			<h5 class="mb-0.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">
 				{link.label}
 			</h5>
 			<div class="flex flex-wrap gap-x-1">

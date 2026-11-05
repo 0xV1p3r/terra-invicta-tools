@@ -176,7 +176,7 @@
 							{#each group.hidden as hidden, j (j)}
 								{#if j > 0 || group.options.length}<span class="text-muted-foreground">or</span
 									>{/if}
-								<span class="inline-flex min-w-0 items-center gap-1 opacity-60">
+								<span class="inline-flex min-w-0 items-center gap-1 text-muted-foreground">
 									<EntityIcon entity={hidden} size={14} />
 									<span class="truncate">{hidden.name}</span>
 								</span>

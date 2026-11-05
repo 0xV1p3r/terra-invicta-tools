@@ -2,6 +2,7 @@
 	import { api, assetUrl, type SearchHit, type EntityKind, type TechCategory } from '$lib/api';
 	import { app } from '$lib/state.svelte';
 	import { KIND_LABELS } from '$lib/format';
+	import * as ToggleGroup from '$lib/components/ui/toggle-group';
 	import * as Command from '$lib/components/ui/command';
 	import { Button } from '$lib/components/ui/button';
 	import {
@@ -25,6 +26,20 @@
 	let loading = $state(false);
 	let error = $state<string | null>(null);
 	let retry = $state(0);
+	const searchLimit = 200;
+	let typeFilter = $state('all');
+	const filterTypes = ['All', 'Research', 'Equipment', 'Other'];
+	const filteredHits = $derived(
+		hits.filter(({ entity }) => {
+			const group =
+				entity.kind === 'tech' || entity.kind === 'project'
+					? 'Research'
+					: entity.kind === 'shipPart' || entity.kind === 'habModule'
+						? 'Equipment'
+						: 'Other';
+			return typeFilter === 'all' || typeFilter === group;
+		})
+	);
 	const icons = {
 		tech: FlaskConical,
 		project: Wrench,
@@ -61,7 +76,7 @@
 		if (!enabled || !text) return;
 		const timer = setTimeout(async () => {
 			try {
-				const results = await api.search(scope, text, 30);
+				const results = await api.search(scope, text, searchLimit);
 				if (!stale) hits = results;
 			} catch (cause) {
 				if (!stale) error = cause instanceof Error ? cause.message : String(cause);
@@ -119,6 +134,21 @@
 	class="sm:max-w-xl"
 >
 	<Command.Input bind:value={query} placeholder="Search entities…" aria-label="Search entities" />
+	<ToggleGroup.Root
+		type="single"
+		size="sm"
+		value={typeFilter}
+		onValueChange={(value) => {
+			if (value) typeFilter = value;
+		}}
+		aria-label="Filter search results by type"
+		class="mx-3 my-2 flex-wrap"
+		spacing={1}
+	>
+		{#each filterTypes as type (type)}
+			<ToggleGroup.Item value={type === 'All' ? 'all' : type}>{type}</ToggleGroup.Item>
+		{/each}
+	</ToggleGroup.Root>
 	<Command.List aria-busy={loading}>
 		{#if error}
 			<div class="flex flex-col items-start gap-3 px-4 py-6">
@@ -129,13 +159,13 @@
 			</div>
 		{:else if loading}
 			<div role="status" class="px-4 py-6 text-sm text-muted-foreground">Searching…</div>
-		{:else if !hits.length}
+		{:else if !filteredHits.length}
 			<div role="status" class="px-4 py-6 text-center text-sm text-muted-foreground">
-				{query.trim() ? 'No results' : 'Type to search'}
+				{query.trim() ? 'No results in this type' : 'Type to search'}
 			</div>
 		{:else}
 			<Command.Group heading="Results">
-				{#each hits as hit (hit.entity.key)}
+				{#each filteredHits as hit (hit.entity.key)}
 					{@const entity = hit.entity}
 					{@const Icon = icons[entity.kind]}
 					<Command.Item value={entity.key} onSelect={() => select(hit)}>
@@ -167,4 +197,9 @@
 			</Command.Group>
 		{/if}
 	</Command.List>
+	{#if !loading && !error && hits.length >= searchLimit}
+		<p role="status" class="border-t px-4 py-2 text-xs text-muted-foreground">
+			Showing first {hits.length} matches. Refine your search.
+		</p>
+	{/if}
 </Command.Dialog>
