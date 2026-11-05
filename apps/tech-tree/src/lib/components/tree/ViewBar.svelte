@@ -29,6 +29,9 @@
 			.replace(/([a-z])([A-Z])/g, '$1 $2')
 	);
 
+	const groupLabel =
+		'pr-0.5 pl-1 text-[0.6875rem] font-medium tracking-[0.04em] text-muted-foreground uppercase select-none';
+
 	// The full tree is reached with "Back to full tree".
 	const KINDS: { value: Exclude<ViewKind, 'full'>; label: string; title: string }[] = [
 		{
@@ -69,7 +72,7 @@
 	}
 </script>
 
-<div class="flex min-w-0 flex-wrap items-center gap-2">
+<div class="flex min-w-0 flex-wrap items-center justify-center gap-2">
 	<Pill class="max-w-full min-w-0 flex-wrap rounded-3xl" role="toolbar" aria-label="View">
 		{#if view.kind !== 'full'}
 			<Tip text="Back to the full tree, centered on the selection">
@@ -111,7 +114,7 @@
 		</Tip>
 
 		<PillDivider />
-		<span class="group-label" aria-hidden="true">View</span>
+		<span class={groupLabel} aria-hidden="true">View</span>
 		<ToggleGroup.Root
 			type="single"
 			size="sm"
@@ -131,7 +134,7 @@
 
 		{#if view.kind === 'full'}
 			<PillDivider />
-			<span class="group-label" aria-hidden="true">Layout</span>
+			<span class={groupLabel} aria-hidden="true">Layout</span>
 			<ToggleGroup.Root
 				type="single"
 				size="sm"
@@ -210,15 +213,3 @@
 		</div>
 	{/if}
 </div>
-
-<style>
-	.group-label {
-		padding-inline: 0.25rem 0.125rem;
-		font-size: 0.6875rem;
-		font-weight: 500;
-		letter-spacing: 0.04em;
-		text-transform: uppercase;
-		color: var(--muted-foreground);
-		user-select: none;
-	}
-</style>

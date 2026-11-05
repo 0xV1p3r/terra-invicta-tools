@@ -176,8 +176,8 @@ export function render(
 	ctx.globalAlpha = 1;
 
 	// --- edges ---------------------------------------------------------------
-	// Plain edges are bundled onto shared trunks and stay quiet so they don't knot up; only
-	// the hovered and selected nodes' own edges are drawn as strong individual curves.
+	// Edges are bundled onto shared trunks and plain ones stay quiet so they don't knot up;
+	// the hovered and selected nodes' own edges are drawn strongly along the same routes.
 	// Junction dots tell edges joining a trunk apart from ones crossing it.
 	const fade = Math.min(1, Math.max(0.2, z * 2)) * (overview ? 0.5 : 1);
 	const junctions = (alpha: number) => {
@@ -206,7 +206,7 @@ export function render(
 		junctions(Math.min(1, plainAlpha * 1.6));
 		if (lineage) {
 			ctx.globalAlpha = 0.5;
-			strokeEdges(ctx, lineage.edges, theme.foreground, Math.max(1.5, px), px);
+			strokeEdges(ctx, lineage.bundled, theme.foreground, Math.max(1.5, px), px);
 		}
 	}
 	// The selection's own edges: strong but a step below full contrast, so the rest of the
@@ -216,13 +216,13 @@ export function render(
 		ctx.globalAlpha = 0.8;
 		strokeEdges(ctx, highlight, theme.foreground, Math.max(2.5, 1.5 * px), px);
 	}
-	// The hovered node's complete routes, individually: its whole lineage faintly (unless it
-	// spans the tree) and its direct edges strongly, off the shared trunks.
+	// The hovered node's complete routes: its whole lineage faintly (unless it spans the
+	// tree) and its direct edges strongly.
 	if (state.hovered && state.hovered !== state.selected && scene.edgesOf.has(state.hovered)) {
 		const hoverLineage = cachedLineage(scene, state.hovered);
 		if (hoverLineage && !isBig(scene, hoverLineage)) {
 			ctx.globalAlpha = 0.45;
-			strokeEdges(ctx, hoverLineage.edges, theme.foreground, Math.max(1.5, px), px);
+			strokeEdges(ctx, hoverLineage.bundled, theme.foreground, Math.max(1.5, px), px);
 		}
 		ctx.globalAlpha = 0.9;
 		strokeEdges(ctx, scene.edgesOf.get(state.hovered)!, theme.foreground, Math.max(2, px), px);

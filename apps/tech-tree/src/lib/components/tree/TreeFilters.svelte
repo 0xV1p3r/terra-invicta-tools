@@ -17,6 +17,9 @@
 
 	type Kind = 'techs' | 'projects';
 
+	/** Joined toggle: the group draws the outer border, the items only the divider between them. */
+	const segment = `${pillToggle} h-[30px] rounded-none border-0 first:pl-3 last:border-l last:pr-3 focus-visible:ring-inset focus-visible:ring-offset-0`;
+
 	const disabled = $derived(app.mode !== 'full');
 	const kinds = $derived<Kind[]>([
 		...(app.showTechs ? ['techs' as const] : []),
@@ -39,18 +42,21 @@
 </script>
 
 <Pill aria-label="Tree filters">
+	<!-- One segmented control: the bordered group is as tall as the other pill controls. -->
 	<ToggleGroup.Root
 		type="multiple"
 		size="sm"
-		spacing={0.5}
+		variant="outline"
+		spacing={0}
 		{disabled}
 		bind:value={() => kinds, setKinds}
+		class="overflow-hidden rounded-full border border-input data-[size=sm]:rounded-full"
 		aria-label="Research kinds"
 	>
-		<ToggleGroup.Item value="techs" aria-label="Show techs" class={pillToggle}>
+		<ToggleGroup.Item value="techs" aria-label="Show techs" class={segment}>
 			<FlaskConical /> Techs
 		</ToggleGroup.Item>
-		<ToggleGroup.Item value="projects" aria-label="Show projects" class={pillToggle}>
+		<ToggleGroup.Item value="projects" aria-label="Show projects" class={segment}>
 			<Wrench /> Projects
 		</ToggleGroup.Item>
 	</ToggleGroup.Root>

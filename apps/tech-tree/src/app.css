@@ -215,3 +215,47 @@
 		@apply bg-background text-foreground;
 	}
 }
+
+/*
+ * Component styles live here rather than in Svelte <style> blocks: after a dev-server
+ * restart the webview can request a component's virtual CSS module before Svelte compiled
+ * it, and @tailwindcss/vite then parses the whole component as CSS ("Invalid declaration").
+ */
+
+/* Dot grid behind the tree, quieter while a selection or search dims the rest. */
+.tree-surface {
+	--dot: 18%;
+	background-image: radial-gradient(
+		circle,
+		color-mix(in oklab, var(--muted-foreground) var(--dot), transparent) 1px,
+		transparent 1.2px
+	);
+}
+.dark .tree-surface {
+	--dot: 26%;
+}
+.tree-surface.quiet {
+	--dot: 9%;
+}
+.dark .tree-surface.quiet {
+	--dot: 14%;
+}
+
+/* WebKitGTK rasterizes translated/zoomed dialog layers at fractional pixels. */
+.wiki-dialog {
+	transform: none;
+	--tw-enter-scale: 1;
+	--tw-exit-scale: 1;
+	animation-name: wiki-fade;
+}
+.wiki-dialog[data-state='closed'] {
+	animation-direction: reverse;
+}
+@keyframes wiki-fade {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
