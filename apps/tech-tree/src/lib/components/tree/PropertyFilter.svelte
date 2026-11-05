@@ -142,10 +142,13 @@
 		</Popover.Trigger>
 	</Tip>
 	<Popover.Content class="w-[30rem] p-0" align="start">
-		<Command.Root class="rounded-lg!" {filter}>
+		<Command.Root
+			class="rounded-lg! [&_[data-slot=command-input-wrapper]]:border-border [&_[data-slot=command-input-wrapper]]:shadow-none [&_[data-slot=command-input-wrapper]]:focus-within:rounded-md [&_[data-slot=command-input-wrapper]]:focus-within:outline-2 [&_[data-slot=command-input-wrapper]]:focus-within:-outline-offset-2 [&_[data-slot=command-input-wrapper]]:focus-within:outline-ring"
+			{filter}
+		>
 			<Command.Input
 				aria-label="Search effects"
-				placeholder="Filter by effect, e.g. control point, mining…"
+				placeholder="Filter by effect, ability or unlock…"
 			/>
 			<div
 				class="flex items-center justify-between gap-2 border-b px-3 py-1.5 text-xs text-muted-foreground"
