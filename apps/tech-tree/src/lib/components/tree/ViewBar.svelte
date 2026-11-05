@@ -57,8 +57,8 @@
 
 	const DIRECTIONS: { value: Direction; label: string; title: string }[] = [
 		{ value: 'up', label: 'Requirements', title: 'Everything needed to research the root' },
-		{ value: 'down', label: 'Dependents', title: 'Everything the root leads to' },
-		{ value: 'both', label: 'Both', title: 'Requirements and dependents' }
+		{ value: 'down', label: 'Unlocks', title: 'Everything the root unlocks, all the way down' },
+		{ value: 'both', label: 'Both', title: 'Requirements and unlocks' }
 	];
 
 	function setKind(kind: ViewKind) {
@@ -197,12 +197,14 @@
 	{/if}
 
 	{#if graph && view.kind !== 'full'}
-		<span
-			class="pointer-events-auto px-2 text-xs text-muted-foreground"
-			title="{formatCostFull(graph.totalCost)} research"
+		<div
+			class="pointer-events-auto flex flex-wrap items-center gap-x-4 gap-y-1 px-2 text-xs text-muted-foreground"
 		>
-			{graph.nodes.length} items · {formatCost(graph.totalCost)} research for root
-		</span>
+			<span>{graph.nodes.length} items</span>
+			<span title="{rootName} + requirements: {formatCostFull(graph.totalCost)} research">
+				{rootName} + requirements: {formatCost(graph.totalCost)} research
+			</span>
+		</div>
 	{/if}
 </div>
 

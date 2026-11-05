@@ -62,6 +62,11 @@ export interface Scene {
 	 * edges sharing a gap are drawn as one line there instead of a band of crossing curves.
 	 */
 	bundled: EdgePaths;
+	/**
+	 * Dots where a bundled edge joins or leaves a trunk that other edges share, so junctions
+	 * read differently from edges merely crossing a trunk.
+	 */
+	junctions: Path2D;
 	edgeList: SceneEdge[];
 	/** Edges touching a node (for highlighting the selection). */
 	edgesOf: Map<EntityKey, EdgePaths>;
@@ -95,11 +100,22 @@ function edgePath(sx: number, sy: number, tx: number, ty: number, points: [numbe
 /** Corner radius of bundled edges where they turn onto and off a trunk. */
 const TURN = 16;
 
+/** Vertical part of a bundled edge on a trunk: trunk x, then the y it turns on and off at. */
+type TrunkSegment = [x: number, from: number, to: number];
+
 /**
  * Like `edgePath`, but each gap is crossed orthogonally through the gap's middle, where it
- * meets every other edge crossing the same gap (backward hops keep their curve).
+ * meets every other edge crossing the same gap (backward hops keep their curve). Trunk
+ * segments are added to `segments`.
  */
-function bundledPath(sx: number, sy: number, tx: number, ty: number, points: [number, number][]) {
+function bundledPath(
+	sx: number,
+	sy: number,
+	tx: number,
+	ty: number,
+	points: [number, number][],
+	segments: TrunkSegment[]
+) {
 	const p = new Path2D();
 	p.moveTo(sx, sy);
 	let [x, y] = [sx, sy];
@@ -112,6 +128,7 @@ function bundledPath(sx: number, sy: number, tx: number, ty: number, points: [nu
 		} else {
 			const mid = (x + px) / 2;
 			const r = Math.min(TURN, Math.abs(py - y) / 2, (px - x) / 2);
+			segments.push([mid, y, py]);
 			p.arcTo(mid, y, mid, py, r);
 			p.arcTo(mid, py, px, py, r);
 			p.lineTo(px, py);
@@ -177,16 +194,18 @@ export function buildScene(graph: TreeGraph, options: SceneOptions): Scene {
 	const bundled: EdgePaths = { solid: new Path2D(), dashed: new Path2D() };
 	const edgesOf = new Map<EntityKey, EdgePaths>();
 	const edgeList: SceneEdge[] = [];
+	const segments: TrunkSegment[] = [];
 	for (const e of graph.edges) {
 		const from = byKey.get(e.from);
 		const to = byKey.get(e.to);
 		if (!from || !to) continue;
 		const ends = [from.x + w, from.y + h / 2, to.x, to.y + h / 2] as const;
 		const path = edgePath(...ends, e.points);
-		const trunked = bundledPath(...ends, e.points);
+		const hidden = e.redundant && options.hideRedundant;
+		const trunked = bundledPath(...ends, e.points, hidden ? [] : segments);
 		edgeList.push({ from: e.from, to: e.to, alternative: e.alternative, path, bundled: trunked });
 		const kind = e.alternative ? 'dashed' : 'solid';
-		if (!(e.redundant && options.hideRedundant)) {
+		if (!hidden) {
 			edges[kind].addPath(path);
 			bundled[kind].addPath(trunked);
 		}
@@ -206,10 +225,43 @@ export function buildScene(graph: TreeGraph, options: SceneOptions): Scene {
 		bounds,
 		edges,
 		bundled,
+		junctions: junctionDots(segments),
 		edgeList,
 		edgesOf,
 		grid
 	};
+}
+
+/** Radius (world px) of trunk junction dots. */
+export const JUNCTION_RADIUS = 4;
+
+/**
+ * Dots at the turns onto/off a trunk that another segment of the same trunk also reaches
+ * (a lone corner, or an edge crossing a trunk straight, gets none).
+ */
+function junctionDots(segments: TrunkSegment[]) {
+	const trunks = new Map<number, [number, number][]>();
+	for (const [x, a, b] of segments) {
+		const k = Math.round(x);
+		const span: [number, number] = [Math.min(a, b), Math.max(a, b)];
+		const list = trunks.get(k);
+		if (list) list.push(span);
+		else trunks.set(k, [span]);
+	}
+	const dots = new Path2D();
+	for (const [x, spans] of trunks) {
+		if (spans.length < 2) continue;
+		const ys = new Set<number>();
+		for (const [a, b] of spans) ys.add(Math.round(a)).add(Math.round(b));
+		for (const y of ys) {
+			let touching = 0;
+			for (const [a, b] of spans) if (a - 0.5 <= y && y <= b + 0.5 && ++touching > 1) break;
+			if (touching < 2) continue;
+			dots.moveTo(x + JUNCTION_RADIUS, y);
+			dots.arc(x, y, JUNCTION_RADIUS, 0, 2 * Math.PI);
+		}
+	}
+	return dots;
 }
 
 /** Walk each direction separately to keep unrelated branches out of the lineage. */
