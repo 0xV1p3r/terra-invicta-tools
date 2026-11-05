@@ -68,13 +68,15 @@ export interface RenderState {
 	glyphs: Map<string, Path2D>;
 	/** Filter matches in highlight mode (others are dimmed); null = no highlighting. */
 	matches: ReadonlySet<EntityKey> | null;
-	/** Draw the far-out overview (category blocks, landmark labels) below `OVERVIEW_ZOOM`. */
+	/** Draw the far-out overview (category blocks) below `OVERVIEW_ZOOM`. */
 	overview: boolean;
+	/** Label the most important research below `NAME_ZOOM`. */
+	landmarks: boolean;
 }
 
 /** Zoom from which cards show icon, name and badges. */
 export const DETAIL_ZOOM = 0.45;
-/** Zoom from which zoomed-out cards show their (large) name; below it landmarks label the tree. */
+/** Zoom from which zoomed-out cards show their (large) name; below it landmarks (if enabled) label the tree. */
 const NAME_ZOOM = 0.18;
 /** Zoom below which the overview (if enabled) replaces cards with category blocks. */
 export const OVERVIEW_ZOOM = 0.1;
@@ -373,7 +375,8 @@ export function render(
 
 	// --- screen-space labels (constant size) -------------------------------------
 	ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-	if (z < NAME_ZOOM) drawLandmarks(ctx, camera, scene, visible, state, unrelated);
+	if (state.landmarks && z < NAME_ZOOM)
+		drawLandmarks(ctx, camera, scene, visible, state, unrelated);
 	if (scene.graph.bands.length) drawBandLabels(ctx, camera, scene, theme, bandPad);
 	ctx.globalAlpha = 1;
 }

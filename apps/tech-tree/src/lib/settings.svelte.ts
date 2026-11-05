@@ -13,8 +13,10 @@ export interface Settings {
 	mergeLinks: boolean;
 	/** Full-tree filters remove non-matching research, or only dim it (layout stays put). */
 	filterMode: FilterMode;
-	/** Zoomed far out: plain category blocks with screen-sized landmark labels. */
+	/** Zoomed far out: plain category blocks instead of cards. */
 	overviewLabels: boolean;
+	/** Zoomed out: screen-sized name labels on the most depended-on research. */
+	landmarkLabels: boolean;
 	/** Corner of the tree canvas the minimap sits in. */
 	minimapCorner: Corner;
 }
@@ -25,6 +27,7 @@ const DEFAULTS: Settings = {
 	mergeLinks: true,
 	filterMode: 'hide',
 	overviewLabels: true,
+	landmarkLabels: false,
 	minimapCorner: 'top-left'
 };
 
