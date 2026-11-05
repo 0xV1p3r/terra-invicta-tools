@@ -34,8 +34,41 @@
 			(app.categories.length ? CATEGORY_ORDER.length - app.categories.length : 0) +
 			app.properties.length
 	);
+	const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+	// Filters don't apply outside the full tree, so the collapsed control calls them saved.
+	const savedSummary = $derived(
+		[
+			...(app.showTechs ? [] : ['techs hidden']),
+			...(app.showProjects ? [] : ['projects hidden']),
+			...(app.categories.length
+				? [`${plural(CATEGORY_ORDER.length - app.categories.length, 'category')} hidden`]
+				: []),
+			...(app.properties.length ? [plural(app.properties.length, 'effect')] : [])
+		].join(', ')
+	);
 	const collapsedReason = $derived(
-		`Back to the full tree to filter${activeCount ? ` · ${activeCount} active` : ''}. Filters apply to the full tree only.`
+		activeCount
+			? `Back to the full tree to filter. ${plural(activeCount, 'saved filter')} ${activeCount === 1 ? 'applies' : 'apply'} again there: ${savedSummary}.`
+			: 'Back to the full tree to filter. Filters apply to the full tree only.'
+	);
+	/**
+	 * Container widths at which the collapsed control fits its label: Focus view has no
+	 * Relationships group, so it has room much sooner. Literal classes so Tailwind finds them.
+	 */
+	const labelled = $derived(
+		app.mode === 'focus'
+			? {
+					button: '@min-[1100px]:w-auto @min-[1100px]:gap-1.5 @min-[1100px]:px-2',
+					label: '@min-[1100px]:inline',
+					undo: '@min-[1100px]:hidden',
+					badge: '@min-[1100px]:h-4 @min-[1100px]:min-w-4 @min-[1100px]:px-1 @min-[1100px]:text-xs'
+				}
+			: {
+					button: '@min-[1800px]:w-auto @min-[1800px]:gap-1.5 @min-[1800px]:px-2',
+					label: '@min-[1800px]:inline',
+					undo: '@min-[1800px]:hidden',
+					badge: '@min-[1800px]:h-4 @min-[1800px]:min-w-4 @min-[1800px]:px-1 @min-[1800px]:text-xs'
+				}
 	);
 	const kinds = $derived<Kind[]>([
 		...(app.showTechs ? ['techs' as const] : []),
@@ -87,8 +120,10 @@
 			<Button
 				variant="ghost"
 				size="sm"
-				class="{pillItem} gap-1.5 px-2 text-xs @max-[1800px]:size-8 @max-[1800px]:px-0 @max-[1800px]:has-[>svg]:px-0"
-				aria-label={`Full tree to filter${activeCount ? ` · ${activeCount}` : ''}`}
+				class="{pillItem} gap-1 text-xs {activeCount
+					? 'w-10 justify-start pr-1 pl-1.5'
+					: 'w-8 px-0'} {labelled.button}"
+				aria-label={`Full tree to filter${activeCount ? `, ${plural(activeCount, 'saved filter')}` : ''}`}
 				onclick={async () => {
 					app.showFullTree(app.selected ?? app.root);
 					// Focusing a filtered-out node makes the canvas clear every filter.
@@ -98,15 +133,16 @@
 					techsButton?.focus();
 				}}
 			>
-				<!-- Icon-only below 1800px: a return arrow on the funnel, and the count as a corner badge. -->
+				<!-- Icon-only while the label doesn't fit: a return arrow on the funnel, the count beside it. -->
 				<span class="relative inline-flex" aria-hidden="true"
 					><Funnel /><Undo2
-						class="absolute -bottom-1 -left-1.5 size-2.5! rounded-sm bg-muted stroke-3 @min-[1800px]:hidden"
+						class="absolute -bottom-1 -left-1.5 size-2.5! rounded-sm bg-muted stroke-3 {labelled.undo}"
 					/></span
 				>
-				<span class="@max-[1800px]:hidden">Full tree to filter</span>
+				<span class="hidden {labelled.label}">Full tree filters</span>
 				{#if activeCount}<Badge
-						class="h-4 min-w-4 justify-center px-1 tabular-nums @max-[1800px]:absolute @max-[1800px]:top-0.5 @max-[1800px]:right-0.5 @max-[1800px]:h-3.5 @max-[1800px]:min-w-3.5 @max-[1800px]:px-0.5 @max-[1800px]:text-[0.625rem] @max-[1800px]:leading-none"
+						aria-hidden="true"
+						class="h-3.5 min-w-3.5 justify-center px-0.5 text-[0.625rem] leading-none tabular-nums {labelled.badge}"
 						>{activeCount}</Badge
 					>{/if}
 			</Button>
@@ -161,7 +197,7 @@
 				{@const last = on && shown.length === 1}
 				<!-- The last shown category can't be hidden (setShown keeps it on). -->
 				<Tip
-					text={`${CATEGORIES[category].label} — ${last ? 'the only category shown' : on ? 'shown. Click to hide' : 'hidden. Click to show'} · Shift+click: ${last ? 'show all' : 'only this'}`}
+					text={`${CATEGORIES[category].label} — ${last ? 'at least one category stays shown' : on ? 'shown. Click to hide' : 'hidden. Click to show'} · Shift+click: ${last ? 'show all' : 'only this'}`}
 				>
 					<ToggleGroup.Item
 						value={category}
