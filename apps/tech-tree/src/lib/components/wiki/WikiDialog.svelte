@@ -241,7 +241,7 @@
 				{...props}
 				variant="ghost"
 				size="sm"
-				class="rounded-full"
+				class="h-8"
 				disabled={!app.meta}
 				onclick={() => wiki.show()}
 				aria-keyshortcuts="Control+Shift+k Meta+Shift+k"><BookOpen /> Wiki</Button

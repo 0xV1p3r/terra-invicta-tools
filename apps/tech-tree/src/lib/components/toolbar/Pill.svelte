@@ -1,12 +1,15 @@
 <script lang="ts" module>
-	/** Borderless control inside a pill: every control in the toolbar shares this height. */
-	export const pillItem = 'h-8 rounded-full px-2.5 has-[>svg]:px-2';
-	/** A toggle inside a pill: filled with the primary color while on, in both themes. */
-	export const pillToggle = `${pillItem} border-0 font-normal data-[state=on]:bg-primary data-[state=on]:font-medium data-[state=on]:text-primary-foreground data-[state=on]:hover:bg-primary/90 data-[state=on]:hover:text-primary-foreground`;
+	/** Borderless toolbar control: every control in the toolbar shares this height. */
+	export const pillItem = 'h-8 rounded-md px-2.5 has-[>svg]:px-2';
+	/**
+	 * A toolbar toggle. While on it is a raised tile (like a segmented control) rather than a
+	 * primary fill, which glared against the muted toolbar.
+	 */
+	export const pillToggle = `${pillItem} border-0 font-normal text-muted-foreground hover:bg-accent/60 data-[state=on]:bg-background data-[state=on]:font-medium data-[state=on]:text-foreground data-[state=on]:shadow-xs data-[state=on]:ring-1 data-[state=on]:ring-border data-[state=on]:hover:bg-background data-[state=on]:hover:text-foreground dark:data-[state=on]:bg-input dark:data-[state=on]:hover:bg-input`;
 </script>
 
 <script lang="ts">
-	// A floating group of related controls over the tree canvas.
+	// A group of related controls in the toolbar; the toolbar draws the dividers between groups.
 	import type { Snippet } from 'svelte';
 	import type { HTMLAttributes } from 'svelte/elements';
 	import { cn } from '$lib/utils.js';
@@ -20,10 +23,7 @@
 
 <div
 	role="group"
-	class={cn(
-		'pointer-events-auto flex min-h-10 items-center gap-0.5 rounded-full border bg-card/90 p-1 text-sm shadow-md backdrop-blur',
-		className
-	)}
+	class={cn('flex min-h-10 items-center gap-0.5 px-2 text-sm', className)}
 	{...rest}
 >
 	{@render children()}

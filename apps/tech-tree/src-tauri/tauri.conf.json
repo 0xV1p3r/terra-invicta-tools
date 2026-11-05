@@ -10,7 +10,15 @@
 		"frontendDist": "../build"
 	},
 	"app": {
-		"windows": [{ "title": "Terra Invicta Tech Tree", "width": 1600, "height": 1000 }],
+		"windows": [
+			{
+				"title": "Terra Invicta Tech Tree",
+				"width": 1720,
+				"height": 1000,
+				"minWidth": 1720,
+				"minHeight": 720
+			}
+		],
 		"security": { "csp": null }
 	},
 	"bundle": {

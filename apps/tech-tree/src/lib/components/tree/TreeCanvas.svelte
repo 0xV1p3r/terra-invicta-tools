@@ -2,7 +2,7 @@
 	// The research tree view: one <canvas> drawn by `render.ts` from a camera, plus DOM
 	// overlays (controls, minimap, hover card, status). Performance-first replacement for
 	// xyflow, whose DOM cards made WebKitGTK (Tauri on Linux) stutter on pan and freeze on zoom.
-	import { onDestroy, onMount, tick, untrack, type Snippet } from 'svelte';
+	import { onDestroy, onMount, tick, untrack } from 'svelte';
 	import Keyboard from '@lucide/svelte/icons/keyboard';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import Maximize from '@lucide/svelte/icons/maximize';
@@ -31,11 +31,10 @@
 	import MiniMap from './MiniMap.svelte';
 	import { DETAIL_ZOOM, readTheme, render, type Theme } from './render';
 	import { buildScene, nodeAt, type SceneNode } from './scene';
-	import ViewBar from './ViewBar.svelte';
 	import ViewStats from './ViewStats.svelte';
 
-	/** Floating toolbar pills placed before and after the view controls. */
-	let { leading, trailing }: { leading?: Snippet; trailing?: Snippet } = $props();
+	/** The graph on screen once it matches the current view, for the toolbar (bindable). */
+	let { graph: shown = $bindable(null) }: { graph?: TreeGraph | null } = $props();
 
 	const NO_FILTER: TreeFilter = { techs: true, projects: true, categories: [], properties: [] };
 
@@ -82,6 +81,9 @@
 
 	const graph = $derived(loaded?.graph ?? null);
 	const ready = $derived(loaded?.key === requestKey);
+	$effect(() => {
+		shown = ready ? graph : null;
+	});
 	const scene = $derived(
 		graph ? buildScene(graph, { hideRedundant: settings.hideRedundantLinks }) : null
 	);
@@ -139,8 +141,6 @@
 	let surface = $state<HTMLDivElement>();
 	let width = $state(0);
 	let height = $state(0);
-	/** Height of the floating toolbar; top-anchored overlays sit below it. */
-	let toolbarHeight = $state(0);
 	let dpr = $state(typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1);
 	let theme = $state.raw<Theme | null>(null);
 	let hovered = $state<EntityKey | null>(null);
@@ -214,28 +214,20 @@
 	// --- overlays ---------------------------------------------------------------------
 
 	/**
-	 * Screen rectangles of the floating overlays (`data-overlay` elements, and the children
-	 * of `data-overlay-group` ones), which camera fits and landmark labels keep clear of.
+	 * Screen rectangles of the floating overlays (`data-overlay` elements), which camera fits
+	 * and landmark labels keep clear of.
 	 * Measured when they resize or move, not per frame.
 	 */
 	function measureOverlays() {
 		if (!container) return;
 		const base = container.getBoundingClientRect();
 		const rects: { x: number; y: number; width: number; height: number }[] = [];
-		const add = (el: Element) => {
-			if (el.hasAttribute('data-overlay-group')) {
-				for (const child of el.children) add(child);
-				return;
-			}
+		for (const el of container.querySelectorAll(':scope > [data-overlay]')) {
 			const r = el.getBoundingClientRect();
-			if (!r.width || !r.height) return;
+			if (!r.width || !r.height) continue;
 			rects.push({ x: r.left - base.left, y: r.top - base.top, width: r.width, height: r.height });
 			observeOverlay(el);
-		};
-		for (const el of container.querySelectorAll(
-			':scope > [data-overlay], :scope > [data-overlay-group]'
-		))
-			add(el);
+		}
 		camera.overlays = rects;
 		requestRender();
 	}
@@ -262,9 +254,9 @@
 		cancelAnimationFrame(overlayFrame);
 	});
 
-	// Overlays move with the minimap corner, the view (toolbar contents) and the window size.
+	// Overlays move with the minimap corner, the view and the window size.
 	$effect(() => {
-		void [settings.minimapCorner, app.view, scene, width, height, toolbarHeight];
+		void [settings.minimapCorner, app.view, scene, width, height];
 		tick().then(measureOverlays);
 	});
 
@@ -612,7 +604,6 @@
 		bind:this={container}
 		class="tree-surface relative size-full overflow-hidden bg-background"
 		class:quiet
-		style:--toolbar-h="{toolbarHeight}px"
 		bind:clientWidth={width}
 		bind:clientHeight={height}
 	>
@@ -718,7 +709,7 @@
 		</div>
 
 		<div
-			class="pointer-events-none absolute top-[max(var(--toolbar-h),0.75rem)] left-1/2 flex -translate-x-1/2 flex-col items-center gap-2"
+			class="pointer-events-none absolute top-3 left-1/2 flex -translate-x-1/2 flex-col items-center gap-2"
 		>
 			{#if ready && graph && app.view.kind !== 'full'}
 				<ViewStats {graph} />
@@ -743,20 +734,9 @@
 			{/if}
 		{/if}
 
-		<!-- Floating toolbar; clicks between the pills reach the tree. -->
-		<div
-			class="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-wrap items-start justify-center gap-2 p-3"
-			data-overlay-group
-			bind:clientHeight={toolbarHeight}
-		>
-			<ViewBar graph={ready ? graph : null} />
-			{@render leading?.()}
-			{@render trailing?.()}
-		</div>
-
 		{#if loading}
 			<div
-				class="pointer-events-none absolute top-[max(var(--toolbar-h),0.75rem)] left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full border bg-card px-3 py-1 text-sm text-muted-foreground shadow"
+				class="pointer-events-none absolute top-3 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full border bg-card px-3 py-1 text-sm text-muted-foreground shadow"
 				role="status"
 			>
 				<LoaderCircle class="size-4 animate-spin" /> Loading tree…
