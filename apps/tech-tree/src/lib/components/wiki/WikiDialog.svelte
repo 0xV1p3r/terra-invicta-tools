@@ -16,7 +16,7 @@
 	import EntityIcon from '$lib/components/detail/EntityIcon.svelte';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import * as Card from '$lib/components/ui/card';
-	import * as Tooltip from '$lib/components/ui/tooltip';
+	import Tip from '$lib/components/toolbar/Tip.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Input } from '$lib/components/ui/input';
@@ -235,20 +235,17 @@
 		></Label
 	><Switch {id} bind:checked={settings.wikiSpoilers} />{/snippet}
 <svelte:window onkeydown={shortcut} />
-<Tooltip.Root
-	><Tooltip.Trigger
-		>{#snippet child({ props })}<Button
-				{...props}
-				variant="ghost"
-				size="sm"
-				class="h-8"
-				disabled={!app.meta}
-				onclick={() => wiki.show()}
-				aria-keyshortcuts="Control+Shift+k Meta+Shift+k"
-				><BookOpen /><span class="sr-only @min-[1800px]:not-sr-only">Wiki</span></Button
-			>{/snippet}</Tooltip.Trigger
-	><Tooltip.Content>Browse the wiki (Ctrl/Cmd+Shift+K)</Tooltip.Content></Tooltip.Root
->
+<Tip text="Browse the wiki" shortcut="Ctrl+Shift+K">
+	<Button
+		variant="ghost"
+		size="sm"
+		class="h-8"
+		disabled={!app.meta}
+		onclick={() => wiki.show()}
+		aria-keyshortcuts="Control+Shift+k Meta+Shift+k"
+		><BookOpen /><span class="sr-only @min-[1800px]:not-sr-only">Wiki</span></Button
+	>
+</Tip>
 <Dialog.Root bind:open={wiki.open}>
 	<Dialog.Content
 		overlayClass="bg-black/50 supports-backdrop-filter:backdrop-blur-none"

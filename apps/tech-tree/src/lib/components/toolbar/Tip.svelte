@@ -1,7 +1,7 @@
 <script lang="ts">
 	// Tooltip for a toolbar control, with its keyboard shortcut. The trigger is a wrapper so the
 	// tooltip also shows while the control is disabled (disabled buttons get no pointer events).
-	// The wrapper itself is not focusable: focus on the control inside opens the tooltip, and the
+	// The wrapper itself is not focusable: focus on a control inside opens the tooltip, and that
 	// control (not the wrapper) is described by it.
 	import type { Snippet } from 'svelte';
 	import type { Attachment } from 'svelte/attachments';
@@ -19,11 +19,25 @@
 		children: Snippet;
 	} = $props();
 
-	/** Points the wrapped control's aria-describedby at the open tooltip. */
-	function describe(id: string | undefined): Attachment<HTMLElement> {
+	const controls = 'button, input, [role="combobox"], [tabindex]';
+	/** The control last focused or hovered inside the wrapper; it gets the description. */
+	let active = $state<HTMLElement | null>(null);
+
+	function track(e: Event) {
+		const wrapper = e.currentTarget as HTMLElement;
+		const control = (e.target as HTMLElement).closest<HTMLElement>(controls);
+		if (control && control !== wrapper && wrapper.contains(control)) active = control;
+		else {
+			// Pointer over a disabled control lands on the wrapper: use the only control, if any.
+			const all = wrapper.querySelectorAll<HTMLElement>(controls);
+			if (all.length === 1) active = all[0];
+		}
+	}
+
+	/** Points the active control's aria-describedby at the open tooltip. */
+	function describe(id: string | undefined, control: HTMLElement | null): Attachment<HTMLElement> {
 		return (wrapper) => {
-			const control = wrapper.querySelector<HTMLElement>('button, input, [tabindex]');
-			if (!id || !control) return;
+			if (!id || !control || !wrapper.contains(control)) return;
 			const previous = control.getAttribute('aria-describedby');
 			control.setAttribute('aria-describedby', previous ? `${previous} ${id}` : id);
 			return () => {
@@ -47,9 +61,13 @@
 			<span
 				{...rest}
 				class="inline-flex"
-				onfocusin={onfocus as (e: FocusEvent) => void}
+				onpointerover={track}
+				onfocusin={(e) => {
+					track(e);
+					(onfocus as (e: FocusEvent) => void)?.(e);
+				}}
 				onfocusout={onblur as (e: FocusEvent) => void}
-				{@attach describe(describedBy as string | undefined)}>{@render children()}</span
+				{@attach describe(describedBy as string | undefined, active)}>{@render children()}</span
 			>
 		{/snippet}
 	</Tooltip.Trigger>

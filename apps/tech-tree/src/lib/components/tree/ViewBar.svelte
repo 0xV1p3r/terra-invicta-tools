@@ -27,9 +27,10 @@
 			.replace(/([a-z])([A-Z])/g, '$1 $2')
 	);
 
-	// Group captions only on wide toolbars; the toggles are labelled for assistive tech anyway.
+	// Group captions; the toggles are labelled for assistive tech anyway. "Layout" always shows, so
+	// the two mode sets don't read as one; "View" only where the toolbar has room to spare.
 	const groupLabel =
-		'hidden pr-0.5 pl-1 @min-[1800px]:inline text-[0.6875rem] font-medium tracking-[0.04em] text-muted-foreground uppercase select-none';
+		'translate-y-px pr-0.5 pl-1 text-[0.6875rem] font-medium tracking-[0.04em] text-muted-foreground uppercase select-none';
 
 	const KINDS: { value: ViewKind; label: string; title: string }[] = [
 		{ value: 'full', label: 'Full tree', title: 'Full tree: every tech and project' },
@@ -108,20 +109,20 @@
 	</Tip>
 
 	<PillDivider />
-	<span class={groupLabel} aria-hidden="true">View</span>
+	<span class="{groupLabel} hidden @min-[1800px]:inline" aria-hidden="true">View</span>
 	<ToggleGroup.Root
 		type="single"
 		size="sm"
 		spacing={0.5}
-		value={view.kind}
-		onValueChange={(v) => v && setKind(v as ViewKind)}
+		bind:value={() => view.kind, (v) => v && setKind(v as ViewKind)}
 		aria-label="View: what is shown"
 	>
 		{#each KINDS as k (k.value)}
 			<Tip text={kindTitle(k)}>
+				<!-- aria-disabled rather than disabled, so keyboard users can reach the explanation. -->
 				<ToggleGroup.Item
 					value={k.value}
-					disabled={k.value !== 'full' && !candidate}
+					aria-disabled={k.value !== 'full' && !candidate}
 					class={pillToggle}
 				>
 					{k.label}

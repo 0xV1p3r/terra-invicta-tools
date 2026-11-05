@@ -4,9 +4,11 @@
 	import * as Select from '$lib/components/ui/select';
 	import { Badge } from '$lib/components/ui/badge';
 	import Pill, { pillItem } from '$lib/components/toolbar/Pill.svelte';
+	import Tip from '$lib/components/toolbar/Tip.svelte';
 	// Borderless triggers, like the other toolbar controls. A fixed width keeps the toolbar from
-	// reflowing when a long scenario or faction name is chosen; the label truncates instead.
-	const trigger = `${pillItem} justify-between @min-[1800px]:w-40 border-0 bg-transparent shadow-none hover:bg-accent dark:bg-transparent dark:hover:bg-accent/50 data-[size=sm]:h-8 data-[size=sm]:rounded-md`;
+	// reflowing when a long scenario or faction name is chosen; the faction trigger fits every
+	// faction, a long scenario truncates, and the tooltip carries the full value.
+	const trigger = `${pillItem} justify-between border-0 bg-transparent shadow-none hover:bg-accent dark:bg-transparent dark:hover:bg-accent/50 data-[size=sm]:h-8 data-[size=sm]:rounded-md`;
 	const all = '__all__';
 	let listed = $derived(app.meta?.scenarios.filter((s) => s.listed) ?? []);
 	let other = $derived(app.meta?.scenarios.filter((s) => !s.listed) ?? []);
@@ -25,9 +27,11 @@
 			app.scope = { ...app.scope, scenario: value === all ? null : value };
 		}}
 	>
-		<Select.Trigger size="sm" class="{trigger} w-32" aria-label="Scenario"
-			><span class="min-w-0 truncate">{scenarioLabel}</span></Select.Trigger
-		>
+		<Tip text="Scenario: {scenarioLabel}">
+			<Select.Trigger size="sm" class="{trigger} w-32 @min-[1800px]:w-44" aria-label="Scenario"
+				><span class="min-w-0 truncate">{scenarioLabel}</span></Select.Trigger
+			>
+		</Tip>
 		<Select.Content>
 			<Select.Group>
 				<Select.Item value={all} label="All scenarios">All scenarios</Select.Item>
@@ -64,15 +68,17 @@
 			app.scope = { ...app.scope, faction: value === all ? null : value };
 		}}
 	>
-		<Select.Trigger size="sm" class="{trigger} w-36" aria-label="Faction"
-			><span class="flex min-w-0 items-center gap-2"
-				>{#if faction?.icon}<img
-						src={assetUrl(faction.icon) ?? undefined}
-						alt=""
-						class="size-4 shrink-0 object-contain"
-					/>{/if}<span class="truncate">{faction?.label ?? 'All factions'}</span></span
-			></Select.Trigger
-		>
+		<Tip text="Faction: {faction?.label ?? 'All factions'}">
+			<Select.Trigger size="sm" class="{trigger} w-40" aria-label="Faction"
+				><span class="flex min-w-0 items-center gap-1.5"
+					>{#if faction?.icon}<img
+							src={assetUrl(faction.icon) ?? undefined}
+							alt=""
+							class="size-4 shrink-0 object-contain"
+						/>{/if}<span class="truncate">{faction?.label ?? 'All factions'}</span></span
+				></Select.Trigger
+			>
+		</Tip>
 		<Select.Content
 			><Select.Group>
 				<Select.Item value={all} label="All factions">All factions</Select.Item>

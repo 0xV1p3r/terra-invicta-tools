@@ -1,4 +1,6 @@
 <script lang="ts">
+	import Funnel from '@lucide/svelte/icons/funnel';
+	import { Badge } from '$lib/components/ui/badge/index.js';
 	import Check from '@lucide/svelte/icons/check';
 	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
 	import FlaskConical from '@lucide/svelte/icons/flask-conical';
@@ -16,14 +18,20 @@
 	type Kind = 'techs' | 'projects';
 
 	/** Joined toggle: the group draws the outer border, the items only the divider between them. */
-	const segment = `${pillToggle} h-[30px] rounded-none border-0 first:pl-3 last:border-l last:pr-3 disabled:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background`;
+	const segment = `${pillToggle} h-[30px] rounded-none border-0 px-3 focus-visible:outline-none focus-visible:ring-2! focus-visible:ring-ring! focus-visible:ring-offset-2 focus-visible:ring-offset-background`;
 	/** A persistent underline distinguishes shown categories from hidden ones. */
 	const categoryToggle = `${pillItem} relative disabled:opacity-100 size-8 min-w-8 border-0 px-0 hover:bg-accent/60 data-[state=on]:bg-transparent data-[state=on]:hover:bg-accent/60 focus-visible:ring-offset-0`;
 
-	const disabledReason = 'Filters apply to the full tree. Switch to Full tree to use them.';
+	const collapsedReason = 'Filters apply to the full tree. Click to return to the full tree.';
 	const componentId = $props.id();
 	const descriptionId = `${componentId}-filters-description`;
-	const disabled = $derived(app.mode !== 'full');
+	const collapsed = $derived(app.mode !== 'full');
+	const activeCount = $derived(
+		Number(!app.showTechs) +
+			Number(!app.showProjects) +
+			app.categories.length +
+			app.properties.length
+	);
 	const kinds = $derived<Kind[]>([
 		...(app.showTechs ? ['techs' as const] : []),
 		...(app.showProjects ? ['projects' as const] : [])
@@ -62,102 +70,117 @@
 	}
 </script>
 
-<span id={descriptionId} class="sr-only"
-	>{disabled ? disabledReason : 'Select one or both research kinds.'}</span
->
-<Pill aria-label="Research kinds" class={disabled ? 'opacity-50 grayscale' : ''}>
-	<Tip
-		text={disabled
-			? disabledReason
-			: 'Show techs, projects, or both. At least one kind stays shown.'}
+{#if collapsed}
+	<Pill aria-label="Tree filters">
+		<Tip text={collapsedReason}>
+			<Button
+				variant="ghost"
+				size="sm"
+				class={pillItem}
+				aria-label="Filters · full tree only"
+				onclick={() => {
+					app.showFullTree(app.selected ?? app.root);
+					// Focusing a filtered-out node makes the canvas clear every filter.
+					// Keep the saved filters when returning through this control.
+					if (app.filtersActive) app.focus = null;
+				}}
+			>
+				<Funnel /> Filters · full tree only
+				{#if activeCount}<Badge class="h-4 min-w-4 justify-center px-1 tabular-nums"
+						>{activeCount}</Badge
+					>{/if}
+			</Button>
+		</Tip>
+	</Pill>
+{:else}
+	<span id={descriptionId} class="sr-only"
+		>Select one or both research kinds. At least one kind stays shown.</span
 	>
-		<!-- One segmented control: the bordered group is as tall as the other toolbar controls. -->
+	<Pill aria-label="Research kinds">
 		<ToggleGroup.Root
 			type="multiple"
 			size="sm"
 			variant="outline"
 			spacing={0}
-			{disabled}
 			bind:value={() => kinds, setKinds}
-			aria-describedby={descriptionId}
 			class="rounded-md border border-input data-[size=sm]:rounded-md"
 			aria-label="Research kinds"
 		>
-			<ToggleGroup.Item
-				value="techs"
-				aria-label="Show techs"
-				aria-describedby={descriptionId}
-				class={segment}
-			>
-				{#if app.showTechs}<Check />{:else}<FlaskConical />{/if} Techs
-			</ToggleGroup.Item>
-			<ToggleGroup.Item
-				value="projects"
-				aria-label="Show projects"
-				aria-describedby={descriptionId}
-				class={segment}
-			>
-				{#if app.showProjects}<Check />{:else}<Wrench />{/if} Projects
-			</ToggleGroup.Item>
-		</ToggleGroup.Root>
-	</Tip>
-</Pill>
-
-<Pill aria-label="Categories" class={disabled ? 'opacity-50 grayscale' : ''}>
-	<ToggleGroup.Root
-		type="multiple"
-		size="sm"
-		spacing={0.5}
-		{disabled}
-		bind:value={() => shown, setShown}
-		aria-label="Categories shown"
-	>
-		{#each CATEGORY_ORDER as category (category)}
-			{@const on = shown.includes(category)}
-			<Tip
-				text={disabled
-					? disabledReason
-					: `${CATEGORIES[category].label}${on ? '' : ' (hidden)'}. Shift+click: only this`}
-			>
+			<Tip text="Show techs. At least one kind stays shown.">
 				<ToggleGroup.Item
-					value={category}
-					aria-label={CATEGORIES[category].label}
-					aria-describedby={disabled ? descriptionId : undefined}
-					class={categoryToggle}
-					onpointerdown={(e: PointerEvent) => press(category, e)}
-					onkeydown={(e: KeyboardEvent) => press(category, e)}
+					value="techs"
+					aria-label="Show techs"
+					aria-describedby={descriptionId}
+					class="{segment} rounded-l-md! rounded-r-none!"
 				>
-					<CategoryIcon
-						{category}
-						size={22}
-						class={on || disabled ? 'transition' : 'opacity-65 grayscale transition'}
-					/>
-					<span
-						aria-hidden="true"
-						class="absolute bottom-0.5 h-0.5 w-3 rounded-full bg-foreground {on ? '' : 'invisible'}"
-					></span>
+					{#if app.showTechs}<Check />{:else}<FlaskConical />{/if} Techs
 				</ToggleGroup.Item>
 			</Tip>
-		{/each}
-	</ToggleGroup.Root>
-	<Tip text={disabled ? disabledReason : 'Show all categories'}>
-		<Button
-			variant="ghost"
-			size="icon"
-			class="{pillItem} size-8 px-0 text-muted-foreground disabled:opacity-100 {app.categories
-				.length
-				? ''
-				: 'invisible'}"
-			{disabled}
-			aria-label="Show all categories"
-			aria-describedby={disabled ? descriptionId : undefined}
-			onclick={() => (app.categories = [])}
-		>
-			<RotateCcw />
-		</Button>
-	</Tip>
-</Pill>
+			<Tip text="Show projects. At least one kind stays shown.">
+				<ToggleGroup.Item
+					value="projects"
+					aria-label="Show projects"
+					aria-describedby={descriptionId}
+					class="{segment} rounded-l-none! rounded-r-md! border-l!"
+				>
+					{#if app.showProjects}<Check />{:else}<Wrench />{/if} Projects
+				</ToggleGroup.Item>
+			</Tip>
+		</ToggleGroup.Root>
+	</Pill>
 
-<Pill aria-label="Effects filter">
-	<PropertyFilter {disabled} />
-</Pill>
+	<Pill aria-label="Categories">
+		<ToggleGroup.Root
+			type="multiple"
+			size="sm"
+			spacing={0.5}
+			bind:value={() => shown, setShown}
+			aria-label="Categories shown"
+		>
+			{#each CATEGORY_ORDER as category (category)}
+				{@const on = shown.includes(category)}
+				<Tip
+					text={`${CATEGORIES[category].label}${on ? '' : ' (hidden)'}. Shift+click: ${shown.length === 1 && on ? 'show all' : 'only this'}`}
+				>
+					<ToggleGroup.Item
+						value={category}
+						aria-label={CATEGORIES[category].label}
+						class={categoryToggle}
+						onpointerdown={(e: PointerEvent) => press(category, e)}
+						onkeydown={(e: KeyboardEvent) => press(category, e)}
+					>
+						<CategoryIcon
+							{category}
+							size={22}
+							class={on ? 'transition' : 'opacity-65 transition'}
+						/>
+						<span
+							aria-hidden="true"
+							class="absolute bottom-0.5 h-0.5 w-3 rounded-full bg-foreground {on
+								? ''
+								: 'invisible'}"
+						></span>
+					</ToggleGroup.Item>
+				</Tip>
+			{/each}
+		</ToggleGroup.Root>
+		<Tip text="Show all categories">
+			<Button
+				variant="ghost"
+				size="icon"
+				class="{pillItem} size-8 px-0 text-muted-foreground disabled:opacity-100 {app.categories
+					.length
+					? ''
+					: 'invisible'}"
+				aria-label="Show all categories"
+				onclick={() => (app.categories = [])}
+			>
+				<RotateCcw />
+			</Button>
+		</Tip>
+	</Pill>
+
+	<Pill aria-label="Effects filter">
+		<PropertyFilter />
+	</Pill>
+{/if}
