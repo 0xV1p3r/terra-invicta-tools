@@ -10,6 +10,8 @@
 	import SearchPalette from '$lib/components/search/SearchPalette.svelte';
 	import SettingsDialog from '$lib/components/settings/SettingsDialog.svelte';
 	import Pill from '$lib/components/toolbar/Pill.svelte';
+	import PillDivider from '$lib/components/toolbar/PillDivider.svelte';
+	import Tip from '$lib/components/toolbar/Tip.svelte';
 	import TreeCanvas from '$lib/components/tree/TreeCanvas.svelte';
 	import TreeFilters from '$lib/components/tree/TreeFilters.svelte';
 	import { Badge } from '$lib/components/ui/badge/index.js';
@@ -58,34 +60,37 @@
 						<TreeFilters />
 					{/snippet}
 					{#snippet trailing()}
-						<Pill aria-label="Search">
+						<Pill aria-label="Search and settings">
 							<SearchPalette />
 							<WikiDialog />
-						</Pill>
-						<Pill aria-label="System">
-							{#if mockMode}
-								<Badge variant="outline" class="ml-1 text-amber-600 dark:text-amber-400"
-									>mock data</Badge
-								>
-							{/if}
+							<PillDivider />
 							{#if !app.panelOpen}
-								<Button
-									variant="ghost"
-									size="icon"
-									class="rounded-full"
-									aria-label="Show details panel"
-									title="Show details panel"
-									onclick={() => (app.panelOpen = true)}
-								>
-									<PanelRightOpen />
-								</Button>
+								<Tip text="Show details panel">
+									<Button
+										variant="ghost"
+										size="icon"
+										class="size-8 rounded-full"
+										aria-label="Show details panel"
+										onclick={() => (app.panelOpen = true)}
+									>
+										<PanelRightOpen />
+									</Button>
+								</Tip>
 							{/if}
 							<SettingsDialog />
-							<LightSwitch variant="ghost" class="rounded-full" />
+							<LightSwitch variant="ghost" class="size-8 rounded-full" />
 						</Pill>
 					{/snippet}
 				</TreeCanvas>
 			</main>
+			{#if mockMode}
+				<!-- Dev-only marker; kept out of the toolbar flow so it can't push the pills around. -->
+				<Badge
+					variant="outline"
+					class="pointer-events-none fixed bottom-3 left-1/2 z-20 -translate-x-1/2 bg-card/90 text-amber-600 dark:text-amber-400"
+					>mock data</Badge
+				>
+			{/if}
 			{#if app.panelOpen}
 				<div class="w-[420px] shrink-0">
 					<DetailPanel />

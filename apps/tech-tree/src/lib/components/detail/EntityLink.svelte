@@ -16,7 +16,7 @@
 	<Button
 		variant="link"
 		type="button"
-		class="inline-flex max-w-full items-center gap-1.5 rounded-md px-1 py-0.5 text-left align-middle font-medium text-sky-700 hover:bg-accent hover:underline focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none dark:text-sky-400"
+		class="inline-flex max-w-full items-center gap-1.5 rounded-md px-1 py-0.5 text-left align-middle font-medium text-link hover:bg-accent hover:underline"
 		title="{KIND_LABELS[entity.kind] ?? entity.kind} · {entity.dataName}"
 		onclick={() => navigate(entity)}
 	>

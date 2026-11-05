@@ -2,13 +2,13 @@
 	// Overview of the whole tree: nodes pre-drawn once per scene into an offscreen canvas;
 	// each camera change only blits it and draws the viewport frame. Click or drag to pan.
 	import { onDestroy } from 'svelte';
-	import { mode } from 'mode-watcher';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { settings, type Corner } from '$lib/settings.svelte';
 	import type { Camera } from './camera';
+	import type { Theme } from './render';
 	import type { Scene } from './scene';
 
-	let { scene, camera }: { scene: Scene; camera: Camera } = $props();
+	let { scene, camera, theme }: { scene: Scene; camera: Camera; theme: Theme } = $props();
 
 	const WIDTH = 200;
 	const HEIGHT = 150;
@@ -44,7 +44,7 @@
 		const w = Math.max(1, scene.width * scale);
 		const h = Math.max(1, scene.height * scale);
 		for (const n of scene.nodes) {
-			ctx.fillStyle = n.color;
+			ctx.fillStyle = theme.categories[n.item.category] ?? n.color;
 			ctx.fillRect(ox + n.x * scale, oy + n.y * scale, w, h);
 		}
 		return layer;
@@ -66,15 +66,14 @@
 		const rw = v.width * scale;
 		const rh = v.height * scale;
 		// Dim everything outside the viewport frame.
-		const style = getComputedStyle(canvas);
-		ctx.fillStyle = style.getPropertyValue('--background');
+		ctx.fillStyle = theme.background;
 		ctx.globalAlpha = 0.65;
 		ctx.beginPath();
 		ctx.rect(0, 0, WIDTH, HEIGHT);
 		ctx.rect(rx, ry, rw, rh);
 		ctx.fill('evenodd');
 		ctx.globalAlpha = 1;
-		ctx.strokeStyle = style.getPropertyValue('--foreground');
+		ctx.strokeStyle = theme.foreground;
 		ctx.lineWidth = 1;
 		ctx.strokeRect(rx, ry, rw, rh);
 	}
@@ -86,7 +85,7 @@
 	$effect(() => camera.subscribe(requestDraw));
 	onDestroy(() => cancelAnimationFrame(frame));
 	$effect(() => {
-		void [nodesLayer, mode.current];
+		void [nodesLayer, theme];
 		requestDraw();
 	});
 

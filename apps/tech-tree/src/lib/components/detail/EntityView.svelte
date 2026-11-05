@@ -4,6 +4,8 @@
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import Crosshair from '@lucide/svelte/icons/crosshair';
 	import Focus from '@lucide/svelte/icons/focus';
+	import Globe from '@lucide/svelte/icons/globe';
+	import Shuffle from '@lucide/svelte/icons/shuffle';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 
 	import {
@@ -14,6 +16,7 @@
 		type UnlockItem,
 		type UnlockKind
 	} from '$lib/api';
+	import * as Alert from '$lib/components/ui/alert/index.js';
 	import * as Card from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
@@ -89,15 +92,6 @@
 	});
 
 	const ann = $derived(detail?.annotations);
-	const hasAnnotations = $derived(
-		!!ann &&
-			(ann.scenarioSpecific ||
-				ann.variesByScenario ||
-				ann.dlc ||
-				ann.factions.length > 0 ||
-				!!ann.factionAlways ||
-				!!ann.requiresNation)
-	);
 
 	function scenarioLabel(name: string) {
 		return app.meta?.scenarios.find((s) => s.name === name)?.label ?? name;
@@ -190,21 +184,53 @@
 					{#if category}
 						<Badge
 							variant="outline"
-							style="border-color: {category.cssVar}; color: {category.cssVar}"
+							style="border-color: {category.cssVar}; color: {category.fgVar}"
 						>
 							{category.label}
 						</Badge>
+					{/if}
+					{#if ann?.scenarioSpecific}
+						<Badge variant="outline" class="h-auto text-wrap">
+							<Globe />
+							Only in: {ann.scenarios.length
+								? ann.scenarios.map(scenarioLabel).join(', ')
+								: 'some scenarios'}
+						</Badge>
+					{/if}
+					{#if ann?.dlc}
+						<Badge variant="outline" class="border-amber-500/70">DLC</Badge>
+					{/if}
+					{#if ann?.factions.length}
+						<Badge variant="outline" class="h-auto text-wrap">
+							Factions: {ann.factions.map(factionLabel).join(', ')}
+						</Badge>
+					{/if}
+					{#if ann?.factionAlways}
+						<Badge variant="outline">Always: {factionLabel(ann.factionAlways)}</Badge>
+					{/if}
+					{#if ann?.requiresNation}
+						<Badge variant="outline">Requires nation: {ann.requiresNation}</Badge>
 					{/if}
 				</Card.Content>
 			</Card.Content>
 		</Card.Content>
 
-		{#if imageUrl && !imageFailed}
+		{#if ann?.variesByScenario && !app.scope.scenario}
+			<Alert.Root class="mt-4 border-amber-500/60 bg-amber-500/10">
+				<Shuffle />
+				<Alert.Title>Varies by scenario</Alert.Title>
+				<Alert.Description>
+					Prerequisites or cost differ between scenarios; the values below are the all-scenarios
+					overview. Pick a scenario in the toolbar for exact values.
+				</Alert.Description>
+			</Alert.Root>
+		{/if}
+		{#if inWiki && imageUrl && !imageFailed}
 			<Card.Content class="mt-4 overflow-hidden rounded-lg border bg-muted/20 p-2">
 				<img
 					src={imageUrl}
 					alt={entity.name}
-					class="w-full rounded-md object-contain {inWiki ? 'max-h-60' : 'max-h-32'}"
+					class="max-h-60 w-full rounded-md object-contain"
 					onerror={() => (imageFailed = true)}
 				/>
 			</Card.Content>
@@ -212,6 +238,11 @@
 		{#if detail.effect}<Card.Content class="mt-4 p-0"
 				><EffectItem line={detail.effect} /></Card.Content
 			>{/if}
+		{#if detail.summary}
+			<Card.Content class="mt-4 px-0 text-sm font-medium whitespace-pre-line"
+				>{detail.summary}</Card.Content
+			>
+		{/if}
 		{#if research}
 			<Card.Content class="mt-4 flex gap-2 px-0">
 				<Button
@@ -252,7 +283,6 @@
 				</Button>
 			</Card.Content>
 		{/if}
-
 		{#if detail.researchCost != null || detail.totalCost != null}
 			<Card.Content class="mt-4 grid grid-cols-2 gap-2 px-0">
 				<Card.Content class="rounded-lg bg-muted/50 p-2 px-0">
@@ -271,23 +301,6 @@
 				</Card.Content>
 			</Card.Content>
 		{/if}
-
-		{#if detail.quote}
-			<Card.Content
-				class="mt-4 border-l-2 px-0 pl-3 text-sm whitespace-pre-line text-muted-foreground italic"
-			>
-				{detail.quote}
-			</Card.Content>
-		{/if}
-		{#if detail.summary}
-			<Card.Content class="mt-4 px-0 text-sm whitespace-pre-line">{detail.summary}</Card.Content>
-		{/if}
-		{#if detail.description && !detail.effect}
-			<Card.Content class="mt-3 px-0 text-sm whitespace-pre-line text-muted-foreground">
-				{detail.description}
-			</Card.Content>
-		{/if}
-
 		{#if detail.requirements.length || detail.droppedPrereqs.length}
 			{@render section('Requirements')}
 			<Card.Content class="space-y-1 px-0 text-sm">
@@ -340,21 +353,6 @@
 				{/each}
 			</Card.Content>
 		{/if}
-
-		{#if detail.stats}
-			{@render section('Stats')}
-			<StatBlock stats={detail.stats} wide={inWiki} />
-		{/if}
-
-		{#if detail.effects.length}
-			{@render section('Effects')}
-			<Card.Content class="space-y-2 px-0 text-sm">
-				{#each detail.effects as effect, i (i)}
-					<Card.Content class="px-0"><EffectItem line={effect} /></Card.Content>
-				{/each}
-			</Card.Content>
-		{/if}
-
 		{#if unlockGroups.length}
 			{@render section('Unlocks')}
 			<Card.Content class="space-y-3 px-0">
@@ -397,7 +395,6 @@
 				{/each}
 			</Card.Content>
 		{/if}
-
 		{#if detail.unlockedBy.length}
 			{@render section('Unlocked by')}
 			<Card.Content class="flex flex-col px-0 text-sm">
@@ -406,11 +403,59 @@
 				{/each}
 			</Card.Content>
 		{/if}
+		{#if detail.stats}
+			{@render section('Stats')}
+			<StatBlock stats={detail.stats} wide={inWiki} />
+		{/if}
+		{#if detail.effects.length}
+			{@render section('Effects')}
+			<Card.Content class="space-y-2 px-0 text-sm">
+				{#each detail.effects as effect, i (i)}
+					<Card.Content class="px-0"><EffectItem line={effect} /></Card.Content>
+				{/each}
+			</Card.Content>
+		{/if}
+		{#if detail.quote || (detail.description && !detail.effect) || (!inWiki && imageUrl && !imageFailed)}
+			{#key entity.key}<Collapsible.Root class="mt-6" open={false}>
+					<Collapsible.Trigger
+						class="group flex items-center gap-1 rounded-sm text-xs font-semibold tracking-wider text-muted-foreground uppercase hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
+						><ChevronRight class="size-4 transition-transform group-data-[state=open]:rotate-90" /> Lore</Collapsible.Trigger
+					>
+					<Collapsible.Content class="flex flex-col gap-3 pt-3">
+						{#if !inWiki && imageUrl && !imageFailed}
+							<Card.Content class="overflow-hidden rounded-lg border bg-muted/20 p-2">
+								<img
+									src={imageUrl}
+									alt={entity.name}
+									class="max-h-32 w-full rounded-md object-contain"
+									onerror={() => (imageFailed = true)}
+								/>
+							</Card.Content>
+						{/if}
+						{#if detail.quote}
+							<Card.Content
+								class="border-l-2 px-0 pl-3 text-sm whitespace-pre-line text-muted-foreground italic"
+							>
+								{detail.quote}
+							</Card.Content>
+						{/if}
+						{#if detail.description && !detail.effect}
+							<Card.Content class="px-0 text-sm whitespace-pre-line text-muted-foreground">
+								{detail.description}
+							</Card.Content>
+						{/if}
+					</Collapsible.Content>
+				</Collapsible.Root>{/key}
+		{/if}
 
 		<ReferenceGroups title="References" groups={detail.references ?? []} />
 		<ReferenceGroups title="Referenced by" groups={detail.referencedBy ?? []} />
 		{#key entity.key}<Collapsible.Root class="mt-6" open={false}>
-				<Collapsible.Trigger><ChevronRight class="size-4" /> Technical details</Collapsible.Trigger>
+				<Collapsible.Trigger
+					class="group flex items-center gap-1 rounded-sm text-xs font-semibold tracking-wider text-muted-foreground uppercase hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
+					><ChevronRight class="size-4 transition-transform group-data-[state=open]:rotate-90" /> Technical
+					details</Collapsible.Trigger
+				>
 				<Collapsible.Content class="flex flex-col gap-3 pt-3 text-sm">
 					<p>Data name: {entity.dataName}</p>
 					<p>Template: {entity.template}</p>
@@ -422,43 +467,6 @@
 						>
 					</div>
 
-					{#if ann && hasAnnotations}
-						<Card.Content class="mt-3 flex flex-wrap gap-1 px-0">
-							{#if ann.scenarioSpecific}
-								<Badge
-									variant="outline"
-									class="h-auto text-wrap"
-									title={ann.scenarios.map(scenarioLabel).join(', ')}
-								>
-									Scenarios: {ann.scenarios.length
-										? ann.scenarios.map(scenarioLabel).join(', ')
-										: 'specific'}
-								</Badge>
-							{/if}
-							{#if ann.variesByScenario}
-								<Badge variant="outline">Varies by scenario</Badge>
-							{/if}
-							{#if ann.dlc}
-								<Badge
-									variant="outline"
-									class="border-amber-500/60 text-amber-600 dark:text-amber-400"
-								>
-									DLC
-								</Badge>
-							{/if}
-							{#if ann.factions.length}
-								<Badge variant="outline" class="h-auto text-wrap">
-									Factions: {ann.factions.map(factionLabel).join(', ')}
-								</Badge>
-							{/if}
-							{#if ann.factionAlways}
-								<Badge variant="outline">Always: {factionLabel(ann.factionAlways)}</Badge>
-							{/if}
-							{#if ann.requiresNation}
-								<Badge variant="outline">Requires nation: {ann.requiresNation}</Badge>
-							{/if}
-						</Card.Content>
-					{/if}
 					<ReferenceGroups title="Reference fields" groups={detail.references ?? []} technical />
 					<ReferenceGroups
 						title="Referenced by fields"

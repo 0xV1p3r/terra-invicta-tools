@@ -98,7 +98,7 @@
 				<Button
 					variant="link"
 					type="button"
-					class="truncate font-mono text-[11px] text-muted-foreground/70 underline-offset-2 hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+					class="truncate font-mono text-[11px] text-muted-foreground/70 underline-offset-2 hover:text-foreground hover:underline"
 					title="Open effect record"
 					onclick={() => navigate(line.entity)}
 				>

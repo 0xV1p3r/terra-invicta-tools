@@ -47,17 +47,17 @@ export const SENTIMENT: Record<
 	{ tile: string; ring: string; badge: string; text: string; label: string }
 > = {
 	good: {
-		tile: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400',
-		ring: 'ring-emerald-500/60',
-		badge: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
-		text: 'text-emerald-600 dark:text-emerald-400',
+		tile: 'bg-success-subtle text-success',
+		ring: 'ring-success-border',
+		badge: 'border-success-border bg-success-subtle text-success',
+		text: 'text-success',
 		label: 'Beneficial'
 	},
 	bad: {
-		tile: 'bg-rose-500/15 text-rose-700 dark:text-rose-400',
-		ring: 'ring-rose-500/60',
-		badge: 'border-rose-500/40 bg-rose-500/15 text-rose-700 dark:text-rose-300',
-		text: 'text-rose-600 dark:text-rose-400',
+		tile: 'bg-detrimental-subtle text-detrimental',
+		ring: 'ring-detrimental-border',
+		badge: 'border-detrimental-border bg-detrimental-subtle text-detrimental',
+		text: 'text-detrimental',
 		label: 'Detrimental'
 	},
 	neutral: {

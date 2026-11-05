@@ -24,6 +24,8 @@ export interface Theme {
 	secondary: string;
 	secondaryForeground: string;
 	destructive: string;
+	/** Category colors for small marks and text (darker in the light theme). */
+	categories: Partial<Record<TechCategory, string>>;
 	font: string;
 }
 
@@ -41,9 +43,18 @@ export function readTheme(el: Element): Theme {
 		secondary: v('--secondary'),
 		secondaryForeground: v('--secondary-foreground'),
 		destructive: v('--destructive'),
+		categories: Object.fromEntries(
+			Object.entries(CATEGORIES).map(([key, info]) => {
+				const name = info.cssVar.slice(4, -1); // var(--category-x) → --category-x
+				return [key, v(`${name}-fg`) || v(name) || info.color];
+			})
+		),
 		font: s.fontFamily || 'sans-serif'
 	};
 }
+
+/** Category color of a card for small marks and text in the current theme. */
+const accent = (theme: Theme, n: SceneNode) => theme.categories[n.item.category] ?? n.color;
 
 export interface RenderState {
 	selected: EntityKey | null;
@@ -62,14 +73,20 @@ export interface RenderState {
 
 /** Zoom from which cards show icon, name and badges. */
 export const DETAIL_ZOOM = 0.45;
-/** Zoom from which zoomed-out cards show their (large) name. */
+/** Zoom from which zoomed-out cards show their (large) name; below it landmarks label the tree. */
 const NAME_ZOOM = 0.18;
 /** Zoom below which the overview (if enabled) replaces cards with category blocks. */
 export const OVERVIEW_ZOOM = 0.1;
 /** Most landmark labels in the overview. */
 const LANDMARKS = 40;
-/** Dim factor of cards outside the selection's lineage or the filter matches. */
-const DIM = 0.25;
+/**
+ * Opacity of the fill, border and category bar of cards outside the selection's lineage
+ * or the filter matches. Their text switches to the muted color instead of fading, so it
+ * stays legible.
+ */
+const DIM = 0.3;
+/** Opacity of the icon and badges of such cards. */
+const DIM_CONTENT = 0.55;
 
 const RADIUS = 14;
 const BIG_FONT_PX = 26;
@@ -108,8 +125,8 @@ export function render(
 	const { matches } = state;
 	const unrelated = (n: SceneNode) =>
 		(lineage !== null && !lineage.nodes.has(n.key)) || (matches !== null && !matches.has(n.key));
-	const cardAlpha = (n: SceneNode) =>
-		(n.item.flags.obtainable ? 1 : 0.5) * (unrelated(n) ? DIM : 1);
+	/** Secondary cards: unrelated ones, and unobtainable ones (which also get a dashed border). */
+	const secondary = (n: SceneNode) => unrelated(n) || !n.item.flags.obtainable;
 	const px = 1 / z; // one screen pixel in world units
 	const overview = state.overview && z < OVERVIEW_ZOOM;
 
@@ -143,13 +160,13 @@ export function render(
 
 	// --- card bodies, borders and category bars (batched per style) -----------
 	const bar = detail ? 4 : 12;
-	for (const dim of [false, true]) {
+	for (const dashed of [false, true]) {
 		for (const outside of [false, true]) {
 			const group = visible.filter(
-				(n) => n.item.flags.obtainable === !dim && unrelated(n) === outside
+				(n) => n.item.flags.obtainable === !dashed && unrelated(n) === outside
 			);
 			if (!group.length) continue;
-			ctx.globalAlpha = (dim ? 0.5 : 1) * (outside ? DIM : 1);
+			ctx.globalAlpha = outside ? DIM : 1;
 			if (overview) {
 				// Plain category blocks.
 				const blocks = new Map<string, Path2D>();
@@ -166,12 +183,19 @@ export function render(
 			}
 			const body = new Path2D();
 			for (const n of group) body.roundRect(n.x, n.y, w, h, RADIUS);
+			if (outside) {
+				// Opaque base so edges don't show through the faded cards.
+				ctx.globalAlpha = 1;
+				ctx.fillStyle = theme.background;
+				ctx.fill(body);
+				ctx.globalAlpha = DIM;
+			}
 			ctx.fillStyle = theme.card;
 			ctx.fill(body);
 			if (z > 0.12) {
-				ctx.strokeStyle = theme.border;
+				ctx.strokeStyle = dashed && !outside ? theme.muted : theme.border;
 				ctx.lineWidth = px;
-				ctx.setLineDash(dim ? [6 * px, 4 * px] : []);
+				ctx.setLineDash(dashed ? [6 * px, 4 * px] : []);
 				ctx.stroke(body);
 				ctx.setLineDash([]);
 			}
@@ -179,8 +203,9 @@ export function render(
 			// the card shapes (a rounded bar can't follow the card's corners and sticks out).
 			const bars = new Map<string, Path2D>();
 			for (const n of group) {
-				let p = bars.get(n.color);
-				if (!p) bars.set(n.color, (p = new Path2D()));
+				const color = accent(theme, n);
+				let p = bars.get(color);
+				if (!p) bars.set(color, (p = new Path2D()));
 				p.rect(n.x, n.y, bar, h);
 			}
 			ctx.save();
@@ -194,19 +219,16 @@ export function render(
 	}
 
 	// --- content --------------------------------------------------------------
+	ctx.globalAlpha = 1;
 	if (detail) {
-		for (const n of visible) {
-			ctx.globalAlpha = cardAlpha(n);
-			drawDetail(ctx, n, scene, state);
-		}
+		for (const n of visible) drawDetail(ctx, n, scene, state, secondary(n), unrelated(n));
 	} else if (z >= NAME_ZOOM && !overview) {
 		ctx.font = `600 ${BIG_FONT_PX}px ${theme.font}`;
 		ctx.textBaseline = 'middle';
-		ctx.fillStyle = theme.cardForeground;
 		const maxWidth = w - bar - 24;
 		const lineHeight = BIG_FONT_PX * 1.15;
 		for (const n of visible) {
-			ctx.globalAlpha = cardAlpha(n);
+			ctx.fillStyle = secondary(n) ? theme.muted : theme.cardForeground;
 			const lines = wrap(ctx, n, maxWidth, 2);
 			const top = n.y + h / 2 - ((lines.length - 1) * lineHeight) / 2;
 			lines.forEach((line, i) => ctx.fillText(line, n.x + bar + 12, top + i * lineHeight));
@@ -245,7 +267,7 @@ export function render(
 		if (n) draw(n);
 	};
 	outline(state.hovered, (n) => {
-		ctx.strokeStyle = n.color;
+		ctx.strokeStyle = accent(theme, n);
 		ctx.lineWidth = 2 * px;
 		ctx.beginPath();
 		ctx.roundRect(n.x - px, n.y - px, w + 2 * px, h + 2 * px, RADIUS + px);
@@ -262,20 +284,23 @@ export function render(
 		ctx.setLineDash([]);
 	});
 	outline(state.selected, (n) => {
+		// A crisp border with a soft halo outside it.
+		ctx.strokeStyle = accent(theme, n);
 		ctx.beginPath();
-		ctx.roundRect(n.x - 3 * px, n.y - 3 * px, w + 6 * px, h + 6 * px, RADIUS + 3 * px);
-		ctx.strokeStyle = n.color;
-		ctx.globalAlpha = 0.35;
-		ctx.lineWidth = 12 * px;
+		ctx.roundRect(n.x - 5 * px, n.y - 5 * px, w + 10 * px, h + 10 * px, RADIUS + 5 * px);
+		ctx.globalAlpha = 0.18;
+		ctx.lineWidth = 4 * px;
 		ctx.stroke();
 		ctx.globalAlpha = 1;
-		ctx.lineWidth = 3 * px;
+		ctx.beginPath();
+		ctx.roundRect(n.x - 1.5 * px, n.y - 1.5 * px, w + 3 * px, h + 3 * px, RADIUS + 1.5 * px);
+		ctx.lineWidth = 2.5 * px;
 		ctx.stroke();
 	});
 
 	// --- screen-space labels (constant size) -------------------------------------
 	ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-	if (overview) drawLandmarks(ctx, camera, scene, visible, state, unrelated);
+	if (z < NAME_ZOOM) drawLandmarks(ctx, camera, scene, visible, state, unrelated);
 	if (scene.graph.bands.length) drawBandLabels(ctx, camera, scene, theme, bandPad);
 	ctx.globalAlpha = 1;
 }
@@ -299,11 +324,9 @@ function drawBandLabels(
 		// Stick to the top of the screen, but stay inside the band.
 		const y = Math.min(Math.max(top + 10, 10), bottom - 28);
 		const info = CATEGORIES[b.category];
-		ctx.globalAlpha = 0.9;
-		ctx.fillStyle = info?.color ?? theme.foreground;
+		ctx.fillStyle = theme.categories[b.category] ?? theme.foreground;
 		ctx.fillText(info?.label ?? b.category, left, y);
 	}
-	ctx.globalAlpha = 1;
 }
 
 const rankingCache = new WeakMap<
@@ -367,7 +390,7 @@ function drawLandmarks(
 		ctx.roundRect(r.x, r.y, r.w, r.h, 6);
 		ctx.fill();
 		ctx.globalAlpha = 1;
-		ctx.strokeStyle = n.color;
+		ctx.strokeStyle = accent(theme, n);
 		ctx.lineWidth = 1.5;
 		ctx.stroke();
 		ctx.fillStyle = theme.cardForeground;
@@ -390,41 +413,56 @@ function strokeEdges(
 	ctx.setLineDash([]);
 }
 
-/** Full card content: icon, name, cost/kind badges and flag glyphs (world px, like the old DOM card). */
-function drawDetail(ctx: CanvasRenderingContext2D, n: SceneNode, scene: Scene, state: RenderState) {
+/**
+ * Full card content: icon, name, cost/kind badges and flag glyphs (world px, like the old
+ * DOM card). Secondary cards get muted text; faded ones also fade their icon and badges.
+ */
+function drawDetail(
+	ctx: CanvasRenderingContext2D,
+	n: SceneNode,
+	scene: Scene,
+	state: RenderState,
+	secondary: boolean,
+	faded: boolean
+) {
 	const { theme } = state;
 	const h = scene.height;
+	const text = secondary ? theme.muted : theme.cardForeground;
+	const marks = faded ? DIM_CONTENT : 1;
 	const icon = state.icons[n.item.category];
 	const iconX = n.x + 4 + 12;
+	ctx.globalAlpha = marks;
 	if (icon?.complete && icon.naturalWidth) ctx.drawImage(icon, iconX, n.y + h / 2 - 18, 36, 36);
+	ctx.globalAlpha = 1;
 
 	const textX = iconX + 36 + 12;
 	const maxWidth = n.x + scene.width - 12 - textX;
 	const top = n.y + (h - 44) / 2;
 	ctx.font = `500 14px ${theme.font}`;
 	ctx.textBaseline = 'middle';
-	ctx.fillStyle = theme.cardForeground;
+	ctx.fillStyle = text;
 	ctx.fillText(ellipsize(ctx, n, maxWidth), textX, top + 9);
 
 	// Badges (h-5 = 20px), as shadcn's secondary/outline Badge.
 	ctx.font = `500 12px ${theme.font}`;
 	let bx = textX;
 	const by = top + 24;
-	const badge = (text: string, filled: boolean) => {
-		const width = ctx.measureText(text).width + 16;
+	const badge = (label: string, filled: boolean) => {
+		const width = ctx.measureText(label).width + 16;
 		ctx.beginPath();
 		ctx.roundRect(bx, by, width, 20, 10);
+		ctx.globalAlpha = marks;
 		if (filled) {
 			ctx.fillStyle = theme.secondary;
 			ctx.fill();
-			ctx.fillStyle = theme.secondaryForeground;
 		} else {
 			ctx.strokeStyle = theme.border;
 			ctx.lineWidth = 1;
 			ctx.stroke();
-			ctx.fillStyle = theme.cardForeground;
 		}
-		ctx.fillText(text, bx + 8, by + 10.5);
+		ctx.globalAlpha = 1;
+		ctx.fillStyle = secondary ? theme.muted : filled ? theme.secondaryForeground : text;
+		ctx.fillText(label, bx + 8, by + 10.5);
 		bx += width + 4;
 	};
 	badge(n.cost, true);
@@ -445,6 +483,7 @@ function drawDetail(ctx: CanvasRenderingContext2D, n: SceneNode, scene: Scene, s
 		const glyph = state.glyphs.get(f.key);
 		if (!glyph) continue;
 		ctx.save();
+		ctx.globalAlpha = marks;
 		ctx.translate(bx + 3, by + 3);
 		ctx.scale(14 / 24, 14 / 24);
 		ctx.strokeStyle = f.inverted ? theme.destructive : theme.muted;

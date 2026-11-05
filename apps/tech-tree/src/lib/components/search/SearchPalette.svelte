@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { api, assetUrl, type SearchHit, type EntityKind, type TechCategory } from '$lib/api';
 	import { app } from '$lib/state.svelte';
+	import { KIND_LABELS } from '$lib/format';
 	import * as Command from '$lib/components/ui/command';
 	import { Button } from '$lib/components/ui/button';
 	import {
@@ -71,6 +72,10 @@
 			clearTimeout(timer);
 		};
 	});
+	function readableLabel(value: string) {
+		const words = value.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ');
+		return words.charAt(0).toUpperCase() + words.slice(1);
+	}
 	function shortcut(event: KeyboardEvent) {
 		if (
 			(event.ctrlKey || event.metaKey) &&
@@ -135,7 +140,11 @@
 						<span class="flex min-w-0 flex-1 flex-col"
 							><span class="truncate">{entity.name}</span><span
 								class="truncate text-xs text-muted-foreground"
-								>{entity.kind}{entity.subtype ? ` / ${entity.subtype}` : ''} · {entity.dataName}</span
+								>{KIND_LABELS[entity.kind]}{entity.category
+									? ` · ${readableLabel(entity.category)}`
+									: entity.subtype
+										? ` · ${readableLabel(entity.subtype)}`
+										: ''}</span
 							></span
 						>
 						{#if (entity.kind === 'tech' || entity.kind === 'project') && entity.category}

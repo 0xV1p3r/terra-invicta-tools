@@ -28,6 +28,7 @@
 	import * as Popover from '$lib/components/ui/popover/index.js';
 	import { SENTIMENT } from '$lib/effect-style';
 	import { app } from '$lib/state.svelte';
+	import { pillItem } from '$lib/components/toolbar/Pill.svelte';
 	import PropertyIcon from './PropertyIcon.svelte';
 
 	let { disabled = false }: { disabled?: boolean } = $props();
@@ -101,9 +102,9 @@
 		{#snippet child({ props })}
 			<Button
 				{...props}
-				variant="outline"
+				variant="ghost"
 				size="sm"
-				class="rounded-full"
+				class={pillItem}
 				aria-label="Filter by effect or unlock{app.properties.length
 					? ` (${app.properties.length} selected)`
 					: ''}"

@@ -60,7 +60,7 @@
 				Terra Invicta Tech Tree{#if app.meta?.gameVersion}, game data v{app.meta.gameVersion}{/if}
 			</Dialog.Description>
 		</Dialog.Header>
-		<div class="grid gap-4 text-sm">
+		<div class="grid gap-5 text-sm">
 			<h2 class="font-semibold">General</h2>
 			<div class="flex items-center justify-between gap-4">
 				<span id="setting-language" class="font-medium">Game text language</span>
@@ -87,18 +87,18 @@
 			</div>
 			<h2 class="font-semibold">Wiki</h2>
 			<div class="flex items-start justify-between gap-4">
-				<Label for="setting-wiki-spoilers" class="grid gap-1 font-normal"
-					><span class="font-medium">Show spoilers in wiki</span><span class="text-muted-foreground"
-						>alien and story content</span
+				<Label for="setting-wiki-spoilers" class="grid gap-2 font-normal"
+					><span class="font-medium">Show spoilers in wiki</span><span
+						class="leading-relaxed text-muted-foreground">alien and story content</span
 					></Label
 				>
 				<Switch id="setting-wiki-spoilers" bind:checked={settings.wikiSpoilers} />
 			</div>
 			<h2 class="font-semibold">Tree display</h2>
 			<div class="flex items-start justify-between gap-4">
-				<Label for="setting-redundant" class="grid gap-1 font-normal">
+				<Label for="setting-redundant" class="grid gap-2 font-normal">
 					<span class="font-medium">Hide redundant links</span>
-					<span class="text-muted-foreground">
+					<span class="leading-relaxed text-muted-foreground">
 						Links already implied by another chain of prerequisites. Still shown when a tech is
 						selected.
 					</span>
@@ -106,9 +106,9 @@
 				<Switch id="setting-redundant" bind:checked={settings.hideRedundantLinks} />
 			</div>
 			<div class="flex items-start justify-between gap-4">
-				<Label for="setting-merge-links" class="grid gap-1 font-normal">
+				<Label for="setting-merge-links" class="grid gap-2 font-normal">
 					<span class="font-medium">Merge long links</span>
-					<span class="text-muted-foreground">
+					<span class="leading-relaxed text-muted-foreground">
 						Links spanning several columns share lines, so the tree is more compact. Off, every link
 						gets a lane of its own.
 					</span>
@@ -116,9 +116,9 @@
 				<Switch id="setting-merge-links" bind:checked={settings.mergeLinks} />
 			</div>
 			<div class="flex items-start justify-between gap-4">
-				<Label for="setting-filter-mode" class="grid gap-1 font-normal">
+				<Label for="setting-filter-mode" class="grid gap-2 font-normal">
 					<span class="font-medium">Highlight filter matches</span>
-					<span class="text-muted-foreground">
+					<span class="leading-relaxed text-muted-foreground">
 						Filters dim the rest of the tree instead of hiding it, so the layout stays put.
 					</span>
 				</Label>
@@ -131,10 +131,10 @@
 				/>
 			</div>
 			<div class="flex items-start justify-between gap-4">
-				<Label for="setting-overview" class="grid gap-1 font-normal">
+				<Label for="setting-overview" class="grid gap-2 font-normal">
 					<span class="font-medium">Overview when zoomed out</span>
-					<span class="text-muted-foreground">
-						Far out, draw plain category blocks with labels for the main techs.
+					<span class="leading-relaxed text-muted-foreground">
+						Far out, replace cards with plain category blocks.
 					</span>
 				</Label>
 				<Switch id="setting-overview" bind:checked={settings.overviewLabels} />

@@ -3,11 +3,13 @@
 	// overlays (controls, minimap, hover card, status). Performance-first replacement for
 	// xyflow, whose DOM cards made WebKitGTK (Tauri on Linux) stutter on pan and freeze on zoom.
 	import { onDestroy, onMount, untrack, type Snippet } from 'svelte';
+	import Keyboard from '@lucide/svelte/icons/keyboard';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import Maximize from '@lucide/svelte/icons/maximize';
 	import ScanSearch from '@lucide/svelte/icons/scan-search';
 	import Minus from '@lucide/svelte/icons/minus';
 	import Plus from '@lucide/svelte/icons/plus';
+	import RotateCw from '@lucide/svelte/icons/rotate-cw';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 	import {
 		api,
@@ -20,6 +22,7 @@
 	} from '$lib/api';
 	import { CATEGORIES, CATEGORY_ORDER } from '$lib/categories';
 	import { Button } from '$lib/components/ui/button/index.js';
+	import * as Popover from '$lib/components/ui/popover/index.js';
 	import { settings } from '$lib/settings.svelte';
 	import { app } from '$lib/state.svelte';
 	import { Camera } from './camera';
@@ -73,6 +76,8 @@
 	let loaded = $state.raw<{ key: string; graph: TreeGraph } | null>(null);
 	let loading = $state(false);
 	let error = $state<string | null>(null);
+	/** Bumped by "Retry" to run the request again. */
+	let attempt = $state(0);
 
 	const graph = $derived(loaded?.graph ?? null);
 	const ready = $derived(loaded?.key === requestKey);
@@ -92,6 +97,7 @@
 	$effect(() => {
 		const key = requestKey;
 		const req = request;
+		void attempt;
 		const cached = req.kind === 'full' ? fullCache[req.layout] : undefined;
 		if (cached?.key === key) {
 			latest++;
@@ -179,6 +185,9 @@
 		const out = camera.zoom < DETAIL_ZOOM;
 		if (zoomedOut !== out) zoomedOut = out;
 	}
+
+	/** The selection or filter highlighting dims the tree; the dot grid recedes with it. */
+	const quiet = $derived(app.selected !== null || matches !== null);
 
 	// Dot grid as a CSS background that follows the camera (cheaper than drawing dots).
 	function updateBackground() {
@@ -492,6 +501,18 @@
 		else if (e.button === 4) app.goForward();
 	}
 
+	const SHORTCUTS: [keys: string, action: string][] = [
+		['Arrow keys', 'Move the selection'],
+		['Enter / Space', 'Show details'],
+		['Shift+Enter', 'Requirements tree'],
+		['+ / −', 'Zoom in / out'],
+		['0', 'Fit the tree'],
+		['Esc', 'Clear the selection'],
+		['Alt+← / →', 'Back / forward'],
+		['Ctrl+K', 'Search'],
+		['Ctrl+Shift+K', 'Wiki']
+	];
+
 	const announcement = $derived.by(() => {
 		const n = app.selected ? scene?.byKey.get(app.selected) : undefined;
 		if (!n) return '';
@@ -524,6 +545,7 @@
 	<div
 		bind:this={container}
 		class="tree-surface relative size-full overflow-hidden bg-background"
+		class:quiet
 		style:--toolbar-h="{toolbarHeight}px"
 		bind:clientWidth={width}
 		bind:clientHeight={height}
@@ -594,6 +616,38 @@
 			<Button variant="outline" size="icon" aria-label="Fit tree" onclick={fitAll}>
 				<Maximize />
 			</Button>
+			<Popover.Root>
+				<Popover.Trigger>
+					{#snippet child({ props })}
+						<Button {...props} variant="outline" size="icon" aria-label="Keyboard shortcuts">
+							<Keyboard />
+						</Button>
+					{/snippet}
+				</Popover.Trigger>
+				<Popover.Content
+					class="w-72"
+					side={settings.minimapCorner === 'bottom-left' ? 'left' : 'right'}
+					align="end"
+				>
+					<Popover.Header>
+						<Popover.Title>Keyboard shortcuts</Popover.Title>
+					</Popover.Header>
+					<dl class="mt-3 grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-1.5 text-sm">
+						{#each SHORTCUTS as [keys, action] (keys)}
+							<dt>
+								<kbd
+									class="rounded border bg-muted px-1.5 py-0.5 font-sans text-xs whitespace-nowrap text-muted-foreground"
+									>{keys}</kbd
+								>
+							</dt>
+							<dd>{action}</dd>
+						{/each}
+					</dl>
+					<p class="mt-3 text-xs text-muted-foreground">
+						Click the tree first so it has keyboard focus.
+					</p>
+				</Popover.Content>
+			</Popover.Root>
 		</div>
 
 		{#if matches}
@@ -610,7 +664,9 @@
 		{/if}
 
 		{#if scene?.nodes.length}
-			<MiniMap {scene} {camera} />
+			{#if theme}
+				<MiniMap {scene} {camera} {theme} />
+			{/if}
 		{/if}
 
 		<!-- Floating toolbar; clicks between the pills reach the tree. -->
@@ -643,14 +699,27 @@
 					<div class="text-sm">
 						<p class="font-medium">Could not load the tree</p>
 						<p class="mt-1 break-words text-muted-foreground">{error}</p>
+						<Button variant="outline" size="sm" class="mt-3" onclick={() => attempt++}>
+							<RotateCw /> Retry
+						</Button>
 					</div>
 				</div>
 			</div>
 		{:else if ready && graph && graph.nodes.length === 0}
 			<div
-				class="pointer-events-none absolute inset-0 grid place-items-center text-muted-foreground"
+				class="pointer-events-none absolute inset-0 grid place-content-center justify-items-center gap-3 text-muted-foreground"
 			>
 				No research matches the current filters.
+				{#if app.mode === 'full' && app.filtersActive}
+					<Button
+						variant="outline"
+						size="sm"
+						class="pointer-events-auto"
+						onclick={() => app.clearFilters()}
+					>
+						Reset filters
+					</Button>
+				{/if}
 			</div>
 		{/if}
 	</div>
@@ -658,10 +727,20 @@
 
 <style>
 	.tree-surface {
+		--dot: 18%;
 		background-image: radial-gradient(
 			circle,
-			color-mix(in oklab, var(--muted-foreground) 35%, transparent) 1px,
+			color-mix(in oklab, var(--muted-foreground) var(--dot), transparent) 1px,
 			transparent 1.2px
 		);
+	}
+	:global(.dark) .tree-surface {
+		--dot: 26%;
+	}
+	.tree-surface.quiet {
+		--dot: 9%;
+	}
+	:global(.dark) .tree-surface.quiet {
+		--dot: 14%;
 	}
 </style>

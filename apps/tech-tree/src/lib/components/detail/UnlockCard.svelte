@@ -33,7 +33,7 @@
 				<Button
 					variant="link"
 					type="button"
-					class="text-left leading-snug font-medium break-words text-sky-700 underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none dark:text-sky-400"
+					class="text-left leading-snug font-medium break-words text-link underline-offset-2 hover:underline"
 					title="Open {entity.name}"
 					onclick={() => navigate(entity)}
 				>
@@ -42,7 +42,7 @@
 				<p class="truncate font-mono text-[11px] text-muted-foreground/70">{entity.dataName}</p>
 			</div>
 			<Collapsible.Trigger
-				class="group grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+				class="group grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
 				aria-label="Toggle stats of {entity.name}"
 			>
 				<ChevronRight class="size-4 transition-transform group-data-[state=open]:rotate-90" />
