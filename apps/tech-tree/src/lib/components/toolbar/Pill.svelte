@@ -9,7 +9,9 @@
 </script>
 
 <script lang="ts">
-	// A group of related controls in the toolbar; the toolbar draws the dividers between groups.
+	// A group of related controls in the toolbar, laid out as an inline block so the toolbar can
+	// wrap groups as wholes. Each group draws a short divider at its left edge; the -ml-px moves
+	// it under the toolbar's clip when the group starts a row, so dividers never dangle.
 	import type { Snippet } from 'svelte';
 	import type { HTMLAttributes } from 'svelte/elements';
 	import { cn } from '$lib/utils.js';
@@ -23,7 +25,10 @@
 
 <div
 	role="group"
-	class={cn('flex min-h-10 items-center gap-0.5 px-2 text-sm', className)}
+	class={cn(
+		'relative -ml-px inline-flex min-h-10 shrink-0 items-center align-middle gap-0.5 px-1.5 text-sm before:absolute before:top-1/2 before:left-0 before:h-6 before:w-px before:-translate-y-1/2 before:bg-border',
+		className
+	)}
 	{...rest}
 >
 	{@render children()}

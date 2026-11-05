@@ -1,14 +1,13 @@
 <script lang="ts">
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import ArrowRight from '@lucide/svelte/icons/arrow-right';
-	import Undo2 from '@lucide/svelte/icons/undo-2';
 	import type { Direction, TreeGraph } from '$lib/api';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Switch } from '$lib/components/ui/switch/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
 	import * as ToggleGroup from '$lib/components/ui/toggle-group/index.js';
 	import { app, type FullLayout, type ViewKind } from '$lib/state.svelte';
-	import Pill, { pillItem, pillToggle } from '$lib/components/toolbar/Pill.svelte';
+	import Pill, { pillToggle } from '$lib/components/toolbar/Pill.svelte';
 	import PillDivider from '$lib/components/toolbar/PillDivider.svelte';
 	import Tip from '$lib/components/toolbar/Tip.svelte';
 	import CategoryIcon from './CategoryIcon.svelte';
@@ -28,11 +27,12 @@
 			.replace(/([a-z])([A-Z])/g, '$1 $2')
 	);
 
+	// Group captions only on wide toolbars; the toggles are labelled for assistive tech anyway.
 	const groupLabel =
-		'pr-0.5 pl-1 text-[0.6875rem] font-medium tracking-[0.04em] text-muted-foreground uppercase select-none';
+		'hidden pr-0.5 pl-1 @min-[1800px]:inline text-[0.6875rem] font-medium tracking-[0.04em] text-muted-foreground uppercase select-none';
 
-	// The full tree is reached with "Back to full tree".
-	const KINDS: { value: Exclude<ViewKind, 'full'>; label: string; title: string }[] = [
+	const KINDS: { value: ViewKind; label: string; title: string }[] = [
+		{ value: 'full', label: 'Full tree', title: 'Full tree: every tech and project' },
 		{
 			value: 'subtree',
 			label: 'Sub-tree',
@@ -44,6 +44,13 @@
 			title: 'Focus: direct requirements and unlocks of the selected item'
 		}
 	];
+
+	/** Tooltip for a view option; sub-tree/focus need a root, full tree recenters on leaving. */
+	function kindTitle(k: (typeof KINDS)[number]) {
+		if (k.value === 'full')
+			return view.kind === 'full' ? k.title : 'Back to the full tree, centered on the selection';
+		return candidate ? k.title : `${k.title}. Select a tech or project first.`;
+	}
 
 	const LAYOUTS: { value: FullLayout; label: string; title: string }[] = [
 		{
@@ -66,24 +73,13 @@
 
 	function setKind(kind: ViewKind) {
 		if (kind === view.kind) return;
-		if (candidate && kind === 'subtree') app.openSubtree(candidate, 'up');
+		if (kind === 'full') app.showFullTree(app.selected ?? app.root);
+		else if (candidate && kind === 'subtree') app.openSubtree(candidate, 'up');
 		else if (candidate && kind === 'focus') app.openFocus(candidate);
 	}
 </script>
 
-<Pill class="max-w-full min-w-0 flex-wrap" aria-label="View">
-	{#if view.kind !== 'full'}
-		<Tip text="Back to the full tree, centered on the selection">
-			<Button
-				variant="outline"
-				size="sm"
-				class={pillItem}
-				onclick={() => app.showFullTree(app.selected ?? app.root)}
-			>
-				<Undo2 /> Full tree
-			</Button>
-		</Tip>
-	{/if}
+<Pill aria-label="View">
 	<Tip text="Back" shortcut="Alt+←">
 		<Button
 			variant="ghost"
@@ -117,13 +113,17 @@
 		type="single"
 		size="sm"
 		spacing={0.5}
-		value={view.kind === 'full' ? '' : view.kind}
+		value={view.kind}
 		onValueChange={(v) => v && setKind(v as ViewKind)}
 		aria-label="View: what is shown"
 	>
 		{#each KINDS as k (k.value)}
-			<Tip text={candidate ? k.title : `${k.title}. Select a tech or project first.`}>
-				<ToggleGroup.Item value={k.value} disabled={!candidate} class={pillToggle}>
+			<Tip text={kindTitle(k)}>
+				<ToggleGroup.Item
+					value={k.value}
+					disabled={k.value !== 'full' && !candidate}
+					class={pillToggle}
+				>
 					{k.label}
 				</ToggleGroup.Item>
 			</Tip>

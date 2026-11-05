@@ -119,8 +119,9 @@
 	aria-keyshortcuts="Control+k Meta+k"
 	class="h-8 gap-2"
 >
-	<Search /> <span>Search…</span><kbd
-		class="ml-4 rounded border px-1 text-[10px] text-muted-foreground">Ctrl K</kbd
+	<!-- Collapses to icon + shortcut when the toolbar is narrow. -->
+	<Search /> <span class="hidden @min-[1800px]:inline">Search…</span><kbd
+		class="rounded border px-1 text-[10px] text-muted-foreground @min-[1800px]:ml-4">Ctrl K</kbd
 	>
 </Button>
 <Command.Dialog

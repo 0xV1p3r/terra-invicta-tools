@@ -18,6 +18,8 @@
 </script>
 
 <script lang="ts">
+	import Check from '@lucide/svelte/icons/check';
+	import Tip from '$lib/components/toolbar/Tip.svelte';
 	import Funnel from '@lucide/svelte/icons/funnel';
 	import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
 	import X from '@lucide/svelte/icons/x';
@@ -33,6 +35,9 @@
 
 	let { disabled = false }: { disabled?: boolean } = $props();
 
+	const disabledReason = 'Filters apply to the full tree. Switch to Full tree to use them.';
+	const componentId = $props.id();
+	const descriptionId = `${componentId}-effects-description`;
 	let open = $state(false);
 	/** Properties of the research the other filters leave on screen. */
 	let catalog = $state.raw<PropertyInfo[]>([]);
@@ -97,35 +102,42 @@
 	}
 </script>
 
+<span id={descriptionId} class="sr-only"
+	>{disabled ? disabledReason : 'Show research matching any selected effect.'}</span
+>
 <Popover.Root bind:open>
-	<Popover.Trigger {disabled}>
-		{#snippet child({ props })}
-			<Button
-				{...props}
-				variant="ghost"
-				size="sm"
-				class={pillItem}
-				aria-label="Filter by effect or unlock{app.properties.length
-					? ` (${app.properties.length} selected)`
-					: ''}"
-			>
-				<SlidersHorizontal /> Effects
-				{#if app.properties.length}
-					<span class="flex -space-x-1">
-						{#each chips.slice(0, 3) as chip (chip.id)}
-							{#if chip.info}
-								<PropertyIcon property={chip.info} size={18} />
-							{/if}
-						{/each}
-					</span>
-					<Badge class="h-4 min-w-4 px-1 tabular-nums">{app.properties.length}</Badge>
-				{/if}
-			</Button>
-		{/snippet}
-	</Popover.Trigger>
+	<Tip text={disabled ? disabledReason : 'Filter by effects, abilities, or unlocks'}>
+		<Popover.Trigger {disabled}>
+			{#snippet child({ props })}
+				<Button
+					{...props}
+					variant="ghost"
+					size="sm"
+					class="{pillItem} {disabled ? 'grayscale' : ''}"
+					aria-describedby={descriptionId}
+					aria-label="Filter by effect or unlock{app.properties.length
+						? ` (${app.properties.length} selected)`
+						: ''}"
+				>
+					<SlidersHorizontal /> Effects
+					<Badge
+						class="h-4 w-6 justify-center px-1 tabular-nums {app.properties.length
+							? ''
+							: 'invisible'}"
+						aria-hidden={app.properties.length === 0}
+					>
+						{app.properties.length}
+					</Badge>
+				</Button>
+			{/snippet}
+		</Popover.Trigger>
+	</Tip>
 	<Popover.Content class="w-[30rem] p-0" align="start">
 		<Command.Root class="rounded-lg!" {filter}>
-			<Command.Input placeholder="Filter by effect, e.g. control point, mining…" />
+			<Command.Input
+				aria-label="Search effects"
+				placeholder="Filter by effect, e.g. control point, mining…"
+			/>
 			<div
 				class="flex items-center justify-between gap-2 border-b px-3 py-1.5 text-xs text-muted-foreground"
 			>
@@ -198,6 +210,10 @@
 								class="gap-2.5 data-[checked=true]:bg-primary/10"
 								onSelect={() => toggle(p.id)}
 							>
+								<Check
+									class="size-4 shrink-0 {selected.has(p.id) ? '' : 'invisible'}"
+									aria-hidden="true"
+								/>
 								<PropertyIcon property={p} />
 								<div class="flex min-w-0 flex-1 flex-col">
 									<span class="flex items-center gap-1">
