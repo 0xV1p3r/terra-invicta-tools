@@ -14,8 +14,10 @@ export interface CategoryInfo {
 	icon: string;
 	/** Hex color (used where CSS variables don't work, e.g. the MiniMap). */
 	color: string;
-	/** CSS variable reference for inline styles. */
+	/** CSS variable reference for inline styles (decorative accents). */
 	cssVar: string;
+	/** Theme-aware text color with readable contrast (CSS variable reference). */
+	fgVar: string;
 }
 
 export const CATEGORIES: Record<TechCategory, CategoryInfo> = {
@@ -23,49 +25,57 @@ export const CATEGORIES: Record<TechCategory, CategoryInfo> = {
 		label: 'Energy',
 		icon: EnergyIcon,
 		color: '#FF6C00',
-		cssVar: 'var(--category-energy)'
+		cssVar: 'var(--category-energy)',
+		fgVar: 'var(--category-energy-fg)'
 	},
 	InformationScience: {
 		label: 'Information Science',
 		icon: InformationIcon,
 		color: '#E75A73',
-		cssVar: 'var(--category-information)'
+		cssVar: 'var(--category-information)',
+		fgVar: 'var(--category-information-fg)'
 	},
 	LifeScience: {
 		label: 'Life Science',
 		icon: LifeIcon,
 		color: '#3CC273',
-		cssVar: 'var(--category-life)'
+		cssVar: 'var(--category-life)',
+		fgVar: 'var(--category-life-fg)'
 	},
 	Materials: {
 		label: 'Materials',
 		icon: MaterialIcon,
 		color: '#FDC549',
-		cssVar: 'var(--category-materials)'
+		cssVar: 'var(--category-materials)',
+		fgVar: 'var(--category-materials-fg)'
 	},
 	MilitaryScience: {
 		label: 'Military Science',
 		icon: MilitaryIcon,
 		color: '#688C73',
-		cssVar: 'var(--category-military)'
+		cssVar: 'var(--category-military)',
+		fgVar: 'var(--category-military-fg)'
 	},
 	SocialScience: {
 		label: 'Social Science',
 		icon: SocialIcon,
 		color: '#8CD8F4',
-		cssVar: 'var(--category-social)'
+		cssVar: 'var(--category-social)',
+		fgVar: 'var(--category-social-fg)'
 	},
 	SpaceScience: {
 		label: 'Space Science',
 		icon: SpaceIcon,
 		color: '#0092DE',
-		cssVar: 'var(--category-space)'
+		cssVar: 'var(--category-space)',
+		fgVar: 'var(--category-space-fg)'
 	},
 	Xenology: {
 		label: 'Xenology',
 		icon: XenologyIcon,
 		color: '#896BDE',
-		cssVar: 'var(--category-xenology)'
+		cssVar: 'var(--category-xenology)',
+		fgVar: 'var(--category-xenology-fg)'
 	}
 };
 

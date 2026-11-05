@@ -42,6 +42,7 @@
 	let limit = $state(200);
 	let cursor = $state(0);
 	const global = $derived(!!query.trim());
+	const browsing = $derived(global || !!wiki.template);
 	const groups = $derived([
 		...new Set(
 			wiki.sections
@@ -63,7 +64,7 @@
 			? hits
 					.filter((h) => settings.wikiSpoilers || !h.entity.spoiler)
 					.map((h): WikiEntry => ({ entity: h.entity, subtitle: null, effect: null }))
-			: entries.filter((e) =>
+			: (wiki.template ? entries : []).filter((e) =>
 					`${e.entity.name} ${e.entity.dataName} ${e.subtitle ?? ''}`
 						.toLowerCase()
 						.includes(filter.toLowerCase())
@@ -170,7 +171,7 @@
 	function openEntity(entity: EntityRef) {
 		if (!entity.spoiler || settings.wikiSpoilers) wiki.openEntity(entity.key, !!entity.spoiler);
 	}
-	/** Cursor keys only from the filter input; focused buttons keep their own activation. */
+	/** Cursor keys from search and entry filter inputs; focused buttons keep their own activation. */
 	function listKey(event: KeyboardEvent) {
 		if (!(event.target instanceof HTMLInputElement)) return;
 		if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -239,9 +240,14 @@
 			>
 			<Input
 				bind:value={query}
+				onkeydown={listKey}
+				aria-describedby="wiki-search-hint"
 				placeholder="Search all entity types…"
 				aria-label="Search all wiki entities"
 			/>
+			<Card.Description id="wiki-search-hint" class="text-xs"
+				>↑↓ to move, Enter to open</Card.Description
+			>
 		</Dialog.Header>
 		<Card.Content class="flex min-h-0 flex-1 p-0">
 			<Card.Root
@@ -341,11 +347,12 @@
 						</Select.Content>
 					</Select.Root><Card.Title
 						>{global ? 'Search results' : (section?.label ?? 'Entries')}</Card.Title
-					><Card.Description>{matching.length.toLocaleString()} entries</Card.Description
-					>{#if global && hiddenHits}<Card.Description
+					>{#if browsing}<Card.Description
+							>{matching.length.toLocaleString()} entries</Card.Description
+						>{/if}{#if global && hiddenHits}<Card.Description
 							>{hiddenHits} spoiler results hidden</Card.Description
 						>{/if}
-					{#if !global}<Input
+					{#if !global && wiki.template}<Input
 							bind:value={filter}
 							placeholder="Filter name or data name…"
 							aria-label="Filter entries"
@@ -357,6 +364,8 @@
 								class="h-24 w-full"
 							/>{:else if global ? searchError : error}<Card.Description role="alert"
 								>{global ? searchError : error}</Card.Description
+							>{:else if !browsing}<Card.Description class="p-2 leading-relaxed"
+								>Choose a section or search all entries.</Card.Description
 							>{:else if !matching.length}<Card.Description>No entries found.</Card.Description
 							>{/if}
 						{#each visible as entry, i (entry.entity.key)}
@@ -436,9 +445,10 @@
 					><Card.Content class="p-5"
 						>{#if wiki.selected}<EntityView entityKey={wiki.selected} inWiki />{:else}<Card.Title
 								>{section?.label ?? 'Explore the wiki'}</Card.Title
-							><Card.Description class="mt-3"
-								>Select an entry to read its details and follow its references. {section?.count.toLocaleString() ??
-									0} entries in this section.</Card.Description
+							><Card.Description class="mt-3">
+								{#if browsing}Select an entry to read its details and follow its references.
+									{#if section && !global}{section.count.toLocaleString()} entries in this section.{/if}
+								{:else}Choose a section or search all entries.{/if}</Card.Description
 							>{/if}</Card.Content
 					></ScrollArea
 				>

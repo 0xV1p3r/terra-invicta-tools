@@ -24,7 +24,7 @@ const DEFAULTS: Settings = {
 	hideRedundantLinks: true,
 	mergeLinks: true,
 	filterMode: 'hide',
-	overviewLabels: false,
+	overviewLabels: true,
 	minimapCorner: 'top-left'
 };
 

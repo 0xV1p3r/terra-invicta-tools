@@ -23,7 +23,7 @@
 	--destructive: oklch(0.577 0.245 27.325);
 	--border: oklch(0.92 0.004 286.32);
 	--input: oklch(0.92 0.004 286.32);
-	--ring: oklch(0.705 0.015 286.067);
+	--ring: oklch(0.552 0.016 285.938);
 	--chart-1: oklch(0.646 0.222 41.116);
 	--chart-2: oklch(0.6 0.118 184.704);
 	--chart-3: oklch(0.398 0.07 227.392);
@@ -46,6 +46,25 @@
 	--category-social: #8cd8f4;
 	--category-space: #0092de;
 	--category-xenology: #896bde;
+
+	/* Category colours for text: >= 4.5:1 on the background and muted surfaces. */
+	--category-energy-fg: #b84e00;
+	--category-information-fg: #b9485c;
+	--category-life-fg: #267c4a;
+	--category-materials-fg: #866827;
+	--category-military-fg: #56745f;
+	--category-social-fg: #4a7281;
+	--category-space-fg: #0073af;
+	--category-xenology-fg: #775dc1;
+
+	/* Effect sentiment and links: text >= 4.5:1 on its subtle background and on muted surfaces. */
+	--success: #047857;
+	--success-subtle: #ecfdf5;
+	--success-border: #059669;
+	--detrimental: #be123c;
+	--detrimental-subtle: #fff1f2;
+	--detrimental-border: #e11d48;
+	--link: #0369a1;
 }
 
 .dark {
@@ -66,7 +85,7 @@
 	--destructive: oklch(0.704 0.191 22.216);
 	--border: oklch(1 0 0 / 10%);
 	--input: oklch(1 0 0 / 15%);
-	--ring: oklch(0.552 0.016 285.938);
+	--ring: oklch(0.705 0.015 286.067);
 	--chart-1: oklch(0.488 0.243 264.376);
 	--chart-2: oklch(0.696 0.17 162.48);
 	--chart-3: oklch(0.769 0.188 70.08);
@@ -89,6 +108,23 @@
 	--category-social: #8cd8f4;
 	--category-space: #0092de;
 	--category-xenology: #896bde;
+
+	--category-energy-fg: #ff6c00;
+	--category-information-fg: #e8647b;
+	--category-life-fg: #3cc273;
+	--category-materials-fg: #fdc549;
+	--category-military-fg: #779881;
+	--category-social-fg: #8cd8f4;
+	--category-space-fg: #0d97e0;
+	--category-xenology-fg: #9a80e3;
+
+	--success: #34d399;
+	--success-subtle: #052e22;
+	--success-border: #10b981;
+	--detrimental: #fb7185;
+	--detrimental-subtle: #3b0d16;
+	--detrimental-border: #f43f5e;
+	--link: #38bdf8;
 }
 
 @theme inline {
@@ -136,11 +172,27 @@
 	--color-category-social: var(--category-social);
 	--color-category-space: var(--category-space);
 	--color-category-xenology: var(--category-xenology);
+	--color-category-energy-fg: var(--category-energy-fg);
+	--color-category-information-fg: var(--category-information-fg);
+	--color-category-life-fg: var(--category-life-fg);
+	--color-category-materials-fg: var(--category-materials-fg);
+	--color-category-military-fg: var(--category-military-fg);
+	--color-category-social-fg: var(--category-social-fg);
+	--color-category-space-fg: var(--category-space-fg);
+	--color-category-xenology-fg: var(--category-xenology-fg);
+
+	--color-success: var(--success);
+	--color-success-subtle: var(--success-subtle);
+	--color-success-border: var(--success-border);
+	--color-detrimental: var(--detrimental);
+	--color-detrimental-subtle: var(--detrimental-subtle);
+	--color-detrimental-border: var(--detrimental-border);
+	--color-link: var(--link);
 }
 
 @layer base {
 	* {
-		@apply border-border outline-ring/50;
+		@apply border-border outline-ring;
 	}
 
 	body {
