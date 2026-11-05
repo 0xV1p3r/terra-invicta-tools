@@ -154,15 +154,16 @@
 			{#if root}
 				<CategoryIcon category={root.category} size={22} />
 			{/if}
-			<Button
-				variant="ghost"
-				size="sm"
-				class="h-8 max-w-48 min-w-0 px-1 font-semibold"
-				title={rootName}
-				onclick={() => app.root && app.navigate({ key: app.root, kind: root?.kind ?? 'tech' })}
-			>
-				<span class="truncate">{rootName}</span>
-			</Button>
+			<Tip text="Show {rootName} details">
+				<Button
+					variant="ghost"
+					size="sm"
+					class="h-8 max-w-48 min-w-0 px-1 font-semibold"
+					onclick={() => app.root && app.navigate({ key: app.root, kind: root?.kind ?? 'tech' })}
+				>
+					<span class="truncate">{rootName}</span>
+				</Button>
+			</Tip>
 		</div>
 	{/if}
 </Pill>

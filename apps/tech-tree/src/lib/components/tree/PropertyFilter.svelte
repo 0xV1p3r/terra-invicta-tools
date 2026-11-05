@@ -57,6 +57,15 @@
 		app.properties.map((id) => ({ id, info: known.get(id), shown: visible.has(id) }))
 	);
 
+	const triggerTip = $derived(
+		chips.length
+			? `Selected: ${chips
+					.slice(0, 3)
+					.map((chip) => chip.info?.label ?? chip.id)
+					.join(', ')}${chips.length > 3 ? ` +${chips.length - 3} more` : ''}`
+			: 'Filter by effects, abilities, or unlocks'
+	);
+
 	// Options follow the scope and the other tree filters (kinds, categories).
 	$effect(() => {
 		const scope = $state.snapshot(app.scope);
@@ -106,7 +115,7 @@
 	>{disabled ? disabledReason : 'Show research matching any selected effect.'}</span
 >
 <Popover.Root bind:open>
-	<Tip text={disabled ? disabledReason : 'Filter by effects, abilities, or unlocks'}>
+	<Tip text={disabled ? disabledReason : triggerTip}>
 		<Popover.Trigger {disabled}>
 			{#snippet child({ props })}
 				<Button
