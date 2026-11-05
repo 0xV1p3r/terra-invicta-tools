@@ -146,7 +146,7 @@ fn write_fixtures() {
 
     for q in ["laser", "fusion", "ad astra"] {
         let name = format!("search-{}.json", q.replace(' ', "_"));
-        write(&name, &commands::search(&b, &scope, q, 30, false).unwrap());
+        write(&name, &commands::search(&b, &scope, q, 30, false, &[]).unwrap());
         index.searches.push(q.into());
     }
     write("index.json", &index);

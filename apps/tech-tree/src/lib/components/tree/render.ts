@@ -80,20 +80,20 @@ const NAME_ZOOM = 0.18;
 export const OVERVIEW_ZOOM = 0.1;
 /** Most landmark labels in the overview. */
 const LANDMARKS = 40;
-/** Widest one-line landmark label (screen px, padding included) where there is room. */
-const LANDMARK_WIDE = 250;
 /**
- * Width (screen px, padding included) of two-line landmark labels and of the shortened
- * one-line fallback where space is tight.
+ * Width (screen px, padding included) of landmark labels: names up to it fit on one line,
+ * longer ones wrap onto two lines at exactly this width, or are shortened to it.
  */
-const LANDMARK_WIDTH = 150;
-/** Width of the wider two-line variant, for names that need three lines at `LANDMARK_WIDTH`. */
-const LANDMARK_WIDTH_2 = 200;
+const LANDMARK_WIDTH = 180;
 /**
  * Extra neighbouring cards a full-name label may cover before a shortened one wins, so
  * names are only cut where space is really tight.
  */
-const SHORTENED_PENALTY = 2;
+const SHORTENED_PENALTY = 3;
+/** Share of the canvas covered by cards below which landmark labels avoid crossing columns. */
+const LANDMARK_PACKED = 0.12;
+/** Clearance (screen px) a landmark label keeps from cards other than its own. */
+const LANDMARK_CLEARANCE = 6;
 const LANDMARK_LINE = 14;
 /** Landmark candidates tried per frame, so dense views don't scan the whole ranking. */
 const LANDMARK_TRIES = 240;
@@ -193,7 +193,7 @@ export function render(
 			ctx.stroke(scene.junctions);
 		}
 	};
-	const plainAlpha = (lineage ? 0.08 : matches ? 0.25 : 0.45) * fade;
+	const plainAlpha = (lineage ? 0.2 : matches ? 0.25 : 0.45) * fade;
 	ctx.globalAlpha = plainAlpha;
 	strokeEdges(ctx, scene.bundled, theme.muted, Math.max(1.5, 0.5 * px), px);
 	if (lineage && isBig(scene, lineage)) {
@@ -205,7 +205,7 @@ export function render(
 	} else {
 		junctions(Math.min(1, plainAlpha * 1.6));
 		if (lineage) {
-			ctx.globalAlpha = 0.4;
+			ctx.globalAlpha = 0.5;
 			strokeEdges(ctx, lineage.edges, theme.foreground, Math.max(1.5, px), px);
 		}
 	}
@@ -404,7 +404,7 @@ function drawBandLabels(
 
 interface LandmarkLabel {
 	lines: string[];
-	/** Widest line (text only). */
+	/** Box width (padding included). */
 	width: number;
 	/** Shows the whole name (not shortened). */
 	full: boolean;
@@ -417,9 +417,8 @@ const rankingCache = new WeakMap<
 
 /**
  * Nodes by importance with their landmark label variants in the current font, most
- * complete first: the whole name on one line, then on two lines (narrow, then wider), then
- * shortened. A
- * shortened label that would read the same as another node's keeps the name's end instead
+ * complete first: the whole name on one line if it fits `LANDMARK_WIDTH`, else on two lines
+ * at that width, then shortened. A shortened label that would read the same as another node's keeps the name's end instead
  * ("Antimatter…Reactor III").
  */
 function landmarkRanking(ctx: CanvasRenderingContext2D, scene: Scene) {
@@ -428,7 +427,7 @@ function landmarkRanking(ctx: CanvasRenderingContext2D, scene: Scene) {
 	const importance = importanceOf(scene);
 	const label = (lines: string[], full = true) => ({
 		lines,
-		width: Math.max(...lines.map((l) => ctx.measureText(l).width)),
+		width: Math.max(...lines.map((l) => ctx.measureText(l).width)) + 12,
 		full
 	});
 	const name = (node: SceneNode) => node.item.name.replace(/\s+/g, ' ');
@@ -439,16 +438,11 @@ function landmarkRanking(ctx: CanvasRenderingContext2D, scene: Scene) {
 		.sort((a, b) => (importance.get(b.key) ?? 0) - (importance.get(a.key) ?? 0))
 		.map((node) => {
 			const full = label([node.item.name]);
-			if (full.width <= LANDMARK_WIDTH - 12) return { node, labels: [full] };
+			if (full.width <= LANDMARK_WIDTH) return { node, labels: [full] };
 			const labels: LandmarkLabel[] = [];
-			if (full.width <= LANDMARK_WIDE - 12) labels.push(full);
-			for (const width of [LANDMARK_WIDTH, LANDMARK_WIDTH_2]) {
-				const lines = wrap(ctx, node, width - 12, 2);
-				if (lines.join(' ') === name(node)) {
-					labels.push(label(lines));
-					break;
-				}
-			}
+			const lines = wrap(ctx, node, LANDMARK_WIDTH - 12, 2);
+			// Fixed width, so two-line labels line up with each other.
+			if (lines.join(' ') === name(node)) labels.push({ ...label(lines), width: LANDMARK_WIDTH });
 			const cut = short.get(node)!;
 			labels.push(
 				label(
@@ -504,6 +498,11 @@ function drawLandmarks(
 	const taken: Box[] = [];
 	const cw = scene.width * z;
 	const ch = scene.height * z;
+	// Where there is room, cards in other columns count double: covering them hides the
+	// structure, while a label over its own column only hides siblings. In densely packed
+	// views labels can't help crossing columns.
+	const packed = (visible.length * cw * ch) / (camera.width * camera.height);
+	const across = packed < LANDMARK_PACKED ? 2 : 1;
 	let count = 0;
 	let tries = 0;
 	for (const { node: n, labels } of landmarkRanking(ctx, scene)) {
@@ -517,7 +516,7 @@ function drawLandmarks(
 		let best: [Box, number, LandmarkLabel] | null = null;
 		let bestScore = Infinity;
 		for (const label of labels) {
-			const tw = label.width + 12;
+			const tw = label.width;
 			const th = label.lines.length * LANDMARK_LINE + 6;
 			// Centred on the card, shifted inward at the canvas edges while still over the card.
 			const left = Math.min(
@@ -535,15 +534,17 @@ function drawLandmarks(
 				if (r.y + r.h > camera.height - edge) continue;
 				if (blocked.some((b) => overlaps(r, b, 4)) || taken.some((t) => overlaps(r, t, 4)))
 					continue;
+				const pad = LANDMARK_CLEARANCE;
 				const world = {
-					x: (r.x - camera.x) / z,
-					y: (r.y - camera.y) / z,
-					width: r.w / z,
-					height: r.h / z
+					x: (r.x - pad - camera.x) / z,
+					y: (r.y - pad - camera.y) / z,
+					width: (r.w + 2 * pad) / z,
+					height: (r.h + 2 * pad) / z
 				};
 				let covered = 0;
-				for (const m of nodesIn(scene, world)) if (m !== n) covered++;
-				if (covered > (label.full ? 3 : 2)) continue; // too crowded for this label here
+				for (const m of nodesIn(scene, world)) if (m !== n) covered += m.x === n.x ? 1 : across;
+				// Too crowded for this label here (two-line ones are taller, so cover a little more).
+				if (covered > (label.full ? 2 + label.lines.length : 2)) continue;
 				const score = covered + (label.full ? 0 : SHORTENED_PENALTY);
 				if (score < bestScore) {
 					best = [r, side, label];
@@ -583,9 +584,11 @@ function drawLandmarks(
 		ctx.lineWidth = 1.5;
 		ctx.stroke();
 		ctx.fillStyle = theme.cardForeground;
+		ctx.textAlign = 'center';
 		label.lines.forEach((line, i) =>
-			ctx.fillText(line, r.x + 6, r.y + 3 + (i + 0.5) * LANDMARK_LINE)
+			ctx.fillText(line, r.x + r.w / 2, r.y + 3 + (i + 0.5) * LANDMARK_LINE)
 		);
+		ctx.textAlign = 'start';
 	}
 }
 

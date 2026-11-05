@@ -29,17 +29,13 @@
 	const searchLimit = 200;
 	let typeFilter = $state('all');
 	const filterTypes = ['All', 'Research', 'Equipment', 'Other'];
-	const filteredHits = $derived(
-		hits.filter(({ entity }) => {
-			const group =
-				entity.kind === 'tech' || entity.kind === 'project'
-					? 'Research'
-					: entity.kind === 'shipPart' || entity.kind === 'habModule'
-						? 'Equipment'
-						: 'Other';
-			return typeFilter === 'all' || typeFilter === group;
-		})
-	);
+	/** Kinds searched for each type filter (empty = any); the backend filters before the limit. */
+	const filterKinds: Record<string, EntityKind[]> = {
+		all: [],
+		Research: ['tech', 'project'],
+		Equipment: ['shipPart', 'habModule'],
+		Other: ['effect', 'org', 'trait', 'faction', 'objective', 'mission', 'codex', 'other']
+	};
 	const icons = {
 		tech: FlaskConical,
 		project: Wrench,
@@ -68,6 +64,7 @@
 		void retry;
 		const text = query.trim();
 		const scope = { ...app.scope };
+		const kinds = filterKinds[typeFilter];
 		const enabled = open && !!app.meta;
 		let stale = false;
 		hits = [];
@@ -76,7 +73,7 @@
 		if (!enabled || !text) return;
 		const timer = setTimeout(async () => {
 			try {
-				const results = await api.search(scope, text, searchLimit);
+				const results = await api.search(scope, text, searchLimit, false, kinds);
 				if (!stale) hits = results;
 			} catch (cause) {
 				if (!stale) error = cause instanceof Error ? cause.message : String(cause);
@@ -159,19 +156,17 @@
 			</div>
 		{:else if loading}
 			<div role="status" class="px-4 py-6 text-sm text-muted-foreground">Searching…</div>
-		{:else if !filteredHits.length}
+		{:else if !hits.length}
 			<div role="status" class="px-4 py-6 text-center text-sm text-muted-foreground">
 				{#if !query.trim()}
 					Type to search
-				{:else if hits.length >= searchLimit && typeFilter !== 'all'}
-					No {typeFilter.toLowerCase()} matches among the first {searchLimit} results. Refine your search.
 				{:else}
 					{typeFilter === 'all' ? 'No results' : 'No results in this type'}
 				{/if}
 			</div>
 		{:else}
 			<Command.Group heading="Results">
-				{#each filteredHits as hit (hit.entity.key)}
+				{#each hits as hit (hit.entity.key)}
 					{@const entity = hit.entity}
 					{@const Icon = icons[entity.kind]}
 					<Command.Item value={entity.key} onSelect={() => select(hit)}>
@@ -205,7 +200,7 @@
 	</Command.List>
 	{#if !loading && !error && hits.length >= searchLimit}
 		<p role="status" class="border-t px-4 py-2 text-xs text-muted-foreground">
-			Type filters apply to the first {searchLimit} matches. Refine your search to narrow results.
+			Showing the first {searchLimit} matches. Refine your search to narrow results.
 		</p>
 	{/if}
 </Command.Dialog>

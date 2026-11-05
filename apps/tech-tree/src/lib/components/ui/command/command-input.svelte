@@ -10,7 +10,11 @@
 	}: CommandPrimitive.InputProps = $props();
 </script>
 
-<div class="flex items-center gap-2 border-b px-3" data-slot="command-input-wrapper">
+<!-- The input itself has no outline: the wrapper's bottom edge turns ring-coloured (2px, inset so it is never clipped). -->
+<div
+	class="flex items-center gap-2 border-b px-3 transition-[border-color,box-shadow] focus-within:border-ring focus-within:shadow-[inset_0_-1px_0_0_var(--ring)]"
+	data-slot="command-input-wrapper"
+>
 	<SearchIcon class="size-4 shrink-0 text-muted-foreground" />
 	<CommandPrimitive.Input
 		bind:ref

@@ -93,7 +93,7 @@
 					>mock data</Badge
 				>
 			{/if}
-			{#if app.panelOpen}
+			{#if app.panelOpen && app.selected}
 				<div class="w-[420px] shrink-0">
 					<DetailPanel />
 				</div>

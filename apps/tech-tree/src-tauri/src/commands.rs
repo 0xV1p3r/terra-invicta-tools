@@ -484,13 +484,15 @@ pub fn get_entity(b: &Backend, scope: &ScopeArgs, key: &str) -> CmdResult<Entity
 }
 
 /// `all`: also hits other factions' projects (the wiki); otherwise only what the faction sees.
-pub fn search(b: &Backend, scope: &ScopeArgs, query: &str, limit: usize, all: bool) -> CmdResult<Vec<SearchHit>> {
+/// `kinds`: only entities of these `EntityRef::kind`s (empty = any), applied before `limit`.
+pub fn search(b: &Backend, scope: &ScopeArgs, query: &str, limit: usize, all: bool, kinds: &[String]) -> CmdResult<Vec<SearchHit>> {
     let texts = b.texts(&scope.lang)?;
     let index = b.search_index(&scope.lang)?;
     let view = b.ds.view(scope::resolve(&b.ds, scope)?);
     let spoilers = &*b.spoilers(&view)?;
     let hits = index.search(query, limit, &|id| {
-        if all { view.exists(id) } else { view.contains(id) }
+        (if all { view.exists(id) } else { view.contains(id) })
+            && (kinds.is_empty() || kinds.iter().any(|k| k == refs::kind_name(view.kind(id))))
     });
     Ok(hits
         .into_iter()
@@ -922,17 +924,21 @@ pub(crate) mod tests {
             get_tree(&b, &bad, &TreeFilter { techs: true, projects: true, categories: vec![], properties: vec![] }, FullLayout::Layered, true).is_err()
         );
         let bad = ScopeArgs { faction: Some("NoSuchFaction".into()), ..en() };
-        assert!(search(&b, &bad, "laser", 5, false).is_err());
+        assert!(search(&b, &bad, "laser", 5, false, &[]).is_err());
     }
 
     #[test]
     fn search_hits() {
         let Some(b) = backend() else { return };
-        let hits = search(&b, &en(), "ad astra", 10, false).unwrap();
+        let hits = search(&b, &en(), "ad astra", 10, false, &[]).unwrap();
         assert_eq!(hits[0].entity.key, "TITechTemplate:AdAstra");
         assert!(["name", "dataName", "text", "value"].contains(&hits[0].matched.as_str()));
-        let lasers = search(&b, &en(), "laser", 30, false).unwrap();
+        let lasers = search(&b, &en(), "laser", 30, false, &[]).unwrap();
         assert!(lasers.len() > 5 && lasers.len() <= 30);
-        assert!(search(&b, &en(), "   ", 10, false).unwrap().is_empty());
+        assert!(search(&b, &en(), "   ", 10, false, &[]).unwrap().is_empty());
+        // The kind filter applies before the limit: a small limit still fills up with parts.
+        let parts = search(&b, &en(), "laser", 5, false, &["shipPart".into()]).unwrap();
+        assert_eq!(parts.len(), 5);
+        assert!(parts.iter().all(|h| h.entity.kind == "shipPart"));
     }
 }

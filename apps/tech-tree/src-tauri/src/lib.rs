@@ -88,8 +88,15 @@ async fn get_entity(state: State<'_, AppState>, scope: ScopeArgs, key: String) -
 }
 
 #[tauri::command]
-async fn search(state: State<'_, AppState>, scope: ScopeArgs, query: String, limit: usize, all: Option<bool>) -> CmdResult<Vec<SearchHit>> {
-    run_blocking(state, move |b| commands::search(b, &scope, &query, limit, all.unwrap_or(false))).await
+async fn search(
+    state: State<'_, AppState>,
+    scope: ScopeArgs,
+    query: String,
+    limit: usize,
+    all: Option<bool>,
+    kinds: Option<Vec<String>>,
+) -> CmdResult<Vec<SearchHit>> {
+    run_blocking(state, move |b| commands::search(b, &scope, &query, limit, all.unwrap_or(false), &kinds.unwrap_or_default())).await
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

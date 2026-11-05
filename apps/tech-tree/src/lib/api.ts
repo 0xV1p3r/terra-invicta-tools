@@ -394,9 +394,12 @@ const tauriApi = {
 		invoke<PropertyInfo[]>('get_properties', { scope, filter }),
 	getEntity: (scope: ScopeArgs, key: EntityKey) =>
 		invoke<EntityDetail>('get_entity', { scope, key }),
-	/** `all`: also other factions' projects (the wiki); otherwise only what the faction sees. */
-	search: (scope: ScopeArgs, query: string, limit = 30, all = false) =>
-		invoke<SearchHit[]>('search', { scope, query, limit, all })
+	/**
+	 * `all`: also other factions' projects (the wiki); otherwise only what the faction sees.
+	 * `kinds`: only hits of these kinds (empty = any), applied before `limit`.
+	 */
+	search: (scope: ScopeArgs, query: string, limit = 30, all = false, kinds: EntityKind[] = []) =>
+		invoke<SearchHit[]>('search', { scope, query, limit, all, kinds })
 };
 
 // --- Browser mock mode -------------------------------------------------------
@@ -498,10 +501,10 @@ const mockApi: typeof tauriApi = {
 		return all.flatMap((p) => (counts.has(p.id) ? [{ ...p, count: counts.get(p.id)! }] : []));
 	},
 	getEntity: (_scope, key) => fixture<EntityDetail>(`entity-${key.replaceAll(':', '__')}`),
-	search: async (_scope, query, limit = 30) => {
+	search: async (_scope, query, limit = 30, _all, kinds = []) => {
 		const name = query.trim().replace(/\s+/g, '_');
 		const hits = await fixture<SearchHit[]>(`search-${name}`, `search-${name.toLowerCase()}`);
-		return hits.slice(0, limit);
+		return hits.filter((h) => !kinds.length || kinds.includes(h.entity.kind)).slice(0, limit);
 	}
 };
 
