@@ -37,7 +37,7 @@
 				aria-label="Scenario: {scenarioLabel}"
 				><span class="flex min-w-0 flex-col items-start leading-none"
 					><span class={caption} aria-hidden="true">Scenario</span><span
-						class="max-w-full truncate text-[0.8125rem] leading-[0.875rem]">{scenarioLabel}</span
+						class="max-w-full truncate text-sm leading-[0.9375rem]">{scenarioLabel}</span
 					></span
 				></Select.Trigger
 			>
@@ -90,7 +90,7 @@
 							class="size-4 shrink-0 object-contain"
 						/>{/if}<span class="flex min-w-0 flex-col items-start leading-none"
 						><span class={caption} aria-hidden="true">Faction</span><span
-							class="max-w-full truncate text-[0.8125rem] leading-[0.875rem]"
+							class="max-w-full truncate text-sm leading-[0.9375rem]"
 							>{faction?.label ?? 'All factions'}</span
 						></span
 					></span
