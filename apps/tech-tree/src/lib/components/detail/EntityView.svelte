@@ -5,6 +5,8 @@
 	import Crosshair from '@lucide/svelte/icons/crosshair';
 	import Focus from '@lucide/svelte/icons/focus';
 	import Globe from '@lucide/svelte/icons/globe';
+	import Info from '@lucide/svelte/icons/info';
+	import RotateCw from '@lucide/svelte/icons/rotate-cw';
 	import Shuffle from '@lucide/svelte/icons/shuffle';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 
@@ -16,15 +18,24 @@
 		type UnlockItem,
 		type UnlockKind
 	} from '$lib/api';
-	import * as Alert from '$lib/components/ui/alert/index.js';
 	import * as Card from '$lib/components/ui/card';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Collapsible from '$lib/components/ui/collapsible/index.js';
+	import * as Tooltip from '$lib/components/ui/tooltip/index.js';
 
 	import { Skeleton } from '$lib/components/ui/skeleton/index.js';
 	import { categoryInfo } from '$lib/categories';
-	import { formatCost, formatCostFull, isResearch, KIND_LABELS, UNLOCK_LABELS } from '$lib/format';
+	import {
+		formatCost,
+		formatCostFull,
+		isResearch,
+		KIND_LABELS,
+		readableKey,
+		REQUIREMENT_LABELS,
+		requirementChoices,
+		UNLOCK_LABELS
+	} from '$lib/format';
 	import { app } from '$lib/state.svelte';
 	import EffectItem from './EffectItem.svelte';
 	import EntityIcon from './EntityIcon.svelte';
@@ -36,10 +47,15 @@
 	let loading = $state(false);
 	let error = $state<string | null>(null);
 	let latest = 0;
+	// Bumped by Retry to refetch the same entity.
+	let attempt = $state(0);
+	// Names of loaded entities, so a failed reload (e.g. after a scope change) still names it.
+	const names: Record<EntityKey, string> = {};
 
 	$effect(() => {
 		const selectedKey = entityKey;
 		const scope = $state.snapshot(app.scope);
+		void attempt;
 		const id = ++latest;
 		error = null;
 		if (!selectedKey) {
@@ -53,6 +69,7 @@
 			(d) => {
 				if (id !== latest) return;
 				if (inWiki) wiki.remember(d.entity.key, !!d.entity.spoiler);
+				names[d.entity.key] = d.entity.name;
 				detail = d;
 				loading = false;
 			},
@@ -93,6 +110,18 @@
 
 	const ann = $derived(detail?.annotations);
 
+	// Shown in Requirements, Unlocks, Unlocked by or Effects: References leave these out.
+	const shownElsewhere = $derived(
+		new Set(
+			[
+				...(detail?.requirements ?? []).flatMap((g) => [...g.options, ...g.hidden]),
+				...(detail?.unlocks ?? []).map((u) => u.entity),
+				...(detail?.unlockedBy ?? []),
+				...(detail?.effects ?? []).map((e) => e.entity)
+			].map((e) => e.key)
+		)
+	);
+
 	function scenarioLabel(name: string) {
 		return app.meta?.scenarios.find((s) => s.name === name)?.label ?? name;
 	}
@@ -113,12 +142,37 @@
 	}
 </script>
 
-{#snippet section(title: string)}
+{#snippet section(title: string, hint?: string)}
 	<Card.Content
-		class="mt-5 mb-2 px-0 text-xs font-semibold tracking-wider text-muted-foreground uppercase"
+		class="mt-5 mb-2 flex items-baseline justify-between gap-2 px-0 text-xs font-semibold tracking-wider text-muted-foreground uppercase"
 	>
 		{title}
+		{#if hint}<span class="font-normal tracking-normal normal-case">{hint}</span>{/if}
 	</Card.Content>
+{/snippet}
+
+{#snippet or(show: boolean)}
+	{#if show}<Card.Content class="inline px-0 text-xs text-muted-foreground">or</Card.Content>{/if}
+{/snippet}
+
+{#snippet iconAction(label: string, tip: string, onclick: () => void, Icon: typeof Focus)}
+	<Tooltip.Root>
+		<Tooltip.Trigger>
+			{#snippet child({ props })}
+				<Button
+					{...props}
+					variant="outline"
+					size="icon"
+					class="size-8"
+					aria-label={label}
+					{onclick}
+				>
+					<Icon />
+				</Button>
+			{/snippet}
+		</Tooltip.Trigger>
+		<Tooltip.Content>{tip}</Tooltip.Content>
+	</Tooltip.Root>
 {/snippet}
 
 {#if !entityKey}
@@ -129,9 +183,14 @@
 {:else if error}
 	<Card.Content class="flex items-start gap-3 px-0" role="alert">
 		<TriangleAlert class="mt-0.5 size-5 shrink-0 text-destructive" />
-		<Card.Content class="px-0 text-sm">
-			<Card.Content class="px-0 font-medium">Could not load {entityKey}</Card.Content>
+		<Card.Content class="min-w-0 px-0 text-sm">
+			<Card.Content class="px-0 font-medium"
+				>Could not load {names[entityKey] ?? readableKey(entityKey)}</Card.Content
+			>
 			<Card.Content class="mt-1 px-0 break-words text-muted-foreground">{error}</Card.Content>
+			<Button variant="outline" size="sm" class="mt-3" onclick={() => attempt++}>
+				<RotateCw /> Retry
+			</Button>
 		</Card.Content>
 	</Card.Content>
 {:else if loading && !detail}
@@ -216,14 +275,24 @@
 		</Card.Content>
 
 		{#if ann?.variesByScenario && !app.scope.scenario}
-			<Alert.Root class="mt-4 border-amber-500/60 bg-amber-500/10">
-				<Shuffle />
-				<Alert.Title>Varies by scenario</Alert.Title>
-				<Alert.Description>
-					Prerequisites or cost differ between scenarios; the values below are the all-scenarios
-					overview. Pick a scenario in the toolbar for exact values.
-				</Alert.Description>
-			</Alert.Root>
+			<Card.Content
+				class="mt-3 flex w-fit items-center gap-1.5 rounded-md border border-warning-border/60 bg-warning-subtle py-0.5 pr-1 pl-2 text-xs font-medium text-warning"
+			>
+				<Shuffle class="size-3.5 shrink-0" />
+				Varies by scenario
+				<Tooltip.Root>
+					<Tooltip.Trigger
+						class="grid size-5 place-items-center rounded-sm hover:bg-warning/10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background focus-visible:outline-none"
+						aria-label="Why this varies"
+					>
+						<Info class="size-3.5" />
+					</Tooltip.Trigger>
+					<Tooltip.Content class="max-w-64">
+						Prerequisites or cost differ between scenarios; the values below are the all-scenarios
+						overview. Pick a scenario in the toolbar for exact values.
+					</Tooltip.Content>
+				</Tooltip.Root>
+			</Card.Content>
 		{/if}
 		{#if inWiki && imageUrl && !imageFailed}
 			<Card.Content class="mt-4 overflow-hidden rounded-lg border bg-muted/20 p-2">
@@ -261,26 +330,18 @@
 				>
 					<ArrowDownToLine /> Dependents
 				</Button>
-				<Button
-					variant="outline"
-					size="icon"
-					class="size-8"
-					aria-label="Focus view"
-					title="Focus view: direct requirements and unlocks"
-					onclick={() => treeAction(() => app.openFocus(entity.key))}
-				>
-					<Focus />
-				</Button>
-				<Button
-					variant="outline"
-					size="icon"
-					class="size-8"
-					aria-label="Center in tree"
-					title="Center in tree"
-					onclick={() => treeAction(() => app.navigate(entity))}
-				>
-					<Crosshair />
-				</Button>
+				{@render iconAction(
+					'Focus view',
+					'Focus: direct requirements and unlocks',
+					() => treeAction(() => app.openFocus(entity.key)),
+					Focus
+				)}
+				{@render iconAction(
+					'Center in tree',
+					'Center in tree',
+					() => treeAction(() => app.navigate(entity)),
+					Crosshair
+				)}
 			</Card.Content>
 		{/if}
 		{#if detail.researchCost != null || detail.totalCost != null}
@@ -302,23 +363,24 @@
 			</Card.Content>
 		{/if}
 		{#if detail.requirements.length || detail.droppedPrereqs.length}
-			{@render section('Requirements')}
+			{@render section(
+				'Requirements',
+				detail.requirements.length > 1 ? REQUIREMENT_LABELS.all : undefined
+			)}
 			<Card.Content class="space-y-1 px-0 text-sm">
 				{#each detail.requirements as group, i (i)}
-					<Card.Content class="flex flex-wrap items-center gap-x-1 px-0">
+					{@const choice = requirementChoices(group) > 1}
+					<Card.Content
+						class="flex flex-wrap items-center gap-x-1 px-0 {choice
+							? 'rounded-md border border-dashed px-2 py-1'
+							: ''}"
+					>
+						{#if choice}<Card.Content class="w-full px-0 text-xs text-muted-foreground"
+								>{REQUIREMENT_LABELS.any}</Card.Content
+							>{/if}
 						{#each group.options as option, j (j)}
-							{#if j > 0}<Card.Content class="inline px-0 text-xs text-muted-foreground"
-									>or</Card.Content
-								>{/if}
+							{@render or(j > 0)}
 							<EntityLink entity={option} />
-							{#if group.alternative[j]}
-								<Card.Content
-									class="inline px-0 text-xs text-muted-foreground"
-									title="Alternative prerequisite (altPrereq)"
-								>
-									(alternative)
-								</Card.Content>
-							{/if}
 						{/each}
 						{#if !group.options.length}
 							<Card.Content class="inline px-0 text-xs font-medium text-destructive"
@@ -326,6 +388,7 @@
 							>
 						{/if}
 						{#each group.hidden as hidden, j (j)}
+							{@render or(j > 0 || group.options.length > 0)}
 							<Card.Content
 								class="inline px-0 opacity-60"
 								title="Exists, but can't be researched in this scope (restricted to other factions)"
@@ -334,6 +397,7 @@
 							</Card.Content>
 						{/each}
 						{#each group.unresolved as name, j (j)}
+							{@render or(j > 0 || group.options.length + group.hidden.length > 0)}
 							<Card.Content
 								class="inline px-0 font-mono text-xs text-muted-foreground"
 								title="Unresolved reference"
@@ -448,8 +512,12 @@
 				</Collapsible.Root>{/key}
 		{/if}
 
-		<ReferenceGroups title="References" groups={detail.references ?? []} />
-		<ReferenceGroups title="Referenced by" groups={detail.referencedBy ?? []} />
+		<ReferenceGroups title="References" groups={detail.references ?? []} exclude={shownElsewhere} />
+		<ReferenceGroups
+			title="Referenced by"
+			groups={detail.referencedBy ?? []}
+			exclude={shownElsewhere}
+		/>
 		{#key entity.key}<Collapsible.Root class="mt-6" open={false}>
 				<Collapsible.Trigger
 					class="group flex items-center gap-1 rounded-sm text-xs font-semibold tracking-wider text-muted-foreground uppercase hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"

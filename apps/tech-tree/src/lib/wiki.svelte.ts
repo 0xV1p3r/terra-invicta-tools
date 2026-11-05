@@ -1,4 +1,5 @@
 import type { EntityKey, WikiSection } from '$lib/api';
+import { templateLabel } from '$lib/format';
 class WikiState {
 	open = $state(false);
 	section = $state<{ template: string; spoiler: boolean } | null>(null);
@@ -25,10 +26,7 @@ class WikiState {
 	forward = $state<EntityKey[]>([]);
 	sections = $state.raw<WikiSection[]>([]);
 	label(template: string) {
-		return (
-			this.sections.find((s) => s.template === template)?.label ??
-			template.replace(/^TI/, '').replace(/Template$/, '')
-		);
+		return templateLabel(template, this.sections.find((s) => s.template === template)?.label);
 	}
 	show(template?: string, spoiler = false) {
 		this.open = true;

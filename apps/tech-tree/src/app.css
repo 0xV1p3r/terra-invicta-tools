@@ -17,7 +17,8 @@
 	--secondary: oklch(0.967 0.001 286.375);
 	--secondary-foreground: oklch(0.21 0.006 285.885);
 	--muted: oklch(0.967 0.001 286.375);
-	--muted-foreground: oklch(0.552 0.016 285.938);
+	/* Darker than shadcn's zinc: >= 4.5:1 on --muted and on --warning-subtle. */
+	--muted-foreground: oklch(0.53 0.016 285.938);
 	--accent: oklch(0.967 0.001 286.375);
 	--accent-foreground: oklch(0.21 0.006 285.885);
 	--destructive: oklch(0.577 0.245 27.325);
@@ -57,7 +58,7 @@
 	--category-space-fg: #0073af;
 	--category-xenology-fg: #775dc1;
 
-	/* Effect sentiment and links: text >= 4.5:1 on its subtle background and on muted surfaces. */
+	/* Effect sentiment, warnings and links: text >= 4.5:1 on its subtle background and on muted surfaces. */
 	--success: #047857;
 	--success-subtle: #ecfdf5;
 	--success-border: #059669;
@@ -65,6 +66,9 @@
 	--detrimental-subtle: #fff1f2;
 	--detrimental-border: #e11d48;
 	--link: #0369a1;
+	--warning: #92400e;
+	--warning-subtle: #fffbeb;
+	--warning-border: #d97706;
 }
 
 .dark {
@@ -125,6 +129,9 @@
 	--detrimental-subtle: #3b0d16;
 	--detrimental-border: #f43f5e;
 	--link: #38bdf8;
+	--warning: #fbbf24;
+	--warning-subtle: #2a1d06;
+	--warning-border: #b45309;
 }
 
 @theme inline {
@@ -188,6 +195,9 @@
 	--color-detrimental-subtle: var(--detrimental-subtle);
 	--color-detrimental-border: var(--detrimental-border);
 	--color-link: var(--link);
+	--color-warning: var(--warning);
+	--color-warning-subtle: var(--warning-subtle);
+	--color-warning-border: var(--warning-border);
 }
 
 @layer base {

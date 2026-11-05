@@ -2,7 +2,7 @@
 	// The research tree view: one <canvas> drawn by `render.ts` from a camera, plus DOM
 	// overlays (controls, minimap, hover card, status). Performance-first replacement for
 	// xyflow, whose DOM cards made WebKitGTK (Tauri on Linux) stutter on pan and freeze on zoom.
-	import { onDestroy, onMount, untrack, type Snippet } from 'svelte';
+	import { onDestroy, onMount, tick, untrack, type Snippet } from 'svelte';
 	import Keyboard from '@lucide/svelte/icons/keyboard';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import Maximize from '@lucide/svelte/icons/maximize';
@@ -209,6 +209,63 @@
 		camera.resize(width, height);
 	});
 
+	// --- overlays ---------------------------------------------------------------------
+
+	/**
+	 * Screen rectangles of the floating overlays (`data-overlay` elements, and the children
+	 * of `data-overlay-group` ones), which camera fits and landmark labels keep clear of.
+	 * Measured when they resize or move, not per frame.
+	 */
+	function measureOverlays() {
+		if (!container) return;
+		const base = container.getBoundingClientRect();
+		const rects: { x: number; y: number; width: number; height: number }[] = [];
+		const add = (el: Element) => {
+			if (el.hasAttribute('data-overlay-group')) {
+				for (const child of el.children) add(child);
+				return;
+			}
+			const r = el.getBoundingClientRect();
+			if (!r.width || !r.height) return;
+			rects.push({ x: r.left - base.left, y: r.top - base.top, width: r.width, height: r.height });
+			observeOverlay(el);
+		};
+		for (const el of container.querySelectorAll(
+			':scope > [data-overlay], :scope > [data-overlay-group]'
+		))
+			add(el);
+		camera.overlays = rects;
+		requestRender();
+	}
+
+	let overlayFrame = 0;
+	const observed = new WeakSet<Element>();
+	const overlayObserver =
+		typeof ResizeObserver === 'undefined'
+			? null
+			: new ResizeObserver(() => {
+					if (!overlayFrame)
+						overlayFrame = requestAnimationFrame(() => {
+							overlayFrame = 0;
+							measureOverlays();
+						});
+				});
+	function observeOverlay(el: Element) {
+		if (observed.has(el)) return;
+		observed.add(el);
+		overlayObserver?.observe(el);
+	}
+	onDestroy(() => {
+		overlayObserver?.disconnect();
+		cancelAnimationFrame(overlayFrame);
+	});
+
+	// Overlays move with the minimap corner, the view (toolbar contents) and the window size.
+	$effect(() => {
+		void [settings.minimapCorner, app.view, scene, width, height, toolbarHeight];
+		tick().then(measureOverlays);
+	});
+
 	// Redraw on anything the picture depends on (camera changes subscribe directly).
 	$effect(() => {
 		void [
@@ -265,6 +322,7 @@
 		const focus = app.focus;
 		if (!s || !ready || width <= 0 || height <= 0) return;
 		untrack(() => {
+			measureOverlays();
 			const target = focus ? s.byKey.get(focus) : undefined;
 			if (s.graph !== fitted && (!target || focus === s.graph.root)) {
 				const first = fitted === null;
@@ -299,6 +357,7 @@
 	}
 
 	function fitAll() {
+		measureOverlays();
 		if (scene?.nodes.length) camera.animateTo(camera.fitted(scene.bounds));
 	}
 
@@ -312,6 +371,7 @@
 			[x1, y1] = [Math.min(x1, n.x), Math.min(y1, n.y)];
 			[x2, y2] = [Math.max(x2, n.x + scene.width), Math.max(y2, n.y + scene.height)];
 		}
+		measureOverlays();
 		camera.animateTo(camera.fitted({ x: x1, y: y1, width: x2 - x1, height: y2 - y1 }));
 	}
 
@@ -600,6 +660,7 @@
 
 		<!-- Zoom controls yield the bottom-left corner to the minimap. -->
 		<div
+			data-overlay
 			class={[
 				'absolute bottom-3 flex flex-col gap-1',
 				settings.minimapCorner === 'bottom-left' ? 'right-3' : 'left-3'
@@ -672,11 +733,12 @@
 		<!-- Floating toolbar; clicks between the pills reach the tree. -->
 		<div
 			class="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-wrap items-start gap-2 p-3"
+			data-overlay-group
 			bind:clientHeight={toolbarHeight}
 		>
 			{@render leading?.()}
 			<ViewBar graph={ready ? graph : null} />
-			<div class="ml-auto flex flex-wrap items-start justify-end gap-2">
+			<div class="ml-auto flex flex-wrap items-start justify-end gap-2" data-overlay-group>
 				{@render trailing?.()}
 			</div>
 		</div>

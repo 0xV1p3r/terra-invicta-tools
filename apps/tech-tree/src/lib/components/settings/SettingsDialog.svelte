@@ -3,6 +3,7 @@
 	import ArrowDownRight from '@lucide/svelte/icons/arrow-down-right';
 	import ArrowUpLeft from '@lucide/svelte/icons/arrow-up-left';
 	import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
+	import Tip from '$lib/components/toolbar/Tip.svelte';
 	import Settings from '@lucide/svelte/icons/settings';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
@@ -39,20 +40,15 @@
 </script>
 
 <Dialog.Root>
-	<Dialog.Trigger>
-		{#snippet child({ props })}
-			<Button
-				{...props}
-				variant="ghost"
-				size="icon"
-				class="rounded-full"
-				aria-label="Settings"
-				title="Settings"
-			>
-				<Settings />
-			</Button>
-		{/snippet}
-	</Dialog.Trigger>
+	<Tip text="Settings">
+		<Dialog.Trigger>
+			{#snippet child({ props })}
+				<Button {...props} variant="ghost" size="icon" class="rounded-full" aria-label="Settings">
+					<Settings />
+				</Button>
+			{/snippet}
+		</Dialog.Trigger>
+	</Tip>
 	<Dialog.Content class="max-h-[85vh] overflow-y-auto sm:max-w-md">
 		<Dialog.Header>
 			<Dialog.Title>Settings</Dialog.Title>

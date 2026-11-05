@@ -41,8 +41,8 @@
 		const ctx = layer.getContext('2d')!;
 		ctx.scale(dpr, dpr);
 		const { scale, ox, oy } = fit;
-		const w = Math.max(1, scene.width * scale);
-		const h = Math.max(1, scene.height * scale);
+		const w = Math.max(1.5, scene.width * scale);
+		const h = Math.max(1.5, scene.height * scale);
 		for (const n of scene.nodes) {
 			ctx.fillStyle = theme.categories[n.item.category] ?? n.color;
 			ctx.fillRect(ox + n.x * scale, oy + n.y * scale, w, h);
@@ -65,16 +65,24 @@
 		const ry = oy + v.y * scale;
 		const rw = v.width * scale;
 		const rh = v.height * scale;
-		// Dim everything outside the viewport frame.
+		// Recede everything outside the viewport frame (marks stay readable), then frame it
+		// with a halo so it stands out on both dense and empty areas.
 		ctx.fillStyle = theme.background;
-		ctx.globalAlpha = 0.65;
+		ctx.globalAlpha = 0.45;
 		ctx.beginPath();
 		ctx.rect(0, 0, WIDTH, HEIGHT);
 		ctx.rect(rx, ry, rw, rh);
 		ctx.fill('evenodd');
+		ctx.globalAlpha = 0.08;
+		ctx.fillStyle = theme.foreground;
+		ctx.fillRect(rx, ry, rw, rh);
+		ctx.globalAlpha = 0.8;
+		ctx.strokeStyle = theme.background;
+		ctx.lineWidth = 4;
+		ctx.strokeRect(rx, ry, rw, rh);
 		ctx.globalAlpha = 1;
 		ctx.strokeStyle = theme.foreground;
-		ctx.lineWidth = 1;
+		ctx.lineWidth = 2;
 		ctx.strokeRect(rx, ry, rw, rh);
 	}
 
@@ -99,7 +107,10 @@
 	}
 </script>
 
-<Card.Root class="absolute {CORNER_CLASS[settings.minimapCorner]} overflow-hidden p-0 shadow">
+<Card.Root
+	data-overlay
+	class="absolute {CORNER_CLASS[settings.minimapCorner]} overflow-hidden p-0 shadow"
+>
 	<canvas
 		bind:this={canvas}
 		class="block cursor-pointer"

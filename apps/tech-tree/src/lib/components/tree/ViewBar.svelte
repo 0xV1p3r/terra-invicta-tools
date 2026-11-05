@@ -22,17 +22,23 @@
 	);
 	const root = $derived(app.root ? graph?.nodes.find((n) => n.key === app.root) : undefined);
 
+	const rootName = $derived(
+		(root?.name ?? app.root ?? '')
+			.replace(/^TI[^:]*Template:/, '')
+			.replace(/([a-z])([A-Z])/g, '$1 $2')
+	);
+
 	// The full tree is reached with "Back to full tree".
 	const KINDS: { value: Exclude<ViewKind, 'full'>; label: string; title: string }[] = [
 		{
 			value: 'subtree',
 			label: 'Sub-tree',
-			title: 'Sub-tree: everything the selected tech requires and/or unlocks, all the way down'
+			title: 'Sub-tree: everything it requires/unlocks, all the way'
 		},
 		{
 			value: 'focus',
 			label: 'Focus',
-			title: 'Focus: the selected tech with only its direct requirements and unlocks'
+			title: 'Focus: direct requirements and unlocks of the selected item'
 		}
 	];
 
@@ -62,141 +68,143 @@
 	}
 </script>
 
-<Pill class="min-w-0 flex-wrap rounded-3xl" role="toolbar" aria-label="View">
-	{#if view.kind !== 'full'}
-		<Tip text="Back to the full tree, centered on the selection">
+<div class="flex min-w-0 flex-wrap items-center gap-2">
+	<Pill class="max-w-full min-w-0 flex-wrap rounded-3xl" role="toolbar" aria-label="View">
+		{#if view.kind !== 'full'}
+			<Tip text="Back to the full tree, centered on the selection">
+				<Button
+					variant="default"
+					size="sm"
+					class={pillItem}
+					onclick={() => app.showFullTree(app.selected ?? app.root)}
+				>
+					<Undo2 /> Full tree
+				</Button>
+			</Tip>
+		{/if}
+		<Tip text="Back" shortcut="Alt+←">
 			<Button
-				variant="default"
-				size="sm"
-				class={pillItem}
-				onclick={() => app.showFullTree(app.selected ?? app.root)}
+				variant="ghost"
+				size="icon"
+				class="size-8 rounded-full"
+				aria-label="Back"
+				aria-keyshortcuts="Alt+ArrowLeft"
+				disabled={app.back.length === 0}
+				onclick={() => app.goBack()}
 			>
-				<Undo2 /> Full tree
+				<ArrowLeft />
 			</Button>
 		</Tip>
-	{/if}
-	<Tip text="Back" shortcut="Alt+←">
-		<Button
-			variant="ghost"
-			size="icon"
-			class="size-8 rounded-full"
-			aria-label="Back"
-			aria-keyshortcuts="Alt+ArrowLeft"
-			disabled={app.back.length === 0}
-			onclick={() => app.goBack()}
-		>
-			<ArrowLeft />
-		</Button>
-	</Tip>
-	<Tip text="Forward" shortcut="Alt+→">
-		<Button
-			variant="ghost"
-			size="icon"
-			class="size-8 rounded-full"
-			aria-label="Forward"
-			aria-keyshortcuts="Alt+ArrowRight"
-			disabled={app.forward.length === 0}
-			onclick={() => app.goForward()}
-		>
-			<ArrowRight />
-		</Button>
-	</Tip>
+		<Tip text="Forward" shortcut="Alt+→">
+			<Button
+				variant="ghost"
+				size="icon"
+				class="size-8 rounded-full"
+				aria-label="Forward"
+				aria-keyshortcuts="Alt+ArrowRight"
+				disabled={app.forward.length === 0}
+				onclick={() => app.goForward()}
+			>
+				<ArrowRight />
+			</Button>
+		</Tip>
 
-	<PillDivider />
-	<span class="group-label" aria-hidden="true">View</span>
-	<ToggleGroup.Root
-		type="single"
-		size="sm"
-		spacing={0.5}
-		value={view.kind === 'full' ? '' : view.kind}
-		onValueChange={(v) => v && setKind(v as ViewKind)}
-		aria-label="View: what is shown"
-	>
-		{#each KINDS as k (k.value)}
-			<Tip text={candidate ? k.title : `${k.title}. Select a tech or project first.`}>
-				<ToggleGroup.Item value={k.value} disabled={!candidate} class={pillToggle}>
-					{k.label}
-				</ToggleGroup.Item>
-			</Tip>
-		{/each}
-	</ToggleGroup.Root>
-
-	{#if view.kind === 'full'}
 		<PillDivider />
-		<span class="group-label" aria-hidden="true">Layout</span>
+		<span class="group-label" aria-hidden="true">View</span>
 		<ToggleGroup.Root
 			type="single"
 			size="sm"
 			spacing={0.5}
-			value={view.layout}
-			onValueChange={(v) => v && app.update({ kind: 'full', layout: v as FullLayout })}
-			aria-label="Layout: how the tree is arranged"
+			value={view.kind === 'full' ? '' : view.kind}
+			onValueChange={(v) => v && setKind(v as ViewKind)}
+			aria-label="View: what is shown"
 		>
-			{#each LAYOUTS as l (l.value)}
-				<Tip text={l.title}>
-					<ToggleGroup.Item value={l.value} class={pillToggle}>{l.label}</ToggleGroup.Item>
+			{#each KINDS as k (k.value)}
+				<Tip text={candidate ? k.title : `${k.title}. Select a tech or project first.`}>
+					<ToggleGroup.Item value={k.value} disabled={!candidate} class={pillToggle}>
+						{k.label}
+					</ToggleGroup.Item>
 				</Tip>
 			{/each}
 		</ToggleGroup.Root>
-	{:else}
-		<PillDivider />
-		<div class="flex min-w-0 items-center gap-2 px-1">
-			{#if root}
-				<CategoryIcon category={root.category} size={22} />
-			{/if}
-			<button
-				class="truncate font-semibold hover:underline"
-				onclick={() => app.root && app.navigate({ key: app.root, kind: root?.kind ?? 'tech' })}
-			>
-				{root?.name ?? app.root}
-			</button>
-		</div>
-	{/if}
 
+		{#if view.kind === 'full'}
+			<PillDivider />
+			<span class="group-label" aria-hidden="true">Layout</span>
+			<ToggleGroup.Root
+				type="single"
+				size="sm"
+				spacing={0.5}
+				value={view.layout}
+				onValueChange={(v) => v && app.update({ kind: 'full', layout: v as FullLayout })}
+				aria-label="Layout: how the tree is arranged"
+			>
+				{#each LAYOUTS as l (l.value)}
+					<Tip text={l.title}>
+						<ToggleGroup.Item value={l.value} class={pillToggle}>{l.label}</ToggleGroup.Item>
+					</Tip>
+				{/each}
+			</ToggleGroup.Root>
+		{:else}
+			<PillDivider />
+			<div class="flex min-w-0 items-center gap-2 px-1">
+				{#if root}
+					<CategoryIcon category={root.category} size={22} />
+				{/if}
+				<Button
+					variant="ghost"
+					size="sm"
+					class="h-8 max-w-48 min-w-0 rounded-full px-1 font-semibold"
+					title={rootName}
+					onclick={() => app.root && app.navigate({ key: app.root, kind: root?.kind ?? 'tech' })}
+				>
+					<span class="truncate">{rootName}</span>
+				</Button>
+			</div>
+		{/if}
+	</Pill>
 	{#if view.kind === 'subtree'}
 		{@const sub = view}
-		<PillDivider />
-		<ToggleGroup.Root
-			type="single"
-			size="sm"
-			spacing={0.5}
-			value={sub.direction}
-			onValueChange={(v) => {
-				if (v) app.update({ ...sub, direction: v as Direction });
-			}}
-			aria-label="Direction"
-		>
-			{#each DIRECTIONS as d (d.value)}
-				<Tip text={d.title}>
-					<ToggleGroup.Item value={d.value} class={pillToggle}>{d.label}</ToggleGroup.Item>
-				</Tip>
-			{/each}
-		</ToggleGroup.Root>
-		<Tip text="Include alternative prerequisites (altPrereq)">
-			<Toggle
+		<Pill role="toolbar" aria-label="Relationships">
+			<ToggleGroup.Root
+				type="single"
 				size="sm"
-				class={pillToggle}
-				bind:pressed={
-					() => sub.alternatives, (alternatives) => app.update({ ...sub, alternatives })
-				}
+				spacing={0.5}
+				value={sub.direction}
+				onValueChange={(v) => {
+					if (v) app.update({ ...sub, direction: v as Direction });
+				}}
+				aria-label="Direction"
 			>
-				Alternatives
-			</Toggle>
-		</Tip>
+				{#each DIRECTIONS as d (d.value)}
+					<Tip text={d.title}>
+						<ToggleGroup.Item value={d.value} class={pillToggle}>{d.label}</ToggleGroup.Item>
+					</Tip>
+				{/each}
+			</ToggleGroup.Root>
+			<Tip text="Include alternative prerequisites (altPrereq)">
+				<Toggle
+					size="sm"
+					class={pillToggle}
+					bind:pressed={
+						() => sub.alternatives, (alternatives) => app.update({ ...sub, alternatives })
+					}
+				>
+					Alternatives
+				</Toggle>
+			</Tip>
+		</Pill>
 	{/if}
 
 	{#if graph && view.kind !== 'full'}
-		<PillDivider />
 		<span
-			class="pr-2 whitespace-nowrap text-muted-foreground"
+			class="pointer-events-auto px-2 text-xs text-muted-foreground"
 			title="{formatCostFull(graph.totalCost)} research"
 		>
-			{#if view.kind === 'subtree'}{graph.nodes.length} items ·{/if}
-			research needed for root
-			<span class="font-semibold text-foreground">{formatCost(graph.totalCost)}</span>
+			{graph.nodes.length} items · {formatCost(graph.totalCost)} research for root
 		</span>
 	{/if}
-</Pill>
+</div>
 
 <style>
 	.group-label {

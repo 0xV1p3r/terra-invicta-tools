@@ -39,6 +39,9 @@
 	let indexError = $state('');
 	let error = $state('');
 	let searchError = $state('');
+	let indexRetry = $state(0);
+	let entriesRetry = $state(0);
+	let searchRetry = $state(0);
 	let limit = $state(200);
 	let cursor = $state(0);
 	const global = $derived(!!query.trim());
@@ -74,6 +77,7 @@
 	$effect(() => {
 		const scope = $state.snapshot(app.scope);
 		const spoilers = settings.wikiSpoilers;
+		void indexRetry;
 		if (!wiki.open) return;
 		let stale = false;
 		indexLoading = true;
@@ -91,6 +95,15 @@
 									(a.group === 'Technical' ? 2 : a.group === 'Spoilers' ? 1 : 0) -
 									(b.group === 'Technical' ? 2 : b.group === 'Spoilers' ? 1 : 0)
 							);
+						untrack(() => {
+							if (!wiki.template && !wiki.selected) {
+								const initial =
+									wiki.sections.find((s) => s.template === 'TITechTemplate' && !s.spoiler) ??
+									wiki.sections.find((s) => s.count > 0 && !s.spoiler);
+								if (initial)
+									wiki.section = { template: initial.template, spoiler: !!initial.spoiler };
+							}
+						});
 					}
 				},
 				(cause) => {
@@ -106,6 +119,7 @@
 	});
 	$effect(() => {
 		const scope = $state.snapshot(app.scope);
+		void entriesRetry;
 		const template = wiki.template;
 		const spoiler = wiki.section?.spoiler ?? false;
 		if (!wiki.open || !template) return;
@@ -113,7 +127,6 @@
 		entries = [];
 		loading = true;
 		error = '';
-		filter = '';
 		api
 			.getWikiEntries(scope, template, spoiler)
 			.then(
@@ -136,6 +149,7 @@
 	});
 	$effect(() => {
 		const scope = $state.snapshot(app.scope);
+		void searchRetry;
 		const text = query.trim();
 		hits = [];
 		searchError = '';
@@ -162,6 +176,11 @@
 			stale = true;
 			clearTimeout(timer);
 		};
+	});
+	$effect(() => {
+		void wiki.template;
+		void wiki.section?.spoiler;
+		filter = '';
 	});
 	$effect(() => {
 		void matching;
@@ -248,6 +267,12 @@
 			<Card.Description id="wiki-search-hint" class="text-xs"
 				>↑↓ to move, Enter to open</Card.Description
 			>
+			{#if indexError}
+				<div class="flex items-center gap-3">
+					<p role="alert" class="text-sm text-destructive">Could not load wiki sections.</p>
+					<Button variant="outline" size="sm" onclick={() => indexRetry++}>Retry</Button>
+				</div>
+			{/if}
 		</Dialog.Header>
 		<Card.Content class="flex min-h-0 flex-1 p-0">
 			<Card.Root
@@ -262,14 +287,12 @@
 				>
 				<ScrollArea class="min-h-0 flex-1"
 					><Card.Content class="p-2">
-						{#if indexLoading}<Skeleton class="h-24 w-full" />{:else if indexError}<Card.Description
-								role="alert">{indexError}</Card.Description
-							>{/if}
+						{#if indexLoading}<Skeleton class="h-24 w-full" />{/if}
 						{#each groups as group (group)}
 							<Card.Description
 								class="px-2 pt-5 pb-2 text-[10px] font-semibold tracking-widest uppercase"
 								>{#if group === 'Spoilers'}<EyeOff
-										class="mr-1 inline size-3 text-amber-500"
+										class="mr-1 inline size-3 text-warning"
 									/>{:else if group === 'Technical'}<Wrench
 										class="mr-1 inline size-3"
 									/>{/if}{group}</Card.Description
@@ -286,7 +309,7 @@
 									class="{group === 'Technical'
 										? 'text-muted-foreground'
 										: group === 'Spoilers'
-											? 'text-amber-600'
+											? 'text-warning'
 											: ''} h-auto min-h-9 w-full justify-start gap-2 text-left whitespace-normal"
 									aria-current={wiki.template === item.template &&
 									!!wiki.section?.spoiler === !!item.spoiler
@@ -363,7 +386,17 @@
 						{#if global ? searching : loading}<Skeleton
 								class="h-24 w-full"
 							/>{:else if global ? searchError : error}<Card.Description role="alert"
-								>{global ? searchError : error}</Card.Description
+								>{global
+									? `Could not search for “${query.trim()}”.`
+									: `Could not load ${section?.label ?? 'this section'}.`}</Card.Description
+							>
+							<Button
+								variant="outline"
+								size="sm"
+								onclick={() => {
+									if (global) searchRetry++;
+									else entriesRetry++;
+								}}>Retry</Button
 							>{:else if !browsing}<Card.Description class="p-2 leading-relaxed"
 								>Choose a section or search all entries.</Card.Description
 							>{:else if !matching.length}<Card.Description>No entries found.</Card.Description
