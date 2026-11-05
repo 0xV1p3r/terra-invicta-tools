@@ -94,7 +94,7 @@
 	type={href ? undefined : type}
 	href={href && !disabled ? href : undefined}
 	disabled={href ? undefined : disabled || loading}
-	aria-disabled={href ? disabled : undefined}
+	aria-disabled={href ? disabled : rest['aria-disabled']}
 	role={href && disabled ? 'link' : undefined}
 	tabindex={href && disabled ? -1 : tabindex}
 	class={cn(buttonVariants({ variant, size }), className)}
