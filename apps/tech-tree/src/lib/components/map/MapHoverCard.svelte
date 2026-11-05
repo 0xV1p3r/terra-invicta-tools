@@ -10,6 +10,7 @@
 		x,
 		y,
 		r,
+		labelBox = null,
 		width,
 		height,
 		obstacles,
@@ -23,6 +24,8 @@
 		x: number;
 		y: number;
 		r: number;
+		/** The item's canvas label (x0, y0, x1, y1), also kept clear of. */
+		labelBox?: [number, number, number, number] | null;
 		width: number;
 		height: number;
 		/** Overlay controls to keep clear of. */
@@ -54,6 +57,10 @@
 		const clampX = (v: number) => clamp(v, MARGIN, width - w - MARGIN);
 		const clampY = (v: number) => clamp(v, MARGIN, height - h - MARGIN);
 		const avoid = [...obstacles, new DOMRect(x - r, y - r, 2 * r, 2 * r)];
+		if (labelBox)
+			avoid.push(
+				new DOMRect(labelBox[0], labelBox[1], labelBox[2] - labelBox[0], labelBox[3] - labelBox[1])
+			);
 		const sides = [
 			{ left: x + r + GAP, top: y - GAP },
 			{ left: x - r - GAP - w, top: y - GAP },
@@ -107,6 +114,9 @@
 		return `${(days / 365.25).toFixed(days < 36_525 ? 2 : 0)} years`;
 	}
 
+	/** Same names as the detail panel (stats/space.rs); larger sizes stay numeric there too. */
+	const HAB_SIZES: Record<number, string> = { 1: 'Outpost', 2: 'Settlement', 3: 'Colony' };
+
 	const RATING_VARIANT = {
 		empty: 'outline',
 		possible: 'outline',
@@ -117,12 +127,13 @@
 	} as const;
 </script>
 
-<!-- Hovering the card keeps it open; the map's keyboard help covers what it shows. -->
+<!-- Hovering the card keeps it open. Not focusable: keyboard users get the selection announced. -->
 <div
 	class="absolute z-10"
 	style="left: {position.left}px; top: {position.top}px; width: {CARD_WIDTH}px"
 	bind:clientHeight={cardHeight}
-	aria-hidden="true"
+	role="group"
+	aria-label="{item.name} summary"
 	{onpointerenter}
 	{onpointerleave}
 	{onwheel}
@@ -157,12 +168,10 @@
 					<dt class="text-muted-foreground">Radius</dt>
 					<dd>{Math.round(info.radiusKm).toLocaleString('en-US')} km</dd>
 					{#if info.orbit}
-						<dt class="text-muted-foreground">Orbit</dt>
-						<dd>
-							{distance(info.orbit.semiMajorAxisKm, parent?.bodyType === 'star')}, e {info.orbit.eccentricity.toFixed(
-								3
-							)}
-						</dd>
+						<dt class="text-muted-foreground">Semi-major axis</dt>
+						<dd>{distance(info.orbit.semiMajorAxisKm, parent?.bodyType === 'star')}</dd>
+						<dt class="text-muted-foreground">Eccentricity</dt>
+						<dd>{info.orbit.eccentricity.toFixed(3)}</dd>
 						<dt class="text-muted-foreground">Period</dt>
 						<dd>{period(info.orbit.periodDays)}</dd>
 					{/if}
@@ -170,7 +179,7 @@
 					<dd>{info.habSiteCount}</dd>
 					{#if info.maxHabSize > 0}
 						<dt class="text-muted-foreground">Max hab size</dt>
-						<dd>{info.maxHabSize}</dd>
+						<dd>{HAB_SIZES[info.maxHabSize] ?? info.maxHabSize}</dd>
 					{/if}
 				</dl>
 				{#if Object.keys(info.resources).length}
@@ -192,7 +201,10 @@
 					</p>
 				{/if}
 			{:else if item.point}
-				<p class="text-muted-foreground">Max hab size {item.point.maxHabSize}</p>
+				<dl class="grid grid-cols-[auto_1fr] gap-x-3">
+					<dt class="text-muted-foreground">Max hab tier</dt>
+					<dd>{item.point.maxHabSize}</dd>
+				</dl>
 			{/if}
 		</Card.Content>
 	</Card.Root>

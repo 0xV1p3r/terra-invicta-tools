@@ -44,6 +44,7 @@
 	let wasPlaying = false;
 	$effect(() => {
 		const playing = mapState.playing;
+		if (playing) untrack(cancelDate);
 		if (wasPlaying && !playing) untrack(() => announce('Paused.'));
 		wasPlaying = playing;
 	});
@@ -88,7 +89,14 @@
 		{ unit: 'year', n: 1, short: '+Y', label: 'Forward one year' }
 	];
 
+	function cancelDate() {
+		dateError = false;
+		editing = false;
+		draft = label;
+	}
+
 	function setDay(d: number) {
+		cancelDate();
 		mapState.time = mapState.start + Math.min(SPAN_DAYS, Math.max(0, d)) * DAY_MS;
 	}
 
@@ -160,7 +168,10 @@
 			class="size-8"
 			aria-label={mapState.playing ? 'Pause' : 'Play'}
 			title={mapState.playing ? 'Pause' : 'Play'}
-			onclick={() => (mapState.playing = !mapState.playing)}
+			onclick={() => {
+				cancelDate();
+				mapState.playing = !mapState.playing;
+			}}
 		>
 			{#if mapState.playing}<Pause />{:else}<Play />{/if}
 		</Button>
@@ -185,9 +196,7 @@
 					event.currentTarget.blur();
 				}
 				if (event.key === 'Escape') {
-					dateError = false;
-					editing = false;
-					draft = label;
+					cancelDate();
 					event.currentTarget.blur();
 				}
 			}}
@@ -217,7 +226,11 @@
 		<Select.Root
 			type="single"
 			value={String(mapState.speed)}
-			onValueChange={(v) => v && (mapState.speed = Number(v))}
+			onValueChange={(v) => {
+				if (!v) return;
+				cancelDate();
+				mapState.speed = Number(v);
+			}}
 		>
 			<Select.Trigger size="sm" aria-label="Playback speed" class="w-28 shrink-0">
 				{SPEEDS.find((s) => s.value === String(mapState.speed))?.label ?? `${mapState.speed} d/s`}
@@ -236,7 +249,7 @@
 			title="Start date"
 			onclick={() => {
 				mapState.playing = false;
-				mapState.time = mapState.start;
+				setDay(0);
 				announce();
 			}}
 		>

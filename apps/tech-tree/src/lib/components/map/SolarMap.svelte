@@ -532,7 +532,8 @@
 
 	// --- overlays ---------------------------------------------------------------------
 
-	let hoverAnchor = $state<{ x: number; y: number; r: number } | null>(null);
+	type Box = [number, number, number, number];
+	let hoverAnchor = $state<{ x: number; y: number; r: number; label: Box | null } | null>(null);
 	/** Hover card hidden with Escape until the pointer leaves that item. */
 	let hoverDismissed = $state<EntityKey | null>(null);
 	$effect(() => {
@@ -542,15 +543,29 @@
 		hovered && !dragging && hovered !== hoverDismissed ? (scene?.byKey.get(hovered) ?? null) : null
 	);
 
+	/** Escape elsewhere in the page also hides the hover card, unless an open layer takes it. */
+	function onwindowkeydown(e: KeyboardEvent) {
+		// The surface's own handler prevents the default of the keys it handles.
+		if (e.key !== 'Escape' || e.defaultPrevented || !hoveredItem) return;
+		const layer =
+			'[role=dialog], [role=alertdialog], [role=listbox], [role=menu], [data-slot=popover-content]';
+		if (e.target instanceof Element && e.target.closest(layer)) return;
+		if (document.querySelector(`:is(${layer})[data-state=open]`)) return;
+		hoverDismissed = hoveredItem.key;
+	}
+
 	function updateHoverAnchor() {
 		const it = hoveredItem;
 		if (!it || !it.onScreen) {
 			if (hoverAnchor) hoverAnchor = null;
 			return;
 		}
-		const { sx: x, sy: y, size: r } = it;
-		if (hoverAnchor?.x !== x || hoverAnchor?.y !== y || hoverAnchor?.r !== r)
-			hoverAnchor = { x, y, r };
+		const { sx: x, sy: y, size: r, labelBox } = it;
+		const label = hoverAnchor?.label ?? null;
+		const labelSame =
+			labelBox === label || (!!labelBox && !!label && labelBox.every((v, i) => v === label[i]));
+		if (hoverAnchor?.x !== x || hoverAnchor?.y !== y || hoverAnchor?.r !== r || !labelSame)
+			hoverAnchor = { x, y, r, label: labelBox && [...labelBox] };
 	}
 
 	// Overlays the hover card keeps clear of, measured when it appears (container coordinates).
@@ -595,7 +610,7 @@
 			if (sel !== announcedSelection) {
 				announcedSelection = sel;
 				const it = sel ? s?.byKey.get(sel) : undefined;
-				if (it) parts.push(`${it.name}, ${TYPE_LABELS[it.type]}`);
+				if (it) parts.push([it.name, TYPE_LABELS[it.type], ...filterStatus(it)].join(', '));
 			} else if (!systemChanged) return;
 			let text = parts.join('. ');
 			// Screen readers skip a region whose text didn't change.
@@ -604,10 +619,25 @@
 		});
 	});
 
+	/** Whether the item passes the active filters, in words (none when no filter is on). */
+	function filterStatus(it: MapItem): string[] {
+		const f = filterResult;
+		if (!f) return [];
+		const below = f.gatewayMatches.get(it.key);
+		if (below) {
+			const what = below.bodies
+				? count(below.bodies, 'matching moon', 'matching moons')
+				: count(below.points, 'matching Lagrange point', 'matching Lagrange points');
+			return [`doesn't match filters; ${what} in its system, press Enter to open`];
+		}
+		return [f.filtered.has(it.key) ? "doesn't match filters" : 'matches filters'];
+	}
+
+	const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
 	function systemSummary(s: SystemScene) {
 		const points = s.items.filter((it) => it.point).length;
 		const bodies = s.items.length - points - 1;
-		const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 		return [
 			`${s.center.info.entity.name} system`,
 			count(bodies, 'body', 'bodies'),
@@ -630,6 +660,8 @@
 		['Escape', 'Hide the hover card, or clear the selection']
 	];
 </script>
+
+<svelte:window onkeydown={onwindowkeydown} />
 
 <div
 	bind:this={container}
@@ -769,6 +801,7 @@
 			x={hoverAnchor.x}
 			y={hoverAnchor.y}
 			r={hoverAnchor.r}
+			labelBox={hoverAnchor.label}
 			{width}
 			{height}
 			{obstacles}
