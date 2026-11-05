@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { X, BookOpen } from '@lucide/svelte';
-	import type { EntityRef } from '$lib/api';
+	import type { EntityKey, EntityRef } from '$lib/api';
 	import { Button } from '$lib/components/ui/button';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
 	import * as Card from '$lib/components/ui/card';
@@ -11,6 +11,14 @@
 
 	let shown = $state.raw<EntityRef | null>(null);
 	let viewport = $state<HTMLElement | null>(null);
+	let scrollKey: EntityKey | null = null;
+	$effect(() => {
+		const key = shown?.key;
+		if (!key || !viewport || key === scrollKey) return;
+		scrollKey = key;
+		viewport.scrollTop = 0;
+		titleHidden = false;
+	});
 	// Once the entity's own title has scrolled away, the header names it instead.
 	const TITLE_HEIGHT = 64;
 	let titleHidden = $state(false);

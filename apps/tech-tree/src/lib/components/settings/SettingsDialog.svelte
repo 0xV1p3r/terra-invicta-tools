@@ -146,7 +146,12 @@
 					aria-labelledby="setting-minimap-corner"
 				>
 					{#each CORNER_OPTIONS as c (c.value)}
-						<ToggleGroup.Item value={c.value} aria-label={c.label} title={c.label}>
+						<ToggleGroup.Item
+							value={c.value}
+							aria-label={c.label}
+							title={c.label}
+							class="first:rounded-l-md last:rounded-r-md"
+						>
 							<c.icon />
 						</ToggleGroup.Item>
 					{/each}

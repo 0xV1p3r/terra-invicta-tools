@@ -329,14 +329,23 @@
 				>
 					<ArrowUpToLine /> Requirements tree
 				</Button>
-				<Button
-					variant="outline"
-					size="sm"
-					class="flex-1"
-					onclick={() => treeAction(() => app.openSubtree(entity.key, 'down'))}
-				>
-					<ArrowDownToLine /> Dependents
-				</Button>
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						{#snippet child({ props })}
+							<Button
+								{...props}
+								variant="outline"
+								size="sm"
+								class="flex-1"
+								aria-label="Unlocks tree: Everything this unlocks, all the way down"
+								onclick={() => treeAction(() => app.openSubtree(entity.key, 'down'))}
+							>
+								<ArrowDownToLine /> Unlocks tree
+							</Button>
+						{/snippet}
+					</Tooltip.Trigger>
+					<Tooltip.Content>Everything this unlocks, all the way down</Tooltip.Content>
+				</Tooltip.Root>
 				{@render iconAction(
 					'Focus view',
 					'Focus: direct requirements and unlocks',

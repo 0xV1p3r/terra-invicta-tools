@@ -38,7 +38,7 @@
 
 <span
 	class="grid shrink-0 place-items-center rounded-md {gameIcon
-		? `bg-zinc-800 ring-1 ${tone.ring}`
+		? `bg-icon-bg ring-1 ${tone.ring}`
 		: property.category
 			? ''
 			: tone.tile}"

@@ -409,7 +409,7 @@
 								title={entity.dataName}
 								id={`wiki-entry-${i}`}
 								variant={wiki.selected === entity.key ? 'secondary' : 'ghost'}
-								class="h-auto min-h-16 w-full justify-start gap-3 px-3 py-2.5 text-left whitespace-normal {cursor ===
+								class="h-auto min-h-12 w-full justify-start gap-3 px-3 py-2 text-left whitespace-normal {cursor ===
 									i && wiki.selected !== entity.key
 									? 'outline outline-1 -outline-offset-1 outline-ring'
 									: ''}"

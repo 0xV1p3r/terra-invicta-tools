@@ -44,7 +44,7 @@
 	const FETCH_DELAY = 150;
 	const MAX_REQUIREMENTS = 5;
 	const MAX_EFFECTS = 6;
-	const MAX_UNLOCK_NAMES = 3;
+	const MAX_UNLOCK_NAMES = 4;
 
 	const cardWidth = $derived(expanded ? EXPANDED_WIDTH : CARD_WIDTH);
 	const left = $derived(x + 8 + cardWidth > width ? Math.max(8, x - cardWidth - 8) : x + 8);
@@ -212,16 +212,15 @@
 						<div class="min-w-0">
 							<span class="font-medium">{UNLOCK_LABELS[kind] ?? kind}</span>
 							<span class="text-muted-foreground">({items.length})</span>
-							<div class="truncate text-muted-foreground">
-								{items
-									.slice(0, MAX_UNLOCK_NAMES)
-									.map((u) => u.entity.name)
-									.join(', ')}{items.length > MAX_UNLOCK_NAMES
-									? `, +${items.length - MAX_UNLOCK_NAMES} more`
-									: ''}
+							<div class="flex flex-col gap-0.5 text-muted-foreground">
+								{#each items.slice(0, MAX_UNLOCK_NAMES) as item, i (i)}
+									<div class="line-clamp-2 break-words">{item.entity.name}</div>
+								{/each}
+								{@render more(items.length - MAX_UNLOCK_NAMES)}
 							</div>
 						</div>
 					{/each}
+					<p class="text-muted-foreground">Click for all unlocks</p>
 				{/if}
 			{:else if expanded && !failed}
 				<div class="flex flex-col gap-1.5 pt-1">

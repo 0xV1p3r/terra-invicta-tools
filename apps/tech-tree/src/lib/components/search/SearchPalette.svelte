@@ -161,7 +161,13 @@
 			<div role="status" class="px-4 py-6 text-sm text-muted-foreground">Searching…</div>
 		{:else if !filteredHits.length}
 			<div role="status" class="px-4 py-6 text-center text-sm text-muted-foreground">
-				{query.trim() ? 'No results in this type' : 'Type to search'}
+				{#if !query.trim()}
+					Type to search
+				{:else if hits.length >= searchLimit && typeFilter !== 'all'}
+					No {typeFilter.toLowerCase()} matches among the first {searchLimit} results. Refine your search.
+				{:else}
+					{typeFilter === 'all' ? 'No results' : 'No results in this type'}
+				{/if}
 			</div>
 		{:else}
 			<Command.Group heading="Results">
@@ -199,7 +205,7 @@
 	</Command.List>
 	{#if !loading && !error && hits.length >= searchLimit}
 		<p role="status" class="border-t px-4 py-2 text-xs text-muted-foreground">
-			Showing first {hits.length} matches. Refine your search.
+			Type filters apply to the first {searchLimit} matches. Refine your search to narrow results.
 		</p>
 	{/if}
 </Command.Dialog>

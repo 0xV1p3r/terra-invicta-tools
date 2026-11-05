@@ -154,7 +154,7 @@
 					{#each chips as chip (chip.id)}
 						<Badge
 							variant="secondary"
-							class="h-6 max-w-full gap-1 pr-0.5 pl-0.5 {chip.shown
+							class="h-6 max-w-full gap-1 overflow-visible pr-0.5 pl-0.5 {chip.shown
 								? ''
 								: 'bg-muted text-muted-foreground'}"
 							title={chip.shown ? undefined : 'No research in the filtered tree has this'}

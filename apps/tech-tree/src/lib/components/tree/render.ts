@@ -6,6 +6,7 @@ import { CATEGORIES } from '$lib/categories';
 import type { Camera, Rect } from './camera';
 import {
 	importanceOf,
+	JUNCTION_RADIUS,
 	lineageOf,
 	nodesIn,
 	type EdgePaths,
@@ -86,6 +87,13 @@ const LANDMARK_WIDE = 250;
  * one-line fallback where space is tight.
  */
 const LANDMARK_WIDTH = 150;
+/** Width of the wider two-line variant, for names that need three lines at `LANDMARK_WIDTH`. */
+const LANDMARK_WIDTH_2 = 200;
+/**
+ * Extra neighbouring cards a full-name label may cover before a shortened one wins, so
+ * names are only cut where space is really tight.
+ */
+const SHORTENED_PENALTY = 2;
 const LANDMARK_LINE = 14;
 /** Landmark candidates tried per frame, so dense views don't scan the whole ranking. */
 const LANDMARK_TRIES = 240;
@@ -94,25 +102,36 @@ const LANDMARK_TRIES = 240;
  * or the filter matches. Their text switches to the muted color instead of fading, so it
  * stays legible.
  */
-const DIM = 0.3;
-/** Opacity of their border, kept higher so the card shapes stay apparent. */
-const DIM_BORDER = 0.75;
-/** Opacity of their icon and badges (secondary metadata, so dimmed further than the name). */
-const DIM_CONTENT = 0.4;
+const DIM = 0.45;
+/** Opacity of their border: full, so the card shapes stay apparent (the border is subtle). */
+const DIM_BORDER = 1;
+/** Opacity of their icon and badge fills (badge text stays opaque). */
+const DIM_CONTENT = 0.6;
 
 const RADIUS = 14;
 const BIG_FONT_PX = 26;
 
-const lineageCache = new WeakMap<Scene, { key: EntityKey; lineage: Lineage }>();
+/** Recent lineages per scene (the selection's and the hovered node's). */
+const lineageCache = new WeakMap<Scene, Map<EntityKey, Lineage>>();
 
-function selectedLineage(scene: Scene, key: EntityKey | null): Lineage | null {
+function cachedLineage(scene: Scene, key: EntityKey | null): Lineage | null {
 	if (key === null || !scene.byKey.has(key)) return null;
-	const cached = lineageCache.get(scene);
-	if (cached?.key === key) return cached.lineage;
-	const lineage = lineageOf(scene, key);
-	lineageCache.set(scene, { key, lineage });
+	let cache = lineageCache.get(scene);
+	if (!cache) lineageCache.set(scene, (cache = new Map()));
+	let lineage = cache.get(key);
+	if (lineage) {
+		// Keep it most recently used.
+		cache.delete(key);
+	} else {
+		lineage = lineageOf(scene, key);
+		if (cache.size >= 4) cache.delete(cache.keys().next().value!);
+	}
+	cache.set(key, lineage);
 	return lineage;
 }
+
+/** Lineages reaching more than this share of the nodes are drawn bundled, not as curves. */
+const isBig = (scene: Scene, lineage: Lineage) => lineage.nodes.size > scene.nodes.length / 2;
 
 export function render(
 	ctx: CanvasRenderingContext2D,
@@ -133,7 +152,7 @@ export function render(
 	const detail = z >= DETAIL_ZOOM;
 	const w = scene.width;
 	const h = scene.height;
-	const lineage = selectedLineage(scene, state.selected);
+	const lineage = cachedLineage(scene, state.selected);
 	const { matches } = state;
 	const unrelated = (n: SceneNode) =>
 		(lineage !== null && !lineage.nodes.has(n.key)) || (matches !== null && !matches.has(n.key));
@@ -159,32 +178,54 @@ export function render(
 	// --- edges ---------------------------------------------------------------
 	// Plain edges are bundled onto shared trunks and stay quiet so they don't knot up; only
 	// the hovered and selected nodes' own edges are drawn as strong individual curves.
+	// Junction dots tell edges joining a trunk apart from ones crossing it.
 	const fade = Math.min(1, Math.max(0.2, z * 2)) * (overview ? 0.5 : 1);
-	ctx.globalAlpha = (lineage ? 0.08 : matches ? 0.25 : 0.45) * fade;
+	const junctions = (alpha: number) => {
+		if (overview || z < 0.05) return;
+		ctx.globalAlpha = alpha;
+		ctx.fillStyle = theme.muted;
+		ctx.fill(scene.junctions);
+		// Zoomed out, grow them with a stroke so they stay at least 2 screen px in radius.
+		const grow = 2 * (2 * px - JUNCTION_RADIUS);
+		if (grow > 0) {
+			ctx.strokeStyle = theme.muted;
+			ctx.lineWidth = grow;
+			ctx.stroke(scene.junctions);
+		}
+	};
+	const plainAlpha = (lineage ? 0.08 : matches ? 0.25 : 0.45) * fade;
+	ctx.globalAlpha = plainAlpha;
 	strokeEdges(ctx, scene.bundled, theme.muted, Math.max(1.5, 0.5 * px), px);
-	if (lineage) {
-		if (lineage.nodes.size > scene.nodes.length / 2) {
-			// Big lineages (a sub-tree's root reaches everything) are the structure itself:
-			// bundled like plain edges, just a little stronger.
-			ctx.globalAlpha = 0.55 * fade;
-			strokeEdges(ctx, lineage.bundled, theme.muted, Math.max(1.5, 0.75 * px), px);
-		} else {
-			ctx.globalAlpha = 0.55;
+	if (lineage && isBig(scene, lineage)) {
+		// Big lineages (a sub-tree's root reaches everything) are the structure itself:
+		// bundled like plain edges, just a little stronger.
+		ctx.globalAlpha = 0.55 * fade;
+		strokeEdges(ctx, lineage.bundled, theme.muted, Math.max(1.5, 0.75 * px), px);
+		junctions(0.55 * fade);
+	} else {
+		junctions(Math.min(1, plainAlpha * 1.6));
+		if (lineage) {
+			ctx.globalAlpha = 0.4;
 			strokeEdges(ctx, lineage.edges, theme.foreground, Math.max(1.5, px), px);
 		}
 	}
+	// The selection's own edges: strong but a step below full contrast, so the rest of the
+	// tree doesn't read as disabled next to them.
 	const highlight = lineage && state.selected ? scene.edgesOf.get(state.selected) : undefined;
 	if (highlight) {
-		ctx.globalAlpha = 1;
-		strokeEdges(ctx, highlight, theme.foreground, Math.max(3, 1.5 * px), px);
+		ctx.globalAlpha = 0.8;
+		strokeEdges(ctx, highlight, theme.foreground, Math.max(2.5, 1.5 * px), px);
 	}
-	const hoverEdges =
-		state.hovered && state.hovered !== state.selected
-			? scene.edgesOf.get(state.hovered)
-			: undefined;
-	if (hoverEdges) {
+	// The hovered node's complete routes, individually: its whole lineage faintly (unless it
+	// spans the tree) and its direct edges strongly, off the shared trunks.
+	if (state.hovered && state.hovered !== state.selected && scene.edgesOf.has(state.hovered)) {
+		const hoverLineage = cachedLineage(scene, state.hovered);
+		if (hoverLineage && !isBig(scene, hoverLineage)) {
+			ctx.globalAlpha = 0.45;
+			strokeEdges(ctx, hoverLineage.edges, theme.foreground, Math.max(1.5, px), px);
+		}
 		ctx.globalAlpha = 0.9;
-		strokeEdges(ctx, hoverEdges, theme.foreground, Math.max(2, px), px);
+		strokeEdges(ctx, scene.edgesOf.get(state.hovered)!, theme.foreground, Math.max(2, px), px);
 	}
 	ctx.globalAlpha = 1;
 
@@ -365,6 +406,8 @@ interface LandmarkLabel {
 	lines: string[];
 	/** Widest line (text only). */
 	width: number;
+	/** Shows the whole name (not shortened). */
+	full: boolean;
 }
 
 const rankingCache = new WeakMap<
@@ -374,7 +417,8 @@ const rankingCache = new WeakMap<
 
 /**
  * Nodes by importance with their landmark label variants in the current font, most
- * complete first: the whole name on one line, then on two lines, then shortened. A
+ * complete first: the whole name on one line, then on two lines (narrow, then wider), then
+ * shortened. A
  * shortened label that would read the same as another node's keeps the name's end instead
  * ("Antimatter…Reactor III").
  */
@@ -382,26 +426,39 @@ function landmarkRanking(ctx: CanvasRenderingContext2D, scene: Scene) {
 	const cached = rankingCache.get(scene);
 	if (cached?.font === ctx.font) return cached.ranking;
 	const importance = importanceOf(scene);
-	const label = (lines: string[]) => ({
+	const label = (lines: string[], full = true) => ({
 		lines,
-		width: Math.max(...lines.map((l) => ctx.measureText(l).width))
+		width: Math.max(...lines.map((l) => ctx.measureText(l).width)),
+		full
 	});
+	const name = (node: SceneNode) => node.item.name.replace(/\s+/g, ' ');
 	const short = new Map(scene.nodes.map((n) => [n, ellipsize(ctx, n, LANDMARK_WIDTH - 12)]));
 	const uses = new Map<string, number>();
 	for (const text of short.values()) uses.set(text, (uses.get(text) ?? 0) + 1);
 	const ranking = [...scene.nodes]
 		.sort((a, b) => (importance.get(b.key) ?? 0) - (importance.get(a.key) ?? 0))
 		.map((node) => {
-			const name = node.item.name;
-			const full = label([name]);
+			const full = label([node.item.name]);
 			if (full.width <= LANDMARK_WIDTH - 12) return { node, labels: [full] };
 			const labels: LandmarkLabel[] = [];
 			if (full.width <= LANDMARK_WIDE - 12) labels.push(full);
-			const lines = wrap(ctx, node, LANDMARK_WIDTH - 12, 2);
-			if (lines.join(' ') === name.replace(/\s+/g, ' ')) labels.push(label(lines));
+			for (const width of [LANDMARK_WIDTH, LANDMARK_WIDTH_2]) {
+				const lines = wrap(ctx, node, width - 12, 2);
+				if (lines.join(' ') === name(node)) {
+					labels.push(label(lines));
+					break;
+				}
+			}
 			const cut = short.get(node)!;
 			labels.push(
-				label([(uses.get(cut) ?? 0) > 1 ? middleEllipsize(ctx, name, LANDMARK_WIDTH - 12) : cut])
+				label(
+					[
+						(uses.get(cut) ?? 0) > 1
+							? middleEllipsize(ctx, node.item.name, LANDMARK_WIDTH - 12)
+							: cut
+					],
+					false
+				)
 			);
 			return { node, labels };
 		});
@@ -455,9 +512,10 @@ function drawLandmarks(
 		tries++;
 		const card = { x: camera.x + n.x * z, y: camera.y + n.y * z, w: cw, h: ch };
 		const cx = card.x + cw / 2;
-		// The most complete label that covers no neighbouring card, else the one covering fewest.
+		// The most complete label that covers no neighbouring card, else the one covering fewest
+		// (shortened ones counting as covering `SHORTENED_PENALTY` more).
 		let best: [Box, number, LandmarkLabel] | null = null;
-		let bestCovered = 3; // more covered neighbours than this: skip the label
+		let bestScore = Infinity;
 		for (const label of labels) {
 			const tw = label.width + 12;
 			const th = label.lines.length * LANDMARK_LINE + 6;
@@ -485,13 +543,15 @@ function drawLandmarks(
 				};
 				let covered = 0;
 				for (const m of nodesIn(scene, world)) if (m !== n) covered++;
-				if (covered < bestCovered) {
+				if (covered > (label.full ? 3 : 2)) continue; // too crowded for this label here
+				const score = covered + (label.full ? 0 : SHORTENED_PENALTY);
+				if (score < bestScore) {
 					best = [r, side, label];
-					bestCovered = covered;
-					if (!covered) break;
+					bestScore = score;
+					if (!score) break;
 				}
 			}
-			if (best && !bestCovered) break;
+			if (best && !bestScore) break;
 		}
 		if (!best) continue;
 		const [r, side, label] = best;
@@ -546,7 +606,7 @@ function strokeEdges(
 
 /**
  * Full card content: icon, name, cost/kind badges and flag glyphs (world px, like the old
- * DOM card). Secondary cards get muted text; faded ones also fade their icon and badges.
+ * DOM card). Secondary cards get muted text; faded ones also fade their icon and badge fills.
  */
 function drawDetail(
 	ctx: CanvasRenderingContext2D,
@@ -591,10 +651,11 @@ function drawDetail(
 			ctx.lineWidth = 1;
 			ctx.stroke();
 		}
-		ctx.globalAlpha = faded ? 0.7 : 1;
-		ctx.fillStyle = secondary ? theme.muted : filled ? theme.secondaryForeground : text;
-		ctx.fillText(label, bx + 8, by + 10.5);
+		// The label carries meaning, so it stays opaque: the secondary foreground on fills
+		// (muted text falls just under 4.5:1 on the light secondary fill), muted on outlines.
 		ctx.globalAlpha = 1;
+		ctx.fillStyle = filled ? theme.secondaryForeground : text;
+		ctx.fillText(label, bx + 8, by + 10.5);
 		bx += width + 4;
 	};
 	badge(n.cost, true);

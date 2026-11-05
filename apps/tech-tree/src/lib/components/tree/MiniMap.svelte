@@ -61,10 +61,22 @@
 		ctx.scale(dpr, dpr);
 		const { scale, ox, oy } = fit;
 		const v = camera.visible();
-		const rx = ox + v.x * scale;
-		const ry = oy + v.y * scale;
-		const rw = v.width * scale;
-		const rh = v.height * scale;
+		// The viewport frame, kept inside the minimap's border (it may be larger than the tree).
+		const inset = 2;
+		const x1 = Math.max(inset, ox + v.x * scale);
+		const y1 = Math.max(inset, oy + v.y * scale);
+		const x2 = Math.min(WIDTH - inset, ox + (v.x + v.width) * scale);
+		const y2 = Math.min(HEIGHT - inset, oy + (v.y + v.height) * scale);
+		if (x2 <= x1 || y2 <= y1) return;
+		const [rx, ry, rw, rh] = [x1, y1, x2 - x1, y2 - y1];
+		// The whole tree in view: nothing to point out, so no frame.
+		const b = scene.bounds;
+		const all =
+			v.x <= b.x &&
+			v.y <= b.y &&
+			v.x + v.width >= b.x + b.width &&
+			v.y + v.height >= b.y + b.height;
+		if (all) return;
 		// Recede everything outside the viewport frame (marks stay readable), then frame it
 		// with a halo so it stands out on both dense and empty areas.
 		ctx.fillStyle = theme.background;
@@ -78,11 +90,11 @@
 		ctx.fillRect(rx, ry, rw, rh);
 		ctx.globalAlpha = 0.8;
 		ctx.strokeStyle = theme.background;
-		ctx.lineWidth = 4;
+		ctx.lineWidth = 3;
 		ctx.strokeRect(rx, ry, rw, rh);
 		ctx.globalAlpha = 1;
 		ctx.strokeStyle = theme.foreground;
-		ctx.lineWidth = 2;
+		ctx.lineWidth = 1.5;
 		ctx.strokeRect(rx, ry, rw, rh);
 	}
 
