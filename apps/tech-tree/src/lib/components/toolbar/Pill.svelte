@@ -5,20 +5,18 @@
 	/** Plain icon button for the utility cluster (search sits beside it in its own field). */
 	export const pillIcon = 'size-8 rounded-md text-muted-foreground hover:text-foreground';
 	/**
-	 * Track for a set of toggles (a segmented control): a recessed strip whose on segment is a raised
-	 * tile. Goes on the ToggleGroup.Root.
+	 * A set of toggles as one joined button group, the same height and outline as the selects. The
+	 * group clips its own corners and draws the dividers: each segment sits in a tooltip wrapper,
+	 * so per-item first/last rounding would round every segment. Goes on the ToggleGroup.Root.
 	 */
 	export const segmented =
-		'h-8 items-center gap-0.5 rounded-md border border-input bg-background/80 p-0.5 shadow-inner';
+		'h-8 gap-0 overflow-hidden rounded-md border border-white/20 bg-background/40 shadow-xs divide-x divide-white/20';
 	/**
-	 * A segment of a `segmented` track. On: a raised, lighter tile with full-strength text; off:
-	 * muted text. aria-disabled segments look disabled but stay focusable, so their tooltip explains why.
+	 * A segment of a `segmented` group. On: a lighter fill with full-strength text; off: muted text.
+	 * aria-disabled segments look disabled but stay focusable, so their tooltip explains why.
 	 */
 	export const pillToggle =
-		'h-[1.625rem] min-w-[1.625rem] rounded-[calc(var(--radius-md)-2px)] border-0 px-2.5 has-[>svg]:px-2 text-[0.8125rem] font-normal text-muted-foreground hover:bg-accent/50 hover:text-foreground data-[state=on]:bg-accent data-[state=on]:font-medium data-[state=on]:text-foreground data-[state=on]:shadow-sm data-[state=on]:ring-1 data-[state=on]:ring-white/10 data-[state=on]:hover:bg-accent data-[state=on]:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0 aria-disabled:cursor-default aria-disabled:opacity-40 aria-disabled:hover:bg-transparent aria-disabled:hover:text-muted-foreground';
-	/** Small uppercase caption naming the control next to it. */
-	export const groupLabel =
-		'pr-0.5 pl-1 text-[0.6875rem] font-medium tracking-[0.06em] text-muted-foreground/80 uppercase select-none';
+		'h-[1.875rem] min-w-[1.875rem] rounded-none border-0 px-3 has-[>svg]:px-2.5 text-sm font-normal text-muted-foreground hover:bg-input/40 hover:text-foreground data-[state=on]:bg-white/10 data-[state=on]:font-medium data-[state=on]:text-foreground data-[state=on]:hover:bg-white/10 data-[state=on]:hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring focus-visible:ring-offset-0 aria-disabled:cursor-default aria-disabled:opacity-40 aria-disabled:hover:bg-transparent aria-disabled:hover:text-muted-foreground';
 </script>
 
 <script lang="ts">
