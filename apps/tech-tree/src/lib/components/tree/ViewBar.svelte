@@ -7,12 +7,7 @@
 	import { Label } from '$lib/components/ui/label/index.js';
 	import * as ToggleGroup from '$lib/components/ui/toggle-group/index.js';
 	import { app, type FullLayout, type ViewKind } from '$lib/state.svelte';
-	import Pill, {
-		groupLabel,
-		pillIcon,
-		pillToggle,
-		segmented
-	} from '$lib/components/toolbar/Pill.svelte';
+	import Pill, { pillIcon, pillToggle, segmented } from '$lib/components/toolbar/Pill.svelte';
 	import PillDivider from '$lib/components/toolbar/PillDivider.svelte';
 	import Tip from '$lib/components/toolbar/Tip.svelte';
 	import CategoryIcon from './CategoryIcon.svelte';
@@ -31,9 +26,6 @@
 			.replace(/^TI[^:]*Template:/, '')
 			.replace(/([a-z])([A-Z])/g, '$1 $2')
 	);
-
-	// Group captions; the toggles are labelled for assistive tech anyway. "Layout" always shows, so
-	// the two mode sets don't read as one; "View" only where the toolbar has room to spare.
 
 	const KINDS: { value: ViewKind; label: string; title: string }[] = [
 		{ value: 'full', label: 'Full tree', title: 'Full tree: every tech and project' },
@@ -111,7 +103,6 @@
 		</Button>
 	</Tip>
 
-	<span class="{groupLabel} ml-1 hidden @min-[1800px]:inline" aria-hidden="true">View</span>
 	<ToggleGroup.Root
 		type="single"
 		size="sm"
@@ -135,7 +126,6 @@
 	</ToggleGroup.Root>
 
 	{#if view.kind === 'full'}
-		<span class="{groupLabel} ml-2" aria-hidden="true">Layout</span>
 		<ToggleGroup.Root
 			type="single"
 			size="sm"

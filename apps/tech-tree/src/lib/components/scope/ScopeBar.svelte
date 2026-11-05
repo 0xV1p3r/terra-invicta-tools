@@ -5,11 +5,10 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import Pill, { pillItem } from '$lib/components/toolbar/Pill.svelte';
 	import Tip from '$lib/components/toolbar/Tip.svelte';
-	// Outlined triggers with the field name inline before the value, so a chosen value ("Humanity
-	// First") still reads as a faction. A fixed width keeps the toolbar from reflowing when a long
-	// scenario or faction name is chosen; a long value truncates, and the tooltip carries it in full.
+	// Outlined triggers, like the other toolbar controls. A fixed width keeps the toolbar from
+	// reflowing when a long scenario or faction name is chosen; a long value truncates, and the
+	// tooltip carries it in full.
 	const trigger = `${pillItem} justify-between gap-2 pr-2 data-[size=sm]:h-8 data-[size=sm]:rounded-md`;
-	const caption = 'shrink-0 text-muted-foreground select-none';
 	const all = '__all__';
 	let listed = $derived(app.meta?.scenarios.filter((s) => s.listed) ?? []);
 	let other = $derived(app.meta?.scenarios.filter((s) => !s.listed) ?? []);
@@ -29,12 +28,8 @@
 		}}
 	>
 		<Tip text="Scenario: {scenarioLabel}">
-			<Select.Trigger size="sm" class="{trigger} w-48" aria-label="Scenario: {scenarioLabel}"
-				><span class="flex min-w-0 items-center gap-1.5"
-					><span class={caption} aria-hidden="true">Scenario</span><span class="truncate"
-						>{scenarioLabel}</span
-					></span
-				></Select.Trigger
+			<Select.Trigger size="sm" class="{trigger} w-44" aria-label="Scenario: {scenarioLabel}"
+				><span class="truncate">{scenarioLabel}</span></Select.Trigger
 			>
 		</Tip>
 		<Select.Content>
@@ -76,10 +71,10 @@
 		<Tip text="Faction: {faction?.label ?? 'All factions'}">
 			<Select.Trigger
 				size="sm"
-				class="{trigger} w-48"
+				class="{trigger} w-44"
 				aria-label="Faction: {faction?.label ?? 'All factions'}"
 				><span class="flex min-w-0 items-center gap-1.5"
-					><span class={caption} aria-hidden="true">Faction</span>{#if faction?.icon}<img
+					>{#if faction?.icon}<img
 							src={assetUrl(faction.icon) ?? undefined}
 							alt=""
 							class="size-4 shrink-0 object-contain"

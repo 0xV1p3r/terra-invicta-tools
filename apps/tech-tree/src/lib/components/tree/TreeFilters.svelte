@@ -3,7 +3,6 @@
 	import Funnel from '@lucide/svelte/icons/funnel';
 	import Undo2 from '@lucide/svelte/icons/undo-2';
 	import { Badge } from '$lib/components/ui/badge/index.js';
-	import Check from '@lucide/svelte/icons/check';
 	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
 	import FlaskConical from '@lucide/svelte/icons/flask-conical';
 	import Wrench from '@lucide/svelte/icons/wrench';
@@ -27,7 +26,7 @@
 	const segment = `${pillToggle} focus-visible:outline-none`;
 	let techsButton = $state<HTMLButtonElement | null>(null);
 	/** Shown categories sit on a raised tile in full colour; hidden ones are dimmed and grey. */
-	const categoryToggle = `${pillToggle} group/category size-[1.625rem] px-0 has-[>svg]:px-0`;
+	const categoryToggle = `${pillToggle} group/category w-[1.875rem] px-0 has-[>svg]:px-0`;
 
 	const componentId = $props.id();
 	const descriptionId = `${componentId}-filters-description`;
@@ -174,7 +173,7 @@
 					aria-describedby={descriptionId}
 					class={segment}
 				>
-					{#if app.showTechs}<Check />{:else}<FlaskConical />{/if} Techs
+					<FlaskConical /> Techs
 				</ToggleGroup.Item>
 			</Tip>
 			<Tip text={kindTip('Projects', app.showProjects)}>
@@ -184,7 +183,7 @@
 					aria-describedby={descriptionId}
 					class={segment}
 				>
-					{#if app.showProjects}<Check />{:else}<Wrench />{/if} Projects
+					<Wrench /> Projects
 				</ToggleGroup.Item>
 			</Tip>
 		</ToggleGroup.Root>
