@@ -58,7 +58,26 @@
 					break;
 				}
 			}
-			if (utilities.nextElementSibling !== before) toolbar.insertBefore(utilities, before);
+			if (utilities.nextElementSibling !== before) move(before);
+		};
+		// moveBefore keeps focus (and tooltip state) on the moved controls; insertBefore drops
+		// focus to the body, so put it back.
+		const move = (before: Element | null) => {
+			const host = toolbar as HTMLElement & {
+				moveBefore?: (node: Node, child: Node | null) => void;
+			};
+			if (host.moveBefore) {
+				try {
+					host.moveBefore(utilities, before);
+					return;
+				} catch {
+					// Fall through: moveBefore refuses some moves insertBefore allows.
+				}
+			}
+			const focused = document.activeElement;
+			const refocus = focused instanceof HTMLElement && utilities.contains(focused);
+			toolbar.insertBefore(utilities, before);
+			if (refocus && document.activeElement !== focused) focused.focus({ preventScroll: true });
 		};
 		const resized = new ResizeObserver(place);
 		const observe = () => {

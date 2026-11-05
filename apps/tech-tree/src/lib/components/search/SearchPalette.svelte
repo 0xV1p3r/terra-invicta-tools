@@ -111,7 +111,7 @@
 <svelte:window onkeydown={shortcut} />
 <Tip text="Search techs, projects and more" shortcut="Ctrl+K">
 	<Button
-		variant="outline"
+		variant="ghost"
 		size="sm"
 		disabled={!app.meta}
 		onclick={() => {
@@ -119,9 +119,10 @@
 		}}
 		aria-label="Search entities"
 		aria-keyshortcuts="Control+k Meta+k"
-		class="size-8 gap-2 px-0 @min-[1800px]:w-auto @min-[1800px]:px-2.5"
+		class="size-8 gap-2 px-0 @min-[1800px]:w-auto @min-[1800px]:border @min-[1800px]:border-input @min-[1800px]:bg-input/30 @min-[1800px]:px-2.5 @min-[1800px]:shadow-2xs @min-[1800px]:dark:hover:bg-input/50"
 	>
-		<!-- Collapses to an icon when the toolbar is narrow; the tooltip still names the shortcut. -->
+		<!-- Collapses to a borderless icon, like the other utilities, when the toolbar is narrow; wide,
+		it reads as a search field. The tooltip still names the shortcut. -->
 		<Search /> <span class="hidden @min-[1800px]:inline">Search…</span><kbd
 			class="ml-4 hidden rounded border px-1 text-[10px] text-muted-foreground @min-[1800px]:inline"
 			>Ctrl K</kbd

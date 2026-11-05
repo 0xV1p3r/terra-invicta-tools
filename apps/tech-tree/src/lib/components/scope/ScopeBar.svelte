@@ -7,8 +7,11 @@
 	import Tip from '$lib/components/toolbar/Tip.svelte';
 	// Borderless triggers, like the other toolbar controls. A fixed width keeps the toolbar from
 	// reflowing when a long scenario or faction name is chosen; the faction trigger fits every
-	// faction, a long scenario truncates, and the tooltip carries the full value.
+	// faction, a long scenario truncates, and the tooltip carries the full value. A small caption
+	// above the value names the field, so a chosen value ("Humanity First") still reads as a faction.
 	const trigger = `${pillItem} justify-between border-0 bg-transparent shadow-none hover:bg-accent dark:bg-transparent dark:hover:bg-accent/50 data-[size=sm]:h-8 data-[size=sm]:rounded-md`;
+	const caption =
+		'text-[0.625rem] font-medium tracking-[0.04em] text-muted-foreground uppercase select-none';
 	const all = '__all__';
 	let listed = $derived(app.meta?.scenarios.filter((s) => s.listed) ?? []);
 	let other = $derived(app.meta?.scenarios.filter((s) => !s.listed) ?? []);
@@ -29,7 +32,11 @@
 	>
 		<Tip text="Scenario: {scenarioLabel}">
 			<Select.Trigger size="sm" class="{trigger} w-32 @min-[1800px]:w-44" aria-label="Scenario"
-				><span class="min-w-0 truncate">{scenarioLabel}</span></Select.Trigger
+				><span class="flex min-w-0 flex-col items-start leading-none"
+					><span class={caption} aria-hidden="true">Scenario</span><span
+						class="max-w-full truncate text-[0.8125rem] leading-4">{scenarioLabel}</span
+					></span
+				></Select.Trigger
 			>
 		</Tip>
 		<Select.Content>
@@ -75,7 +82,12 @@
 							src={assetUrl(faction.icon) ?? undefined}
 							alt=""
 							class="size-4 shrink-0 object-contain"
-						/>{/if}<span class="truncate">{faction?.label ?? 'All factions'}</span></span
+						/>{/if}<span class="flex min-w-0 flex-col items-start leading-none"
+						><span class={caption} aria-hidden="true">Faction</span><span
+							class="max-w-full truncate text-[0.8125rem] leading-4"
+							>{faction?.label ?? 'All factions'}</span
+						></span
+					></span
 				></Select.Trigger
 			>
 		</Tip>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tick } from 'svelte';
 	import Funnel from '@lucide/svelte/icons/funnel';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import Check from '@lucide/svelte/icons/check';
@@ -17,10 +18,10 @@
 
 	type Kind = 'techs' | 'projects';
 
-	/** Joined toggle: the group draws the outer border, the items only the divider between them. */
-	const segment = `${pillToggle} h-[30px] rounded-none border-0 px-3 focus-visible:outline-none focus-visible:ring-2! focus-visible:ring-ring! focus-visible:ring-offset-2 focus-visible:ring-offset-background`;
+	const segment = `${pillToggle} focus-visible:outline-none focus-visible:ring-2! focus-visible:ring-ring! focus-visible:ring-offset-2 focus-visible:ring-offset-background`;
+	let techsButton = $state<HTMLButtonElement | null>(null);
 	/** A persistent underline distinguishes shown categories from hidden ones. */
-	const categoryToggle = `${pillItem} relative disabled:opacity-100 size-8 min-w-8 border-0 px-0 hover:bg-accent/60 data-[state=on]:bg-transparent data-[state=on]:hover:bg-accent/60 focus-visible:ring-offset-0`;
+	const categoryToggle = `${pillItem} group/category relative disabled:opacity-100 size-8 min-w-8 border-0 px-0 hover:bg-accent/60 data-[state=on]:bg-transparent data-[state=on]:hover:bg-accent/60 focus-visible:ring-offset-0`;
 
 	const collapsedReason = 'Filters apply to the full tree. Click to return to the full tree.';
 	const componentId = $props.id();
@@ -76,16 +77,18 @@
 			<Button
 				variant="ghost"
 				size="sm"
-				class={pillItem}
-				aria-label="Filters · full tree only"
-				onclick={() => {
+				class="{pillItem} gap-1.5 px-2 text-xs"
+				aria-label={`Full tree to filter${activeCount ? ` · ${activeCount}` : ''}`}
+				onclick={async () => {
 					app.showFullTree(app.selected ?? app.root);
 					// Focusing a filtered-out node makes the canvas clear every filter.
 					// Keep the saved filters when returning through this control.
 					if (app.filtersActive) app.focus = null;
+					await tick();
+					techsButton?.focus();
 				}}
 			>
-				<Funnel /> Filters · full tree only
+				<Funnel /> Full tree to filter
 				{#if activeCount}<Badge class="h-4 min-w-4 justify-center px-1 tabular-nums"
 						>{activeCount}</Badge
 					>{/if}
@@ -100,18 +103,17 @@
 		<ToggleGroup.Root
 			type="multiple"
 			size="sm"
-			variant="outline"
-			spacing={0}
+			spacing={0.5}
 			bind:value={() => kinds, setKinds}
-			class="rounded-md border border-input data-[size=sm]:rounded-md"
 			aria-label="Research kinds"
 		>
 			<Tip text="Show techs. At least one kind stays shown.">
 				<ToggleGroup.Item
+					bind:ref={techsButton}
 					value="techs"
 					aria-label="Show techs"
 					aria-describedby={descriptionId}
-					class="{segment} rounded-l-md! rounded-r-none!"
+					class={segment}
 				>
 					{#if app.showTechs}<Check />{:else}<FlaskConical />{/if} Techs
 				</ToggleGroup.Item>
@@ -121,7 +123,7 @@
 					value="projects"
 					aria-label="Show projects"
 					aria-describedby={descriptionId}
-					class="{segment} rounded-l-none! rounded-r-md! border-l!"
+					class={segment}
 				>
 					{#if app.showProjects}<Check />{:else}<Wrench />{/if} Projects
 				</ToggleGroup.Item>
@@ -152,7 +154,9 @@
 						<CategoryIcon
 							{category}
 							size={22}
-							class={on ? 'transition' : 'opacity-65 transition'}
+							class={on
+								? 'transition'
+								: 'opacity-50 saturate-50 transition group-hover/category:opacity-100 group-hover/category:saturate-100'}
 						/>
 						<span
 							aria-hidden="true"
