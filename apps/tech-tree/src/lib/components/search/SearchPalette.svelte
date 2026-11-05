@@ -5,6 +5,7 @@
 	import * as ToggleGroup from '$lib/components/ui/toggle-group';
 	import * as Command from '$lib/components/ui/command';
 	import { Button } from '$lib/components/ui/button';
+	import Tip from '$lib/components/toolbar/Tip.svelte';
 	import {
 		Search,
 		FlaskConical,
@@ -108,22 +109,25 @@
 </script>
 
 <svelte:window onkeydown={shortcut} />
-<Button
-	variant="outline"
-	size="sm"
-	disabled={!app.meta}
-	onclick={() => {
-		open = true;
-	}}
-	aria-label="Search entities"
-	aria-keyshortcuts="Control+k Meta+k"
-	class="h-8 gap-2"
->
-	<!-- Collapses to icon + shortcut when the toolbar is narrow. -->
-	<Search /> <span class="hidden @min-[1800px]:inline">Search…</span><kbd
-		class="rounded border px-1 text-[10px] text-muted-foreground @min-[1800px]:ml-4">Ctrl K</kbd
+<Tip text="Search techs, projects and more" shortcut="Ctrl+K">
+	<Button
+		variant="outline"
+		size="sm"
+		disabled={!app.meta}
+		onclick={() => {
+			open = true;
+		}}
+		aria-label="Search entities"
+		aria-keyshortcuts="Control+k Meta+k"
+		class="size-8 gap-2 px-0 @min-[1800px]:w-auto @min-[1800px]:px-2.5"
 	>
-</Button>
+		<!-- Collapses to an icon when the toolbar is narrow; the tooltip still names the shortcut. -->
+		<Search /> <span class="hidden @min-[1800px]:inline">Search…</span><kbd
+			class="ml-4 hidden rounded border px-1 text-[10px] text-muted-foreground @min-[1800px]:inline"
+			>Ctrl K</kbd
+		>
+	</Button>
+</Tip>
 <Command.Dialog
 	bind:open
 	shouldFilter={false}
