@@ -98,7 +98,7 @@
 	}}
 	aria-label="Search entities"
 	aria-keyshortcuts="Control+k Meta+k"
-	class="gap-2"
+	class="gap-2 rounded-full"
 >
 	<Search /> <span>Search…</span><kbd
 		class="ml-4 rounded border px-1 text-[10px] text-muted-foreground">Ctrl K</kbd

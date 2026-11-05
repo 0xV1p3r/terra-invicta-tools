@@ -8,7 +8,8 @@
 	import ScopeBar from '$lib/components/scope/ScopeBar.svelte';
 	import WikiDialog from '$lib/components/wiki/WikiDialog.svelte';
 	import SearchPalette from '$lib/components/search/SearchPalette.svelte';
-	import SettingsMenu from '$lib/components/settings/SettingsMenu.svelte';
+	import SettingsDialog from '$lib/components/settings/SettingsDialog.svelte';
+	import Pill from '$lib/components/toolbar/Pill.svelte';
 	import TreeCanvas from '$lib/components/tree/TreeCanvas.svelte';
 	import TreeFilters from '$lib/components/tree/TreeFilters.svelte';
 	import { Badge } from '$lib/components/ui/badge/index.js';
@@ -48,46 +49,48 @@
 			>
 		</main>
 	{:else}
-		<div class="flex h-screen flex-col overflow-hidden">
-			<header class="flex flex-wrap items-center gap-x-4 gap-y-2 border-b bg-card px-4 py-2">
-				<div class="flex items-baseline gap-2">
-					<h1 class="font-semibold tracking-tight whitespace-nowrap">Terra Invicta Tech Tree</h1>
-					{#if app.meta.gameVersion}
-						<span class="text-xs text-muted-foreground">v{app.meta.gameVersion}</span>
-					{/if}
-					{#if mockMode}
-						<Badge variant="outline" class="text-amber-600 dark:text-amber-400">mock data</Badge>
-					{/if}
+		<div class="flex h-screen overflow-hidden">
+			<main class="min-w-0 flex-1">
+				<h1 class="sr-only">Terra Invicta Tech Tree</h1>
+				<TreeCanvas>
+					{#snippet leading()}
+						<ScopeBar />
+						<TreeFilters />
+					{/snippet}
+					{#snippet trailing()}
+						<Pill aria-label="Search">
+							<SearchPalette />
+							<WikiDialog />
+						</Pill>
+						<Pill aria-label="System">
+							{#if mockMode}
+								<Badge variant="outline" class="ml-1 text-amber-600 dark:text-amber-400"
+									>mock data</Badge
+								>
+							{/if}
+							{#if !app.panelOpen}
+								<Button
+									variant="ghost"
+									size="icon"
+									class="rounded-full"
+									aria-label="Show details panel"
+									title="Show details panel"
+									onclick={() => (app.panelOpen = true)}
+								>
+									<PanelRightOpen />
+								</Button>
+							{/if}
+							<SettingsDialog />
+							<LightSwitch variant="ghost" class="rounded-full" />
+						</Pill>
+					{/snippet}
+				</TreeCanvas>
+			</main>
+			{#if app.panelOpen}
+				<div class="w-[420px] shrink-0">
+					<DetailPanel />
 				</div>
-				<ScopeBar />
-				<TreeFilters />
-				<div class="ml-auto flex items-center gap-2">
-					<SearchPalette />
-					<WikiDialog />
-					{#if !app.panelOpen}
-						<Button
-							variant="outline"
-							size="icon"
-							aria-label="Show details panel"
-							onclick={() => (app.panelOpen = true)}
-						>
-							<PanelRightOpen />
-						</Button>
-					{/if}
-					<SettingsMenu />
-					<LightSwitch />
-				</div>
-			</header>
-			<div class="flex min-h-0 flex-1">
-				<main class="min-w-0 flex-1">
-					<TreeCanvas />
-				</main>
-				{#if app.panelOpen}
-					<div class="w-[420px] shrink-0">
-						<DetailPanel />
-					</div>
-				{/if}
-			</div>
+			{/if}
 		</div>
 	{/if}
 </Tooltip.Provider>

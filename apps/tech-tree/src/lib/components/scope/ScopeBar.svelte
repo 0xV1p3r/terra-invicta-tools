@@ -3,23 +3,8 @@
 	import { assetUrl } from '$lib/api';
 	import * as Select from '$lib/components/ui/select';
 	import { Badge } from '$lib/components/ui/badge';
+	import Pill from '$lib/components/toolbar/Pill.svelte';
 	const all = '__all__';
-	const languages: Record<string, string> = {
-		en: 'English',
-		deu: 'Deutsch',
-		fr: 'Français',
-		esp: 'Español',
-		ita: 'Italiano',
-		pol: 'Polski',
-		por: 'Português',
-		rus: 'Русский',
-		ukr: 'Українська',
-		cze: 'Čeština',
-		chs: '简体中文',
-		cht: '繁體中文',
-		jpn: '日本語',
-		kor: '한국어'
-	};
 	let listed = $derived(app.meta?.scenarios.filter((s) => s.listed) ?? []);
 	let other = $derived(app.meta?.scenarios.filter((s) => !s.listed) ?? []);
 	let scenarioLabel = $derived(
@@ -28,7 +13,7 @@
 	let faction = $derived(app.meta?.factions.find((f) => f.name === app.scope.faction));
 </script>
 
-<div class="flex flex-wrap items-center gap-2" role="group" aria-label="Data scope">
+<Pill aria-label="Data scope">
 	<Select.Root
 		type="single"
 		value={app.scope.scenario ?? all}
@@ -37,7 +22,7 @@
 			app.scope = { ...app.scope, scenario: value === all ? null : value };
 		}}
 	>
-		<Select.Trigger size="sm" aria-label="Scenario"
+		<Select.Trigger size="sm" class="rounded-full" aria-label="Scenario"
 			><span class="max-w-48 truncate">{scenarioLabel}</span></Select.Trigger
 		>
 		<Select.Content>
@@ -76,7 +61,7 @@
 			app.scope = { ...app.scope, faction: value === all ? null : value };
 		}}
 	>
-		<Select.Trigger size="sm" aria-label="Faction"
+		<Select.Trigger size="sm" class="rounded-full" aria-label="Faction"
 			><span class="flex max-w-48 items-center gap-2 truncate"
 				>{#if faction?.icon}<img
 						src={assetUrl(faction.icon) ?? undefined}
@@ -100,24 +85,4 @@
 			</Select.Group></Select.Content
 		>
 	</Select.Root>
-	<Select.Root
-		type="single"
-		value={app.scope.lang}
-		disabled={!app.meta}
-		onValueChange={(lang) => {
-			app.scope = { ...app.scope, lang };
-		}}
-	>
-		<Select.Trigger size="sm" aria-label="Language"
-			>{languages[app.scope.lang] ?? app.scope.lang}</Select.Trigger
-		>
-		<Select.Content
-			><Select.Group>
-				{#each app.meta?.languages ?? [] as lang (lang)}<Select.Item
-						value={lang}
-						label={languages[lang] ?? lang}>{languages[lang] ?? lang}</Select.Item
-					>{/each}
-			</Select.Group></Select.Content
-		>
-	</Select.Root>
-</div>
+</Pill>

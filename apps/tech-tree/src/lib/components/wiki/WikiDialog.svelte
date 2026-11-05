@@ -219,8 +219,9 @@
 	><Tooltip.Trigger
 		>{#snippet child({ props })}<Button
 				{...props}
-				variant="outline"
+				variant="ghost"
 				size="sm"
+				class="rounded-full"
 				disabled={!app.meta}
 				onclick={() => wiki.show()}
 				aria-keyshortcuts="Control+Shift+k Meta+Shift+k"><BookOpen /> Wiki</Button

@@ -103,6 +103,7 @@
 				{...props}
 				variant="outline"
 				size="sm"
+				class="rounded-full"
 				aria-label="Filter by effect or unlock{app.properties.length
 					? ` (${app.properties.length} selected)`
 					: ''}"
