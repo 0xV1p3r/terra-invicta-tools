@@ -17,7 +17,6 @@
 	import ViewBar from '$lib/components/tree/ViewBar.svelte';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
-	import { LightSwitch } from '$lib/components/ui/light-switch/index.js';
 	import * as Tooltip from '$lib/components/ui/tooltip/index.js';
 	import { app } from '$lib/state.svelte';
 
@@ -84,9 +83,6 @@
 						</Tip>
 					{/if}
 					<SettingsDialog />
-					<Tip text="Toggle light/dark theme">
-						<LightSwitch variant="ghost" class="size-8" />
-					</Tip>
 				</Pill>
 			</div>
 			<div class="flex min-h-0 flex-1">
@@ -103,7 +99,7 @@
 				<!-- Dev-only marker; kept out of the toolbar flow so it can't push the pills around. -->
 				<Badge
 					variant="outline"
-					class="pointer-events-none fixed bottom-3 left-1/2 z-20 -translate-x-1/2 bg-card/90 text-amber-600 dark:text-amber-400"
+					class="pointer-events-none fixed bottom-3 left-1/2 z-20 -translate-x-1/2 bg-card/90 text-amber-400"
 					>mock data</Badge
 				>
 			{/if}

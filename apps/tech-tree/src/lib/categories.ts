@@ -16,7 +16,7 @@ export interface CategoryInfo {
 	color: string;
 	/** CSS variable reference for inline styles (decorative accents). */
 	cssVar: string;
-	/** Theme-aware text color with readable contrast (CSS variable reference). */
+	/** Text color with readable contrast (CSS variable reference). */
 	fgVar: string;
 }
 

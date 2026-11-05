@@ -277,18 +277,8 @@
 		requestRender();
 	});
 
-	// Theme colors follow the light/dark mode. `mode.current` flips before
-	// mode-watcher toggles the root class, so re-read on the class change itself.
 	$effect(() => {
-		const el = container;
-		if (!el) return;
-		theme = readTheme(el);
-		const observer = new MutationObserver(() => (theme = readTheme(el)));
-		observer.observe(document.documentElement, {
-			attributes: true,
-			attributeFilter: ['class', 'style']
-		});
-		return () => observer.disconnect();
+		if (container) theme = readTheme(container);
 	});
 
 	onMount(() => {
