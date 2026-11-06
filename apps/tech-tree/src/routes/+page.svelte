@@ -13,7 +13,7 @@
 	import WikiDialog from '$lib/components/wiki/WikiDialog.svelte';
 	import SearchPalette from '$lib/components/search/SearchPalette.svelte';
 	import SettingsDialog from '$lib/components/settings/SettingsDialog.svelte';
-	import Pill, { pillIcon, pillToggle, segmented } from '$lib/components/toolbar/Pill.svelte';
+	import Pill, { pillIcon } from '$lib/components/toolbar/Pill.svelte';
 	import PillDivider from '$lib/components/toolbar/PillDivider.svelte';
 	import Tip from '$lib/components/toolbar/Tip.svelte';
 	import TreeCanvas from '$lib/components/tree/TreeCanvas.svelte';
@@ -25,14 +25,8 @@
 	import SolarMap from '$lib/components/map/SolarMap.svelte';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
-	import * as ToggleGroup from '$lib/components/ui/toggle-group/index.js';
 	import * as Tooltip from '$lib/components/ui/tooltip/index.js';
-	import { app, type Page } from '$lib/state.svelte';
-
-	const PAGES: { value: Page; label: string; title: string }[] = [
-		{ value: 'tree', label: 'Tech tree', title: 'Research tree: techs and projects' },
-		{ value: 'map', label: 'Solar system', title: 'Solar system map: space bodies and their stats' }
-	];
+	import { app } from '$lib/state.svelte';
 
 	// The map mounts on first use and then stays (like the tree) so switching back is instant.
 	let mapMounted = $state(false);
@@ -180,26 +174,7 @@
 						</Tip>
 					</Pill>
 				{/if}
-				<Pill aria-label="Page">
-					<ToggleGroup.Root
-						type="single"
-						size="sm"
-						spacing={0.5}
-						class={segmented}
-						value={app.page}
-						onValueChange={(v) => v && (app.page = v as Page)}
-						aria-label="Page"
-					>
-						{#each PAGES as p (p.value)}
-							<Tip text={p.title}>
-								<ToggleGroup.Item value={p.value} class={pillToggle}>{p.label}</ToggleGroup.Item>
-							</Tip>
-						{/each}
-					</ToggleGroup.Root>
-				</Pill>
-				{#if app.page === 'tree'}
-					<ViewBar graph={treeGraph} />
-				{/if}
+				<ViewBar graph={treeGraph} />
 				<ScopeBar />
 				<div
 					role="group"

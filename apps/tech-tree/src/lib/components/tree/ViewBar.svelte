@@ -9,6 +9,7 @@
 	import { app, type FullLayout, type ViewKind } from '$lib/state.svelte';
 	import Pill, { pillIcon, pillToggle, segmented } from '$lib/components/toolbar/Pill.svelte';
 	import PillDivider from '$lib/components/toolbar/PillDivider.svelte';
+	import PageSwitch from '$lib/components/toolbar/PageSwitch.svelte';
 	import Tip from '$lib/components/toolbar/Tip.svelte';
 	import CategoryIcon from './CategoryIcon.svelte';
 
@@ -103,64 +104,69 @@
 		</Button>
 	</Tip>
 
-	<ToggleGroup.Root
-		type="single"
-		size="sm"
-		spacing={0.5}
-		class={segmented}
-		bind:value={() => view.kind, (v) => v && setKind(v as ViewKind)}
-		aria-label="View: what is shown"
-	>
-		{#each KINDS as k (k.value)}
-			<Tip text={kindTitle(k)}>
-				<!-- aria-disabled rather than disabled, so keyboard users can reach the explanation. -->
-				<ToggleGroup.Item
-					value={k.value}
-					aria-disabled={k.value !== 'full' && !candidate}
-					class={pillToggle}
-				>
-					{k.label}
-				</ToggleGroup.Item>
-			</Tip>
-		{/each}
-	</ToggleGroup.Root>
+	<PageSwitch />
 
-	{#if view.kind === 'full'}
+	<!-- The rest of the view controls belong to the tree. -->
+	{#if app.page === 'tree'}
 		<ToggleGroup.Root
 			type="single"
 			size="sm"
 			spacing={0.5}
 			class={segmented}
-			value={view.layout}
-			onValueChange={(v) => v && app.update({ kind: 'full', layout: v as FullLayout })}
-			aria-label="Layout: how the tree is arranged"
+			bind:value={() => view.kind, (v) => v && setKind(v as ViewKind)}
+			aria-label="View: what is shown"
 		>
-			{#each LAYOUTS as l (l.value)}
-				<Tip text={l.title}>
-					<ToggleGroup.Item value={l.value} class={pillToggle}>{l.label}</ToggleGroup.Item>
+			{#each KINDS as k (k.value)}
+				<Tip text={kindTitle(k)}>
+					<!-- aria-disabled rather than disabled, so keyboard users can reach the explanation. -->
+					<ToggleGroup.Item
+						value={k.value}
+						aria-disabled={k.value !== 'full' && !candidate}
+						class={pillToggle}
+					>
+						{k.label}
+					</ToggleGroup.Item>
 				</Tip>
 			{/each}
 		</ToggleGroup.Root>
-	{:else}
-		<PillDivider />
-		<div class="flex min-w-0 items-center gap-2 px-1">
-			{#if root}
-				<CategoryIcon category={root.category} size={22} />
-			{/if}
-			<Tip text="Show {rootName} details">
-				<Button
-					variant="ghost"
-					size="sm"
-					class="h-8 max-w-48 min-w-0 px-1 font-semibold"
-					onclick={() => app.root && app.navigate({ key: app.root, kind: root?.kind ?? 'tech' })}
-				>
-					<span class="truncate">{rootName}</span>
-				</Button>
-			</Tip>
-		</div>
+
+		{#if view.kind === 'full'}
+			<ToggleGroup.Root
+				type="single"
+				size="sm"
+				spacing={0.5}
+				class={segmented}
+				value={view.layout}
+				onValueChange={(v) => v && app.update({ kind: 'full', layout: v as FullLayout })}
+				aria-label="Layout: how the tree is arranged"
+			>
+				{#each LAYOUTS as l (l.value)}
+					<Tip text={l.title}>
+						<ToggleGroup.Item value={l.value} class={pillToggle}>{l.label}</ToggleGroup.Item>
+					</Tip>
+				{/each}
+			</ToggleGroup.Root>
+		{:else}
+			<PillDivider />
+			<div class="flex min-w-0 items-center gap-2 px-1">
+				{#if root}
+					<CategoryIcon category={root.category} size={22} />
+				{/if}
+				<Tip text="Show {rootName} details">
+					<Button
+						variant="ghost"
+						size="sm"
+						class="h-8 max-w-48 min-w-0 px-1 font-semibold"
+						onclick={() => app.root && app.navigate({ key: app.root, kind: root?.kind ?? 'tech' })}
+					>
+						<span class="truncate">{rootName}</span>
+					</Button>
+				</Tip>
+			</div>
+		{/if}
 	{/if}
 </Pill>
-{#if view.kind === 'subtree'}
+{#if app.page === 'tree' && view.kind === 'subtree'}
 	{@const sub = view}
 	<Pill aria-label="Relationships">
 		<ToggleGroup.Root
