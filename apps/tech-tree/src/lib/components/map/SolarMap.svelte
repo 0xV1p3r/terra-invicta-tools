@@ -10,7 +10,7 @@
 	import Plus from '@lucide/svelte/icons/plus';
 	import ZoomIn from '@lucide/svelte/icons/zoom-in';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
-	import { api, assetUrl, type EntityKey, type SolarSystem } from '$lib/api';
+	import { api, assetUrl, type EntityKey } from '$lib/api';
 	import { readTheme, type Theme } from '$lib/components/tree/render';
 	import { Camera } from '$lib/components/tree/camera';
 	import * as Breadcrumb from '$lib/components/ui/breadcrumb/index.js';
@@ -23,7 +23,6 @@
 	import { mapState } from './map-state.svelte';
 	import { clearTextCache, crowdedInner, render } from './render';
 	import {
-		buildIndex,
 		buildSystem,
 		pathTo,
 		systemOf,
@@ -33,11 +32,12 @@
 		type MapItem,
 		type SystemScene
 	} from './scene';
+	import MapHotbar from './MapHotbar.svelte';
 	import TimeBar from './TimeBar.svelte';
 
 	// --- data ---------------------------------------------------------------------
 
-	let data = $state.raw<SolarSystem | null>(null);
+	const data = $derived(mapState.data);
 	let loading = $state(false);
 	let error = $state<string | null>(null);
 	const scopeKey = $derived(JSON.stringify(app.scope));
@@ -56,7 +56,7 @@
 					mapState.start = start;
 					mapState.time = start;
 				}
-				data = d;
+				mapState.data = d;
 				loading = false;
 			},
 			(e) => {
@@ -67,7 +67,7 @@
 		);
 	});
 
-	const index = $derived(data ? buildIndex(data) : null);
+	const index = $derived(mapState.index);
 	const centerKey = $derived(
 		index
 			? app.mapSystem && index.bodies.has(app.mapSystem)
@@ -355,6 +355,15 @@
 		});
 	});
 
+	// Fit requests from outside the map (the focus selector).
+	let fitRequest = mapState.fitRequest;
+	$effect(() => {
+		const n = mapState.fitRequest;
+		if (n === fitRequest) return;
+		fitRequest = n;
+		untrack(() => fitAll());
+	});
+
 	function enterSystem(key: EntityKey) {
 		const body = index?.bodies.get(key);
 		if (!body?.children.length) return;
@@ -570,6 +579,16 @@
 
 	// Overlays the hover card keeps clear of, measured when it appears (container coordinates).
 	let topLeft = $state<HTMLDivElement>();
+	let topLeftWidth = $state(0);
+	let topCenterWidth = $state(0);
+	let topCenterHeight = $state(0);
+	/**
+	 * The breadcrumb column moves below the centered hotbar when it doesn't fit beside it. Its own
+	 * width doesn't depend on where it sits, so this can't oscillate.
+	 */
+	const topLeftDrop = $derived(
+		12 + topLeftWidth + 8 > (width - topCenterWidth) / 2 ? topCenterHeight + 8 : 0
+	);
 	let topCenter = $state<HTMLDivElement>();
 	let bottomLeft = $state<HTMLDivElement>();
 	let timeBar = $state<HTMLDivElement>();
@@ -577,7 +596,20 @@
 	// Measured whenever the overlays may have moved: the hover card and the label placer avoid them.
 	$effect(() => {
 		if (!container) return;
-		void [width, height, hoveredItem, crumbs, enterable, innerCrowded, filterResult, data];
+		void [
+			width,
+			height,
+			hoveredItem,
+			crumbs,
+			enterable,
+			innerCrowded,
+			filterResult,
+			data,
+			loading,
+			topLeftDrop,
+			topCenterWidth,
+			topCenterHeight
+		];
 		const origin = container.getBoundingClientRect();
 		obstacles = [topLeft, topCenter, bottomLeft, timeBar].flatMap((el) => {
 			const r = el?.getBoundingClientRect();
@@ -702,7 +734,12 @@
 	</p>
 	<p class="sr-only" aria-live="polite">{announcement}</p>
 
-	<div bind:this={topLeft} class="absolute top-3 left-3 flex flex-col items-start gap-2">
+	<div
+		bind:this={topLeft}
+		bind:clientWidth={topLeftWidth}
+		class="absolute left-3 flex flex-col items-start gap-2"
+		style:top="{12 + topLeftDrop}px"
+	>
 		{#if crumbs.length}
 			<div class="rounded-lg border bg-card px-3 py-1.5 shadow">
 				<Breadcrumb.Root>
@@ -767,33 +804,42 @@
 		{/if}
 	</div>
 
-	{#if enterable || innerCrowded}
-		<div
-			bind:this={topCenter}
-			class="absolute top-3 left-1/2 flex -translate-x-1/2 flex-col items-center gap-2"
-		>
-			{#if enterable}
-				<Button
-					variant="outline"
-					size="sm"
-					class="rounded-full shadow"
-					onclick={() => keepFocus(() => enterSystem(enterable.key))}
-				>
-					<LogIn /> Enter {enterable.name} system
-				</Button>
-			{/if}
-			{#if innerCrowded}
-				<Button
-					variant="outline"
-					size="sm"
-					class="rounded-full shadow"
-					onclick={() => keepFocus(zoomToInner)}
-				>
-					<ZoomIn /> Zoom to inner planets
-				</Button>
-			{/if}
-		</div>
-	{/if}
+	<div
+		bind:this={topCenter}
+		bind:clientWidth={topCenterWidth}
+		bind:clientHeight={topCenterHeight}
+		class="absolute top-3 left-1/2 flex -translate-x-1/2 flex-col items-center gap-2"
+	>
+		<MapHotbar />
+		{#if loading}
+			<div
+				class="pointer-events-none flex items-center gap-2 rounded-full border bg-card px-3 py-1 text-sm text-muted-foreground shadow"
+				role="status"
+			>
+				<LoaderCircle class="size-4 animate-spin" /> Loading solar system…
+			</div>
+		{/if}
+		{#if enterable}
+			<Button
+				variant="outline"
+				size="sm"
+				class="rounded-full shadow"
+				onclick={() => keepFocus(() => enterSystem(enterable.key))}
+			>
+				<LogIn /> Enter {enterable.name} system
+			</Button>
+		{/if}
+		{#if innerCrowded}
+			<Button
+				variant="outline"
+				size="sm"
+				class="rounded-full shadow"
+				onclick={() => keepFocus(zoomToInner)}
+			>
+				<ZoomIn /> Zoom to inner planets
+			</Button>
+		{/if}
+	</div>
 
 	{#if hoveredItem && hoverAnchor}
 		<MapHoverCard
@@ -853,14 +899,6 @@
 		</div>
 	{/if}
 
-	{#if loading}
-		<div
-			class="pointer-events-none absolute top-3 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full border bg-card px-3 py-1 text-sm text-muted-foreground shadow"
-			role="status"
-		>
-			<LoaderCircle class="size-4 animate-spin" /> Loading solar system…
-		</div>
-	{/if}
 	{#if error}
 		<div class="absolute inset-0 grid place-items-center p-6">
 			<div

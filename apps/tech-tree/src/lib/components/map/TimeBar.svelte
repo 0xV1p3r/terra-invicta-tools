@@ -1,5 +1,5 @@
 <script lang="ts">
-	// Map date: slider over the campaign years, step buttons, and play/pause.
+	// Map date: day, month and year fields, a month slider over the campaign years, and play/pause.
 	import Pause from '@lucide/svelte/icons/pause';
 	import Play from '@lucide/svelte/icons/play';
 	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
@@ -10,9 +10,8 @@
 	import { Slider } from '$lib/components/ui/slider/index.js';
 	import { DAY_MS, mapState } from './map-state.svelte';
 
-	/** Slider span after the start date. */
+	/** Span after the start date. */
 	const YEARS = 120;
-	const SPAN_DAYS = Math.round(YEARS * 365.25);
 
 	const SPEEDS = [
 		{ value: '1', label: '1 day/s' },
@@ -21,30 +20,43 @@
 		{ value: '365', label: '1 year/s' }
 	];
 
-	const day = $derived(Math.round((mapState.time - mapState.start) / DAY_MS));
-	const label = $derived(
-		Number.isFinite(mapState.time) ? new Date(mapState.time).toISOString().slice(0, 10) : '–'
-	);
-
-	const startLabel = $derived(new Date(mapState.start).toISOString().slice(0, 10));
-	const endLabel = $derived(
-		new Date(mapState.start + SPAN_DAYS * DAY_MS).toISOString().slice(0, 10)
-	);
-	let draft = $state('');
-	let editing = $state(false);
-	let dateError = $state(false);
-	const dateErrorId = $props.id();
-	let status = $state('');
-
-	$effect(() => {
-		if (!editing && !dateError) draft = label;
+	const MONTHS = Array.from({ length: 12 }, (_, m) => {
+		const d = new Date(Date.UTC(2000, m, 1));
+		const name = (month: 'long' | 'short') =>
+			d.toLocaleDateString('en', { month, timeZone: 'UTC' });
+		return { value: String(m), short: name('short'), long: name('long') };
 	});
+
+	// Whole calendar years, so the end falls in the slider's last month (the start day, clamped).
+	const end = $derived.by(() => {
+		const s = new Date(mapState.start);
+		const [y, m] = [s.getUTCFullYear() + YEARS, s.getUTCMonth()];
+		return Date.UTC(y, m, Math.min(s.getUTCDate(), daysIn(y, m)));
+	});
+	const clampTime = (t: number) => Math.min(end, Math.max(mapState.start, t));
+	const daysIn = (y: number, m: number) => new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+
+	// Calendar fields of the map date; they only change once a day while playing.
+	const year = $derived(new Date(mapState.time).getUTCFullYear());
+	const month = $derived(new Date(mapState.time).getUTCMonth());
+	const day = $derived(new Date(mapState.time).getUTCDate());
+
+	const startDate = $derived(new Date(mapState.start));
+	const endDate = $derived(new Date(end));
+	const startYear = $derived(startDate.getUTCFullYear());
+	const endYear = $derived(endDate.getUTCFullYear());
+
+	// The slider moves in months: a day step would make it lay out ~44k ticks on every change.
+	const monthIndex = $derived((year - startYear) * 12 + month - startDate.getUTCMonth());
+	const SPAN_MONTHS = YEARS * 12;
+	const monthLabel = $derived(`${MONTHS[month]?.long ?? ''} ${year}`);
+
+	let status = $state('');
 
 	// Observe playback transitions only, including pauses from the map keyboard shortcut.
 	let wasPlaying = false;
 	$effect(() => {
 		const playing = mapState.playing;
-		if (playing) untrack(cancelDate);
 		if (wasPlaying && !playing) untrack(() => announce('Paused.'));
 		wasPlaying = playing;
 	});
@@ -53,78 +65,44 @@
 		status = `${prefix} Map date ${new Date(mapState.time).toISOString().slice(0, 10)}.`.trim();
 	}
 
-	function commitDate() {
-		if (!editing) return;
-		const parsed = Date.parse(`${draft}T00:00:00Z`);
-		if (
-			!/^\d{4}-\d{2}-\d{2}$/.test(draft) ||
-			!Number.isFinite(parsed) ||
-			new Date(parsed).toISOString().slice(0, 10) !== draft ||
-			parsed < mapState.start ||
-			parsed > mapState.start + SPAN_DAYS * DAY_MS
-		) {
-			dateError = true;
-			return;
+	/** Years far outside the span would overflow `Date.UTC` into NaN; the span clamp does the rest. */
+	const boundYear = (y: number) => Math.min(endYear + 1, Math.max(startYear - 1, y));
+
+	/** Sets the date (UTC midnight, kept within the span); out-of-range days roll over. */
+	function setDate(y: number, m: number, d: number) {
+		mapState.playing = false;
+		mapState.time = clampTime(Date.UTC(boundYear(y), m, Math.min(400, Math.max(-400, d))));
+	}
+
+	/** Months and years keep the day, clamped to the target month (Jan 31 → Feb 28). */
+	function setMonth(y: number, m: number) {
+		const t = new Date(Date.UTC(boundYear(y), m, 1));
+		const [ty, tm] = [t.getUTCFullYear(), t.getUTCMonth()];
+		setDate(ty, tm, Math.min(day, daysIn(ty, tm)));
+	}
+
+	/** Commits a number field; an empty or rejected entry shows the current value again. */
+	function commit(input: HTMLInputElement, apply: (n: number) => void, current: () => number) {
+		const n = input.valueAsNumber;
+		if (Number.isFinite(n)) apply(Math.trunc(n));
+		input.value = String(current());
+	}
+
+	function fieldKeydown(event: KeyboardEvent & { currentTarget: HTMLInputElement }) {
+		if (event.key === 'Enter') event.currentTarget.dispatchEvent(new Event('change'));
+		else if (event.key === 'Escape') {
+			event.currentTarget.value = String(event.currentTarget.dataset.field === 'year' ? year : day);
+			event.currentTarget.blur();
 		}
-		dateError = false;
-		mapState.playing = false;
-		setDay(Math.round((parsed - mapState.start) / DAY_MS));
-		announce();
-		draft = new Date(mapState.time).toISOString().slice(0, 10);
-		editing = false;
 	}
 
-	interface Step {
-		unit: 'day' | 'month' | 'year';
-		n: number;
-		short: string;
-		label: string;
-	}
-	const STEPS: Step[] = [
-		{ unit: 'year', n: -1, short: '−Y', label: 'Back one year' },
-		{ unit: 'month', n: -1, short: '−M', label: 'Back one month' },
-		{ unit: 'day', n: -1, short: '−D', label: 'Back one day' },
-		{ unit: 'day', n: 1, short: '+D', label: 'Forward one day' },
-		{ unit: 'month', n: 1, short: '+M', label: 'Forward one month' },
-		{ unit: 'year', n: 1, short: '+Y', label: 'Forward one year' }
-	];
-
-	function cancelDate() {
-		dateError = false;
-		editing = false;
-		draft = label;
-	}
-
-	function setDay(d: number) {
-		cancelDate();
-		mapState.time = mapState.start + Math.min(SPAN_DAYS, Math.max(0, d)) * DAY_MS;
-	}
-
-	function step(unit: Step['unit'], n: number) {
-		mapState.playing = false;
-		const t = new Date(mapState.time);
-		const [y, m, d] = [t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate()];
-		// Months/years keep the day, clamped to the target month's length (Jan 31 + 1 month = Feb 28).
-		const shifted = (ty: number, tm: number) =>
-			Date.UTC(ty, tm, Math.min(d, new Date(Date.UTC(ty, tm + 1, 0)).getUTCDate()));
-		const next =
-			unit === 'day'
-				? Date.UTC(y, m, d + n)
-				: unit === 'month'
-					? shifted(y, m + n)
-					: shifted(y + n, m);
-		setDay(Math.round((next - mapState.start) / DAY_MS));
-		announce();
-	}
-
-	// Playback: advance by `speed` days per real second; stop at the end of the slider.
+	// Playback: advance by `speed` days per real second; stop at the end of the span.
 	$effect(() => {
 		if (!mapState.playing) return;
 		let last = performance.now();
 		let frame = requestAnimationFrame(function tick(now) {
 			const dt = Math.min(0.25, (now - last) / 1000);
 			last = now;
-			const end = mapState.start + SPAN_DAYS * DAY_MS;
 			mapState.time = Math.min(end, mapState.time + dt * mapState.speed * DAY_MS);
 			if (mapState.time >= end) mapState.playing = false;
 			else frame = requestAnimationFrame(tick);
@@ -133,106 +111,78 @@
 	});
 </script>
 
-{#snippet stepButton(s: Step)}
-	<Button
-		variant="ghost"
-		size="sm"
-		class="h-8 px-1.5 font-mono text-xs"
-		aria-label={s.label}
-		title={s.label}
-		onclick={() => step(s.unit, s.n)}>{s.short}</Button
-	>
-{/snippet}
-
 <div
-	class="relative grid gap-1.5 rounded-xl border bg-card px-2 py-1.5 shadow"
+	class="grid gap-1.5 rounded-xl border bg-card px-2 py-1.5 shadow"
 	role="group"
 	aria-label="Map date"
 >
-	{#if dateError}
-		<p
-			id={dateErrorId}
-			role="alert"
-			class="absolute right-0 bottom-full mb-2 max-w-full rounded-md border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md"
-		>
-			Use YYYY-MM-DD between {startLabel} and {endLabel}.
-		</p>
-	{/if}
-	<div class="flex items-center justify-between gap-1">
-		{#each STEPS.slice(0, 3) as s (s.label)}
-			{@render stepButton(s)}
-		{/each}
+	<div class="flex items-center gap-1.5">
 		<Button
 			variant="outline"
 			size="icon"
 			class="size-8"
 			aria-label={mapState.playing ? 'Pause' : 'Play'}
 			title={mapState.playing ? 'Pause' : 'Play'}
-			onclick={() => {
-				cancelDate();
-				mapState.playing = !mapState.playing;
-			}}
+			onclick={() => (mapState.playing = !mapState.playing)}
 		>
 			{#if mapState.playing}<Pause />{:else}<Play />{/if}
 		</Button>
-		{#each STEPS.slice(3) as s (s.label)}
-			{@render stepButton(s)}
-		{/each}
 		<Input
-			class="h-8 w-28 shrink-0 px-1 text-center font-mono text-sm tabular-nums"
-			aria-label="Map date, YYYY-MM-DD"
-			aria-live="off"
-			aria-invalid={dateError}
-			aria-describedby={dateError ? dateErrorId : undefined}
-			bind:value={draft}
-			onfocus={() => {
-				mapState.playing = false;
-				editing = true;
-			}}
-			onblur={commitDate}
-			onkeydown={(event) => {
-				if (event.key === 'Enter') {
-					commitDate();
-					event.currentTarget.blur();
-				}
-				if (event.key === 'Escape') {
-					cancelDate();
-					event.currentTarget.blur();
-				}
-			}}
+			type="number"
+			data-field="day"
+			class="h-8 w-16 px-2 text-center font-mono tabular-nums"
+			aria-label="Day"
+			title="Day"
+			min={0}
+			max={daysIn(year, month) + 1}
+			value={day}
+			onfocus={() => (mapState.playing = false)}
+			onchange={(e) =>
+				commit(
+					e.currentTarget,
+					(d) => setDate(year, month, d),
+					() => day
+				)}
+			onkeydown={fieldKeydown}
 		/>
-	</div>
-	<div class="flex items-center gap-2">
-		<div class="grid min-w-0 flex-1 gap-1">
-			<div class="flex justify-between text-[10px] text-muted-foreground" aria-hidden="true">
-				<span title={startLabel}>{startLabel.slice(0, 4)}</span>
-				<span title={endLabel}>{endLabel.slice(0, 4)}</span>
-			</div>
-			<Slider
-				type="single"
-				class="min-w-0"
-				min={0}
-				max={SPAN_DAYS}
-				step={1}
-				value={day}
-				onValueChange={(v: number) => {
-					mapState.playing = false;
-					setDay(v);
-				}}
-				thumbLabel="Date"
-				thumbValueText={label}
-			/>
-		</div>
+		<Select.Root
+			type="single"
+			value={String(month)}
+			onValueChange={(v) => v && setMonth(year, Number(v))}
+		>
+			<Select.Trigger size="sm" aria-label="Month" title="Month" class="w-20">
+				{MONTHS[month]?.short}
+			</Select.Trigger>
+			<Select.Content>
+				{#each MONTHS as m (m.value)}
+					<Select.Item value={m.value} label={m.long}>{m.long}</Select.Item>
+				{/each}
+			</Select.Content>
+		</Select.Root>
+		<Input
+			type="number"
+			data-field="year"
+			class="h-8 w-20 px-2 text-center font-mono tabular-nums"
+			aria-label="Year, {startYear} to {endYear}"
+			title="Year"
+			min={startYear}
+			max={endYear}
+			value={year}
+			onfocus={() => (mapState.playing = false)}
+			onchange={(e) =>
+				commit(
+					e.currentTarget,
+					(y) => setMonth(y, month),
+					() => year
+				)}
+			onkeydown={fieldKeydown}
+		/>
 		<Select.Root
 			type="single"
 			value={String(mapState.speed)}
-			onValueChange={(v) => {
-				if (!v) return;
-				cancelDate();
-				mapState.speed = Number(v);
-			}}
+			onValueChange={(v) => v && (mapState.speed = Number(v))}
 		>
-			<Select.Trigger size="sm" aria-label="Playback speed" class="w-28 shrink-0">
+			<Select.Trigger size="sm" aria-label="Playback speed" class="ml-auto w-28 shrink-0">
 				{SPEEDS.find((s) => s.value === String(mapState.speed))?.label ?? `${mapState.speed} d/s`}
 			</Select.Trigger>
 			<Select.Content>
@@ -249,12 +199,32 @@
 			title="Start date"
 			onclick={() => {
 				mapState.playing = false;
-				setDay(0);
+				mapState.time = mapState.start;
 				announce();
 			}}
 		>
 			<RotateCcw />
 		</Button>
+	</div>
+	<div class="grid gap-1">
+		<div class="flex justify-between text-[10px] text-muted-foreground" aria-hidden="true">
+			<span>{startYear}</span>
+			<span>{endYear}</span>
+		</div>
+		<Slider
+			type="single"
+			class="min-w-0"
+			min={0}
+			max={SPAN_MONTHS}
+			step={1}
+			value={monthIndex}
+			onValueChange={(v: number) => {
+				// Ignore echoes of the current month (they'd reset the day).
+				if (v !== monthIndex) setMonth(startYear, startDate.getUTCMonth() + v);
+			}}
+			thumbLabel="Month"
+			thumbValueText={monthLabel}
+		/>
 	</div>
 	<span class="sr-only" role="status" aria-live="polite" aria-atomic="true">{status}</span>
 </div>
