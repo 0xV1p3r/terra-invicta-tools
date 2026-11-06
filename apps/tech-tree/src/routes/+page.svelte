@@ -2,6 +2,8 @@
 	import { onMount } from 'svelte';
 	import type { Attachment } from 'svelte/attachments';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
+	import PanelLeftClose from '@lucide/svelte/icons/panel-left-close';
+	import PanelLeftOpen from '@lucide/svelte/icons/panel-left-open';
 	import PanelRightClose from '@lucide/svelte/icons/panel-right-close';
 	import PanelRightOpen from '@lucide/svelte/icons/panel-right-open';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
@@ -17,7 +19,9 @@
 	import TreeCanvas from '$lib/components/tree/TreeCanvas.svelte';
 	import TreeFilters from '$lib/components/tree/TreeFilters.svelte';
 	import ViewBar from '$lib/components/tree/ViewBar.svelte';
-	import MapFilters from '$lib/components/map/MapFilters.svelte';
+	import MapPane from '$lib/components/map/MapPane.svelte';
+	import MapToolbar from '$lib/components/map/MapToolbar.svelte';
+	import { mapState } from '$lib/components/map/map-state.svelte';
 	import SolarMap from '$lib/components/map/SolarMap.svelte';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
@@ -159,6 +163,23 @@
 				aria-label={app.page === 'map' ? 'Map toolbar' : 'Tree toolbar'}
 				{@attach pinUtilities}
 			>
+				{#if app.page === 'map'}
+					<!-- Side panel toggles sit outermost, on their panel's side. -->
+					<Pill aria-label="Bodies pane">
+						<Tip text={mapState.paneOpen ? 'Hide bodies pane' : 'Show bodies pane'}>
+							<Button
+								variant="ghost"
+								size="icon"
+								class={pillIcon}
+								aria-label="Bodies pane"
+								aria-pressed={mapState.paneOpen}
+								onclick={() => (mapState.paneOpen = !mapState.paneOpen)}
+							>
+								{#if mapState.paneOpen}<PanelLeftClose />{:else}<PanelLeftOpen />{/if}
+							</Button>
+						</Tip>
+					</Pill>
+				{/if}
 				<Pill aria-label="Page">
 					<ToggleGroup.Root
 						type="single"
@@ -188,13 +209,14 @@
 					{#if app.page === 'tree'}
 						<TreeFilters />
 					{:else}
-						<MapFilters />
+						<MapToolbar />
 					{/if}
 				</div>
 				<Pill class="ml-auto gap-0.5" aria-label="Search and settings" data-utilities>
 					<SearchPalette />
 					<WikiDialog />
 					<PillDivider />
+					<SettingsDialog />
 					<Tip
 						text={app.selected
 							? app.panelOpen
@@ -219,10 +241,14 @@
 							{#if app.panelOpen}<PanelRightClose />{:else}<PanelRightOpen />{/if}
 						</Button>
 					</Tip>
-					<SettingsDialog />
 				</Pill>
 			</div>
 			<div class="flex min-h-0 flex-1">
+				{#if app.page === 'map' && mapState.paneOpen}
+					<div class="w-80 shrink-0">
+						<MapPane />
+					</div>
+				{/if}
 				<main class="min-w-0 flex-1" class:hidden={app.page !== 'tree'}>
 					<TreeCanvas bind:graph={treeGraph} />
 				</main>

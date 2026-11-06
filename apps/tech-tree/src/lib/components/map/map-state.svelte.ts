@@ -1,6 +1,6 @@
 // UI state of the solar system map shared by its canvas and header controls (Svelte 5 runes).
-import type { ResourceRating, SpaceBodyInfo, SpaceResource } from '$lib/api';
-import type { ItemType } from './scene';
+import type { ResourceRating, SolarSystem, SpaceBodyInfo, SpaceResource } from '$lib/api';
+import { buildIndex, type ItemType, type SolarIndex } from './scene';
 
 export const ITEM_TYPES: ItemType[] = [
 	'planet',
@@ -19,6 +19,14 @@ const rank = (r: ResourceRating | undefined) => (r ? RATINGS.indexOf(r) : -1);
 export const DAY_MS = 86_400_000;
 
 class MapState {
+	/** Loaded solar system (shared by the map and its side pane); null until loaded. */
+	data = $state.raw<SolarSystem | null>(null);
+	index = $derived<SolarIndex | null>(this.data ? buildIndex(this.data) : null);
+	/** Bumped to ask the map to fit the current system (it watches this). */
+	fitRequest = $state(0);
+	/** Side pane with the body list and filters. */
+	paneOpen = $state(true);
+
 	/** Map date as a UTC timestamp (ms); NaN until the data is loaded. */
 	time = $state(NaN);
 	/** Scenario start date (ms), the slider's origin. */

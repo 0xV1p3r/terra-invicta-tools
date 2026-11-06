@@ -144,6 +144,10 @@ const BODY_COLORS: Record<string, string> = {
 	Triton: '#b8c4cc'
 };
 
+/** Marker color of a body: its familiar color for the major ones, else by type. */
+export const bodyColor = (info: SpaceBodyInfo) =>
+	BODY_COLORS[info.entity.dataName] ?? TYPE_COLORS[info.bodyType];
+
 export const TYPE_LABELS: Record<ItemType, string> = {
 	star: 'Star',
 	planet: 'Planet',
@@ -257,7 +261,7 @@ export function buildSystem(center: MapBody, mode: MapScale): SystemScene {
 		center,
 		null,
 		center.info.bodyType === 'star' ? 10 : clamp(dotSize(center.info) * 1.6, 6, 11),
-		BODY_COLORS[center.info.entity.dataName] ?? TYPE_COLORS[center.info.bodyType]
+		bodyColor(center.info)
 	);
 	centerItem.priority = -1;
 	items.push(centerItem);
@@ -271,7 +275,7 @@ export function buildSystem(center: MapBody, mode: MapScale): SystemScene {
 			b,
 			null,
 			dotSize(b.info),
-			BODY_COLORS[b.info.entity.dataName] ?? TYPE_COLORS[b.info.bodyType]
+			bodyColor(b.info)
 		);
 		it.orbit = orbitToPath(orbitPath(b.info.orbit!, orbitSamples(b.info.bodyType)), scale);
 		it.orbitTier = orbitTier(b.info);
