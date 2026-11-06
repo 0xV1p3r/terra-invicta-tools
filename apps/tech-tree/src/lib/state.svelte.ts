@@ -101,10 +101,11 @@ class AppState {
 		return this.view.kind === 'full' ? null : this.view.root;
 	}
 
-	/** Show `next`, recording the current view in the history. */
+	/** Show `next` on the tree page, recording where we came from (page included) in the history. */
 	go(next: ViewSpec) {
-		if (sameView(next, this.view)) return;
+		if (sameView(next, this.view) && this.page === 'tree') return;
 		this.record();
+		this.page = 'tree';
 		this.setView(next);
 	}
 
@@ -194,10 +195,11 @@ class AppState {
 			this.mapFocus = ref.key;
 			return;
 		}
-		if (research) this.page = 'tree';
+		// Record before switching pages, so Back returns to the page we came from.
 		if (research && this.view.kind === 'focus') return this.openFocus(ref.key);
 		if (research && this.view.kind !== 'full' && !this.treeKeys.has(ref.key)) this.showFullTree();
-		else if (ref.key !== this.selected) this.record();
+		else if (ref.key !== this.selected || (research && this.page !== 'tree')) this.record();
+		if (research) this.page = 'tree';
 		this.selected = ref.key;
 		if (research) this.focus = ref.key;
 	}
