@@ -11,9 +11,13 @@ use crate::jsonc::{self, Value, object};
 use crate::output::{RecordContext, canonical_record, io_error, sha256_bytes, write_json, write_str};
 use crate::{Error, ExtractOptions, ExtractReport, FORMAT_VERSION, GameInstall, Images, Progress, Result, Stage, locale, schema, templates};
 
-/// Builds with a `manifest.json`, sorted by directory name.
+/// Builds with a `manifest.json`, sorted by directory name. Hidden directories (`.<id>.partial`,
+/// `.<id>.old`) are work in progress or leftovers, never builds.
 fn complete_builds(data_dir: &Path) -> Vec<PathBuf> {
-    subdirs(data_dir).into_iter().filter(|b| b.join("manifest.json").is_file()).collect()
+    subdirs(data_dir)
+        .into_iter()
+        .filter(|b| !b.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.')) && b.join("manifest.json").is_file())
+        .collect()
 }
 
 fn read_json(path: &Path) -> Result<Value> {
@@ -166,10 +170,27 @@ pub fn run(install: &GameInstall, opts: &ExtractOptions, progress: &mut dyn FnMu
         }
     };
 
-    if final_dir.exists() {
-        std::fs::remove_dir_all(&final_dir).map_err(|e| io_error(&final_dir, e))?;
+    // Swap the old build aside before moving the new one in, so a failure never leaves no build;
+    // delete it only once the new build is in place.
+    let old = data_dir.join(format!(".{build_id}.old"));
+    if old.exists() {
+        std::fs::remove_dir_all(&old).map_err(|e| io_error(&old, e))?;
     }
-    std::fs::rename(&work, &final_dir).map_err(|e| io_error(&final_dir, e))?;
+    let replaced = final_dir.exists();
+    if replaced {
+        std::fs::rename(&final_dir, &old).map_err(|e| io_error(&final_dir, e))?;
+    }
+    if let Err(e) = std::fs::rename(&work, &final_dir) {
+        if replaced {
+            let _ = std::fs::rename(&old, &final_dir);
+        }
+        let _ = std::fs::remove_dir_all(&work);
+        return Err(io_error(&final_dir, e));
+    }
+    if replaced {
+        // Best effort: a leftover is removed by the next run of this build.
+        let _ = std::fs::remove_dir_all(&old);
+    }
     write_index(data_dir)?;
 
     let seconds = started.elapsed().as_secs_f64();

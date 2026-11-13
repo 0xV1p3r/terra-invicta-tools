@@ -309,7 +309,8 @@ pub fn read_game_version(root: &Path) -> Option<String> {
         .and_then(|data| extract_version(&data))
 }
 
-/// Read an install (errors if `root` has no `Templates` directory).
+/// Read an install. Returns `Error::NotAnInstall` if `root` is missing or has no
+/// `TerraInvicta_Data/StreamingAssets/Templates` directory.
 pub fn discover(root: &Path) -> Result<GameInstall> {
     let sa = root.join("TerraInvicta_Data/StreamingAssets");
     if !sa.join("Templates").is_dir() {
