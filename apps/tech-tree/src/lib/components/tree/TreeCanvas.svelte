@@ -722,7 +722,7 @@
 
 		{#if scene?.nodes.length}
 			{#if theme}
-				<MiniMap {scene} {camera} {theme} />
+				<MiniMap {scene} {camera} {theme} {matches} />
 			{/if}
 		{/if}
 

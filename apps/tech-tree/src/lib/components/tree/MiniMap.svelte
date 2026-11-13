@@ -6,9 +6,21 @@
 	import { settings, type Corner } from '$lib/settings.svelte';
 	import type { Camera } from './camera';
 	import type { Theme } from './render';
+	import type { EntityKey } from '$lib/api';
 	import type { Scene } from './scene';
 
-	let { scene, camera, theme }: { scene: Scene; camera: Camera; theme: Theme } = $props();
+	let {
+		scene,
+		camera,
+		theme,
+		matches = null
+	}: {
+		scene: Scene;
+		camera: Camera;
+		theme: Theme;
+		/** Filter matches in highlight mode; the rest are faded. */
+		matches?: ReadonlySet<EntityKey> | null;
+	} = $props();
 
 	const WIDTH = 200;
 	const HEIGHT = 150;
@@ -44,6 +56,7 @@
 		const w = Math.max(1.5, scene.width * scale);
 		const h = Math.max(1.5, scene.height * scale);
 		for (const n of scene.nodes) {
+			ctx.globalAlpha = matches && !matches.has(n.key) ? 0.15 : 1;
 			ctx.fillStyle = theme.categories[n.item.category] ?? n.color;
 			ctx.fillRect(ox + n.x * scale, oy + n.y * scale, w, h);
 		}

@@ -109,6 +109,10 @@ const DIM = 0.45;
 const DIM_BORDER = 1;
 /** Opacity of their icon and badge fills (badge text stays opaque). */
 const DIM_CONTENT = 0.6;
+/** Opacity of the category tint over filter matches' fill. */
+const MATCH_TINT = 0.16;
+/** Width (screen px) of the category ring around filter matches. */
+const MATCH_RING = 2.5;
 
 const RADIUS = 14;
 const BIG_FONT_PX = 26;
@@ -252,6 +256,7 @@ export function render(
 					ctx.fillStyle = color;
 					ctx.fill(p);
 				}
+				if (matches && !outside) ringMatches(ctx, group, theme, w, h, px);
 				continue;
 			}
 			const body = new Path2D();
@@ -290,6 +295,23 @@ export function render(
 				ctx.fill(p);
 			}
 			ctx.restore();
+			if (matches && !outside) {
+				// Filter matches: tinted in their category color so they read at any zoom.
+				const tints = new Map<string, Path2D>();
+				for (const n of group) {
+					const color = accent(theme, n);
+					let p = tints.get(color);
+					if (!p) tints.set(color, (p = new Path2D()));
+					p.roundRect(n.x, n.y, w, h, RADIUS);
+				}
+				ctx.globalAlpha = MATCH_TINT;
+				for (const [color, p] of tints) {
+					ctx.fillStyle = color;
+					ctx.fill(p);
+				}
+				ctx.globalAlpha = 1;
+				ringMatches(ctx, group, theme, w, h, px);
+			}
 		}
 	}
 
@@ -379,6 +401,34 @@ export function render(
 		drawLandmarks(ctx, camera, scene, visible, state, unrelated);
 	if (scene.graph.bands.length) drawBandLabels(ctx, camera, scene, theme, bandPad);
 	ctx.globalAlpha = 1;
+}
+
+/**
+ * A ring in each filter match's category color, just outside the card, at a constant screen
+ * width so matches stand out from the dimmed rest even zoomed far out.
+ */
+function ringMatches(
+	ctx: CanvasRenderingContext2D,
+	group: SceneNode[],
+	theme: Theme,
+	w: number,
+	h: number,
+	px: number
+) {
+	const ring = MATCH_RING * px;
+	const gap = ring / 2;
+	const rings = new Map<string, Path2D>();
+	for (const n of group) {
+		const color = accent(theme, n);
+		let p = rings.get(color);
+		if (!p) rings.set(color, (p = new Path2D()));
+		p.roundRect(n.x - gap, n.y - gap, w + 2 * gap, h + 2 * gap, RADIUS + gap);
+	}
+	ctx.lineWidth = ring;
+	for (const [color, p] of rings) {
+		ctx.strokeStyle = color;
+		ctx.stroke(p);
+	}
 }
 
 /** Category name at the top left of each band, kept on screen while the band is visible. */
