@@ -1,6 +1,17 @@
-<h1 align="center"><img src="apps/tech-tree/branding/icon.svg" width="48" align="center" alt=""> Terra Invicta Tools</h1>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="apps/tech-tree/branding/wordmark-dark.svg">
+    <img src="apps/tech-tree/branding/wordmark-light.svg" alt="Terra Invicta Tools" width="380">
+  </picture>
+</p>
 
-Unofficial desktop tools for Terra Invicta. The app reads data from your installed copy of the game and shows the research tree, a wiki and a solar system map. More tools will follow.
+<p align="center">
+  Unofficial desktop tools for Terra Invicta, built from the data in your installed copy of the game.
+</p>
+
+---
+
+The app shows the research tree, a wiki and a solar system map. More tools will follow.
 
 ## Layout
 
