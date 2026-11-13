@@ -59,7 +59,15 @@ struct Field {
 }
 
 const fn f(field: &'static str, label: &'static str, fmt: Fmt, group: &'static str) -> Field {
-    Field { field, label, fmt, group, tone: Tone::Neutral, icon: None, always: false }
+    Field {
+        field,
+        label,
+        fmt,
+        group,
+        tone: Tone::Neutral,
+        icon: None,
+        always: false,
+    }
 }
 
 impl Field {
@@ -136,17 +144,27 @@ const FIELDS: &[Field] = &[
     f("baseWeaponMass_tons", "Mass", Fmt::Num(" t"), GENERAL).icon("sprite:mass").always(),
     f("crew", "Crew", Fmt::Num(""), GENERAL).icon("sprite:population").always(),
     f("power", "Power", Fmt::Signed(" MW"), GENERAL).up().icon("sprite:hab_power").always(),
-    f("powerRequirement_MW", "Power required", Fmt::Num(" MW"), GENERAL).down().icon("sprite:hab_power"),
-    f("missionControl", "Mission control", Fmt::Signed(""), GENERAL).up().icon("sprite:mission_control"),
-    f("controlPointCapacity", "Control point capacity", Fmt::Signed(""), GENERAL).up().icon("sprite:control_point"),
+    f("powerRequirement_MW", "Power required", Fmt::Num(" MW"), GENERAL)
+        .down()
+        .icon("sprite:hab_power"),
+    f("missionControl", "Mission control", Fmt::Signed(""), GENERAL)
+        .up()
+        .icon("sprite:mission_control"),
+    f("controlPointCapacity", "Control point capacity", Fmt::Signed(""), GENERAL)
+        .up()
+        .icon("sprite:control_point"),
     f("buildTime_Days", "Build time", Fmt::Num(" days"), GENERAL).down().icon("sprite:alarmClock"),
-    f("baseConstructionTime_days", "Build time", Fmt::Num(" days"), GENERAL).down().icon("sprite:alarmClock"),
+    f("baseConstructionTime_days", "Build time", Fmt::Num(" days"), GENERAL)
+        .down()
+        .icon("sprite:alarmClock"),
     f("constructionTimeModifier", "Construction time", Fmt::Pct, GENERAL).down(),
     f("miningModifier", "Mining output", Fmt::Pct, GENERAL).up().icon("sprite:mining"),
     f("consTier", "Construction tier", Fmt::Num(""), GENERAL),
     f("minConsTier", "Min. hull construction tier", Fmt::Num(""), GENERAL),
     f("maxOfficers", "Officers", Fmt::Num(""), GENERAL),
-    f("monthlyIncome_Money", "Upkeep / month", Fmt::Signed(""), GENERAL).up().icon("sprite:currency"),
+    f("monthlyIncome_Money", "Upkeep / month", Fmt::Signed(""), GENERAL)
+        .up()
+        .icon("sprite:currency"),
     f("specialModuleValue", "Rule value", Fmt::Num(""), GENERAL),
     f("specialRulesValue", "", Fmt::Skip, GENERAL),
     f("hp", "Hit points", Fmt::Num(""), GENERAL).up(),
@@ -163,35 +181,61 @@ const FIELDS: &[Field] = &[
     f("incomeNobles_month", "Noble metals", Fmt::Signed(""), INCOME).up().icon("sprite:metal_noble"),
     f("incomeVolatiles_month", "Volatiles", Fmt::Signed(""), INCOME).up().icon("sprite:volatiles"),
     f("incomeFissiles_month", "Fissiles", Fmt::Signed(""), INCOME).up().icon("sprite:radioactive"),
-    f("incomeAntimatter_month", "Antimatter", Fmt::Signed(""), INCOME).up().icon("sprite:antimatter"),
+    f("incomeAntimatter_month", "Antimatter", Fmt::Signed(""), INCOME)
+        .up()
+        .icon("sprite:antimatter"),
     f("incomeExotics_month", "Exotics", Fmt::Signed(""), INCOME).up().icon("sprite:exotics"),
     // Org income
     f("incomeMoney", "Money", Fmt::Signed(""), INCOME).up().icon("sprite:currency"),
     f("incomeInfluence", "Influence", Fmt::Signed(""), INCOME).up().icon("sprite:influence"),
     f("incomeOps", "Operations", Fmt::Signed(""), INCOME).up().icon("sprite:ops"),
     f("incomeBoost", "Boost", Fmt::Signed(""), INCOME).up().icon("sprite:boost"),
-    f("incomeMissionControl", "Mission control", Fmt::Signed(""), INCOME).up().icon("sprite:mission_control"),
+    f("incomeMissionControl", "Mission control", Fmt::Signed(""), INCOME)
+        .up()
+        .icon("sprite:mission_control"),
     f("incomeResearch", "Research", Fmt::Signed(""), INCOME).up().icon("sprite:research"),
     // Org attributes
-    f("persuasion", "Persuasion", Fmt::Signed(""), ATTRIBUTES).up().icon("sprite:attribute_persuasion"),
-    f("investigation", "Investigation", Fmt::Signed(""), ATTRIBUTES).up().icon("sprite:attribute_investigation"),
+    f("persuasion", "Persuasion", Fmt::Signed(""), ATTRIBUTES)
+        .up()
+        .icon("sprite:attribute_persuasion"),
+    f("investigation", "Investigation", Fmt::Signed(""), ATTRIBUTES)
+        .up()
+        .icon("sprite:attribute_investigation"),
     f("espionage", "Espionage", Fmt::Signed(""), ATTRIBUTES).up().icon("sprite:attribute_espionage"),
     f("command", "Command", Fmt::Signed(""), ATTRIBUTES).up().icon("sprite:attribute_command"),
-    f("administration", "Administration", Fmt::Signed(""), ATTRIBUTES).up().icon("sprite:attribute_administration"),
+    f("administration", "Administration", Fmt::Signed(""), ATTRIBUTES)
+        .up()
+        .icon("sprite:attribute_administration"),
     f("science", "Science", Fmt::Signed(""), ATTRIBUTES).up().icon("sprite:attribute_science"),
     f("security", "Security", Fmt::Signed(""), ATTRIBUTES).up().icon("sprite:attribute_security"),
     // Org bonuses
     f("economyBonus", "Economy priority", Fmt::SignedPct, PRIORITIES).up().icon("sprite:economy"),
     f("welfareBonus", "Welfare priority", Fmt::SignedPct, PRIORITIES).up().icon("sprite:welfare"),
-    f("environmentBonus", "Environment priority", Fmt::SignedPct, PRIORITIES).up().icon("sprite:environment"),
-    f("knowledgeBonus", "Knowledge priority", Fmt::SignedPct, PRIORITIES).up().icon("sprite:knowledge"),
-    f("governmentBonus", "Government priority", Fmt::SignedPct, PRIORITIES).up().icon("sprite:gov_type"),
+    f("environmentBonus", "Environment priority", Fmt::SignedPct, PRIORITIES)
+        .up()
+        .icon("sprite:environment"),
+    f("knowledgeBonus", "Knowledge priority", Fmt::SignedPct, PRIORITIES)
+        .up()
+        .icon("sprite:knowledge"),
+    f("governmentBonus", "Government priority", Fmt::SignedPct, PRIORITIES)
+        .up()
+        .icon("sprite:gov_type"),
     f("unityBonus", "Unity priority", Fmt::SignedPct, PRIORITIES).up().icon("sprite:unity"),
-    f("militaryBonus", "Military priority", Fmt::SignedPct, PRIORITIES).up().icon("sprite:build_military"),
-    f("oppressionBonus", "Oppression priority", Fmt::SignedPct, PRIORITIES).up().icon("sprite:oppression"),
-    f("spaceDevBonus", "Space development priority", Fmt::SignedPct, PRIORITIES).up().icon("sprite:space_launch"),
-    f("spaceflightBonus", "Spaceflight priority", Fmt::SignedPct, PRIORITIES).up().icon("sprite:spaceflight_program"),
-    f("MCBonus", "Mission control priority", Fmt::SignedPct, PRIORITIES).up().icon("sprite:mission_control"),
+    f("militaryBonus", "Military priority", Fmt::SignedPct, PRIORITIES)
+        .up()
+        .icon("sprite:build_military"),
+    f("oppressionBonus", "Oppression priority", Fmt::SignedPct, PRIORITIES)
+        .up()
+        .icon("sprite:oppression"),
+    f("spaceDevBonus", "Space development priority", Fmt::SignedPct, PRIORITIES)
+        .up()
+        .icon("sprite:space_launch"),
+    f("spaceflightBonus", "Spaceflight priority", Fmt::SignedPct, PRIORITIES)
+        .up()
+        .icon("sprite:spaceflight_program"),
+    f("MCBonus", "Mission control priority", Fmt::SignedPct, PRIORITIES)
+        .up()
+        .icon("sprite:mission_control"),
     f("miningBonus", "Space mining output", Fmt::SignedPct, PRIORITIES).up().icon("sprite:mining"),
     f("spoilsBonus", "Spoils", Fmt::SignedPct, PRIORITIES).up().icon("sprite:spoils"),
     // Org cost
@@ -202,7 +246,9 @@ const FIELDS: &[Field] = &[
     // Weapons
     f("mount", "Mount", Fmt::Enum(""), COMBAT),
     f("damage_MJ", "Damage", Fmt::Num(" MJ"), COMBAT).up().icon("sprite:ship_damage"),
-    f("expectedDamage_MJ", "Expected damage", Fmt::Num(" MJ"), COMBAT).up().icon("sprite:ship_damage"),
+    f("expectedDamage_MJ", "Expected damage", Fmt::Num(" MJ"), COMBAT)
+        .up()
+        .icon("sprite:ship_damage"),
     f("flatDamage_MJ", "Damage", Fmt::Num(" MJ"), COMBAT).up().icon("sprite:ship_damage"),
     f("shotPower_MJ", "Shot power", Fmt::Num(" MJ"), COMBAT).up().icon("sprite:ship_damage"),
     f("chargingEnergy_GJ", "Charging energy", Fmt::Num(" GJ"), COMBAT).down(),
@@ -245,7 +291,12 @@ const FIELDS: &[Field] = &[
     f("thrusters", "Thrusters", Fmt::Num(""), PROPULSION),
     f("thrustCap", "Combat thrust", Fmt::Num("×"), PROPULSION).up(),
     f("propellant", "Propellant", Fmt::Enum("TIDriveTemplate."), PROPULSION),
-    f("requiredPowerPlant", "Required power plant", Fmt::Enum("TIPowerPlantTemplate.PowerPlantRequirement."), PROPULSION),
+    f(
+        "requiredPowerPlant",
+        "Required power plant",
+        Fmt::Enum("TIPowerPlantTemplate.PowerPlantRequirement."),
+        PROPULSION,
+    ),
     f("req power", "Required power", Fmt::Num(" GW"), PROPULSION),
     f("cooling", "Cooling", Fmt::Skip, PROPULSION),
     f("powerGen", "Backup power", Fmt::Enum("TIDriveTemplate.PowerGenerationType."), PROPULSION),
@@ -301,7 +352,9 @@ const FIELDS: &[Field] = &[
 ];
 
 /// Hulls consume mission control; hab modules provide (+) or consume (−) it.
-const HULL_MISSION_CONTROL: Field = f("missionControl", "Mission control use", Fmt::Num(""), GENERAL).down().icon("sprite:mission_control");
+const HULL_MISSION_CONTROL: Field = f("missionControl", "Mission control use", Fmt::Num(""), GENERAL)
+    .down()
+    .icon("sprite:mission_control");
 
 /// Identity, unlock and presentation fields: never stats.
 const IGNORED: &[&str] = &[
@@ -365,7 +418,17 @@ pub fn entity_stats(view: &View<'_>, texts: &Texts, id: EntityId, spoilers: &Has
         return wiki::stats(view, texts, id, spoilers);
     }
     let record = view.record(id)?.as_object()?;
-    let mut b = Builder { view, texts, spoilers, stats: EntityStats { tags: Vec::new(), groups: Vec::new(), notes: Vec::new(), links: Vec::new() } };
+    let mut b = Builder {
+        view,
+        texts,
+        spoilers,
+        stats: EntityStats {
+            tags: Vec::new(),
+            groups: Vec::new(),
+            notes: Vec::new(),
+            links: Vec::new(),
+        },
+    };
     let mut consumed: HashSet<String> = HashSet::new();
 
     if let Some(tier) = record.get("tier").and_then(Value::as_f64) {
@@ -385,7 +448,11 @@ pub fn entity_stats(view: &View<'_>, texts: &Texts, id: EntityId, spoilers: &Has
         let Some(value) = record.get(spec.field) else {
             continue;
         };
-        let spec = if spec.field == "missionControl" && matches!(kind, Kind::ShipPart(_)) { &HULL_MISSION_CONTROL } else { spec };
+        let spec = if spec.field == "missionControl" && matches!(kind, Kind::ShipPart(_)) {
+            &HULL_MISSION_CONTROL
+        } else {
+            spec
+        };
         b.field(spec, value, record);
         if !matches!(spec.fmt, Fmt::Skip) {
             consumed.insert(prefixed("rand", spec.field));
@@ -430,7 +497,10 @@ impl Builder<'_, '_> {
     fn push(&mut self, group: &str, stat: Stat) {
         match self.stats.groups.iter_mut().find(|g| g.label == group) {
             Some(g) => g.stats.push(stat),
-            None => self.stats.groups.push(StatGroup { label: group.into(), stats: vec![stat] }),
+            None => self.stats.groups.push(StatGroup {
+                label: group.into(),
+                stats: vec![stat],
+            }),
         }
     }
 
@@ -499,11 +569,14 @@ impl Builder<'_, '_> {
         let detail = match (rand, chance) {
             (None, None) => None,
             (rand, chance) => Some(
-                [rand.map(|r| format!("+0–{} random", format_value(spec.fmt, r).trim_start_matches('+'))), chance.map(|c| format!("{}% chance", num(c)))]
-                    .into_iter()
-                    .flatten()
-                    .collect::<Vec<_>>()
-                    .join(" · "),
+                [
+                    rand.map(|r| format!("+0–{} random", format_value(spec.fmt, r).trim_start_matches('+'))),
+                    chance.map(|c| format!("{}% chance", num(c))),
+                ]
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>()
+                .join(" · "),
             ),
         };
         let stat = self.stat(spec, format_value(spec.fmt, v), spec.tone, v, detail);
@@ -538,7 +611,14 @@ impl Builder<'_, '_> {
             }
             _ => return,
         };
-        let stat = Stat { label, value: text, detail: None, sentiment: "neutral".into(), icon: None, field: field.into() };
+        let stat = Stat {
+            label,
+            value: text,
+            detail: None,
+            sentiment: "neutral".into(),
+            icon: None,
+            field: field.into(),
+        };
         self.push(OTHER, stat);
     }
 
@@ -548,24 +628,39 @@ impl Builder<'_, '_> {
     fn costs(&mut self, kind: Kind, record: &Map<String, Value>) {
         let n = |f: &str| record.get(f).and_then(|v| v.as_f64().or_else(|| v.as_str()?.trim().parse().ok()));
         let map = |f: &str| record.get(f).and_then(Value::as_object);
-        let rules: Vec<&str> = record.get("specialRules").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).collect();
+        let rules: Vec<&str> = record
+            .get("specialRules")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .collect();
         // With an active helium-3 mine, fissiles in these materials are replaced by water
         // (TIHabModuleTemplate.BuildMaterials/MonthlySupportCost, TIDriveTemplate.GetPerTankPropellantMaterials).
         let he3 = rules.contains(&"UsesHelium3") || record.get("helium3Fuel").and_then(Value::as_bool) == Some(true);
         let tons = match kind {
             Kind::HabModule => n("baseMass_tons").map(|t| (t, "Base build cost (in space)")),
             Kind::ShipPart(PartKind::PowerPlant) => n("specificPower_tGW").map(|t| (t, "Build cost per GW")),
-            Kind::ShipPart(PartKind::Radiator) => n("specificPower_2s_KWkg").filter(|p| *p > 0.0).map(|p| (1000.0 / p, "Build cost per GW waste heat")),
+            Kind::ShipPart(PartKind::Radiator) => n("specificPower_2s_KWkg")
+                .filter(|p| *p > 0.0)
+                .map(|p| (1000.0 / p, "Build cost per GW waste heat")),
             Kind::ShipPart(PartKind::Armor) => Some((1.0, "Build cost per ton")),
             Kind::ShipPart(PartKind::Drive) => {
                 // TIDriveTemplate.buildMass_tons: flatMass + thrustPower_GW × specificPower_kgMW.
                 let thrust_power_gw = n("thrust_N").unwrap_or(0.0) * n("EV_kps").unwrap_or(0.0) * 0.5 / 1e6;
-                Some((n("flatMass_tons").unwrap_or(0.0) + thrust_power_gw * n("specificPower_kgMW").unwrap_or(0.0), "Build cost"))
+                Some((
+                    n("flatMass_tons").unwrap_or(0.0) + thrust_power_gw * n("specificPower_kgMW").unwrap_or(0.0),
+                    "Build cost",
+                ))
             }
             Kind::ShipPart(_) => n("mass_tons").or_else(|| n("baseWeaponMass_tons")).map(|t| (t, "Build cost")),
             _ => None,
         };
-        let build_field = if record.contains_key("weightedBuildMaterials") { "weightedBuildMaterials" } else { "weightBuildMaterials" };
+        let build_field = if record.contains_key("weightedBuildMaterials") {
+            "weightedBuildMaterials"
+        } else {
+            "weightBuildMaterials"
+        };
         if let Some(materials) = map(build_field) {
             match tons {
                 Some((t, label)) if t > 0.0 => self.cost_group(label, build_field, materials, t, kind == Kind::HabModule && he3),
@@ -625,7 +720,11 @@ impl Builder<'_, '_> {
             .iter()
             .filter_map(|(key, share)| {
                 let share = share.as_f64().filter(|v| *v > 0.0)?;
-                Some((key.clone(), share * tons * RESOURCE_PER_TON, Some(format!("{} of {} t", pct(share), amount(tons)))))
+                Some((
+                    key.clone(),
+                    share * tons * RESOURCE_PER_TON,
+                    Some(format!("{} of {} t", pct(share), amount(tons))),
+                ))
             })
             .collect();
         self.render_amounts(group, field, amounts, he3, Tone::Neutral);
@@ -637,7 +736,14 @@ impl Builder<'_, '_> {
                 continue;
             };
             let (label, icon) = self.material(key);
-            let stat = Stat { label, value: pct(share), detail: None, sentiment: "neutral".into(), icon, field: format!("{field}.{key}") };
+            let stat = Stat {
+                label,
+                value: pct(share),
+                detail: None,
+                sentiment: "neutral".into(),
+                icon,
+                field: format!("{field}.{key}"),
+            };
             self.push(group, stat);
         }
     }
@@ -651,7 +757,13 @@ impl Builder<'_, '_> {
                 let listed = support.get(key).and_then(Value::as_f64).unwrap_or(0.0);
                 let from_crew = crew.iter().find(|(k, _)| *k == key).map_or(0.0, |(_, v)| *v);
                 let total = listed + from_crew;
-                (total != 0.0).then(|| (key.to_string(), total, (from_crew > 0.0).then(|| format!("incl. {} for crew", amount(from_crew)))))
+                (total != 0.0).then(|| {
+                    (
+                        key.to_string(),
+                        total,
+                        (from_crew > 0.0).then(|| format!("incl. {} for crew", amount(from_crew))),
+                    )
+                })
             })
             .collect();
         self.render_amounts("Upkeep / month", "supportMaterials_month", amounts, he3, Tone::Down);
@@ -672,7 +784,11 @@ impl Builder<'_, '_> {
                 "fissiles" if he3 => Some(0.0),
                 _ => None,
             };
-            let detail = [detail, alt.map(|a| format!("{} with helium-3", amount(a)))].into_iter().flatten().collect::<Vec<_>>().join(" · ");
+            let detail = [detail, alt.map(|a| format!("{} with helium-3", amount(a)))]
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>()
+                .join(" · ");
             let (label, icon) = self.material(&key);
             let stat = Stat {
                 label,
@@ -715,7 +831,13 @@ impl Builder<'_, '_> {
     /// the value as a percentage; the others are game constants or runtime state.
     fn hab_rules(&mut self, record: &Map<String, Value>) {
         let value = record.get("specialRulesValue").and_then(Value::as_f64);
-        for rule in record.get("specialRules").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str) {
+        for rule in record
+            .get("specialRules")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+        {
             let text = self
                 .texts
                 .get(&format!("HabModuleSpecialRule.{rule}"))
@@ -736,7 +858,13 @@ impl Builder<'_, '_> {
     }
 
     fn module_rules(&mut self, record: &Map<String, Value>) {
-        for rule in record.get("specialModuleRules").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str) {
+        for rule in record
+            .get("specialModuleRules")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+        {
             self.stats.tags.push(humanize(rule));
         }
     }
@@ -771,7 +899,12 @@ impl Builder<'_, '_> {
     /// Hull module slots, counted by type.
     fn slots(&mut self, slots: Option<&Value>) {
         let mut counts: Vec<(String, usize)> = Vec::new();
-        for t in slots.and_then(Value::as_array).into_iter().flatten().filter_map(|s| s.get("moduleSlotType")?.as_str()) {
+        for t in slots
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|s| s.get("moduleSlotType")?.as_str())
+        {
             match counts.iter_mut().find(|(n, _)| n == t) {
                 Some((_, c)) => *c += 1,
                 None => counts.push((t.to_string(), 1)),
@@ -797,7 +930,11 @@ impl Builder<'_, '_> {
             Some(other) => {
                 let stat = Stat {
                     label: "Cooling".into(),
-                    value: if other == "Calc" { "Depends on exhaust velocity".into() } else { humanize(other) },
+                    value: if other == "Calc" {
+                        "Depends on exhaust velocity".into()
+                    } else {
+                        humanize(other)
+                    },
                     detail: None,
                     sentiment: "neutral".into(),
                     icon: None,
@@ -830,11 +967,17 @@ impl Builder<'_, '_> {
         };
         let required = names("requiredOwnerTraits", model::TRAIT);
         if !required.is_empty() {
-            self.stats.notes.push(fill("UI.Orgs.RequiresTraits", "Councilor must have these trait(s): {0}", &required.join(", ")));
+            self.stats
+                .notes
+                .push(fill("UI.Orgs.RequiresTraits", "Councilor must have these trait(s): {0}", &required.join(", ")));
         }
         let prohibited = names("prohibitedOwnerTraits", model::TRAIT);
         if !prohibited.is_empty() {
-            self.stats.notes.push(fill("UI.Orgs.ProhibitedTraits", "Councilor cannot have these trait(s): {0}", &prohibited.join(", ")));
+            self.stats.notes.push(fill(
+                "UI.Orgs.ProhibitedTraits",
+                "Councilor cannot have these trait(s): {0}",
+                &prohibited.join(", "),
+            ));
         }
         if let Some(region) = record.get("homeRegionMapTemplateName").and_then(Value::as_str) {
             let name = humanize(region.strip_prefix("map_").unwrap_or(region));
@@ -854,7 +997,10 @@ impl Builder<'_, '_> {
         if record.get("grantsMarked").and_then(Value::as_bool) == Some(true)
             && let Some(t) = self.texts.get("UI.Orgs.GrantsMarked")
         {
-            let marked = self.view.find(model::TRAIT, "Marked").map_or_else(|| "Marked".into(), |id| self.view.name(self.texts, id));
+            let marked = self
+                .view
+                .find(model::TRAIT, "Marked")
+                .map_or_else(|| "Marked".into(), |id| self.view.name(self.texts, id));
             self.stats.notes.push(to_plain_with(t, &mut |_| Some(marked.clone())));
         }
     }
@@ -863,7 +1009,10 @@ impl Builder<'_, '_> {
         let r = |id| entity_ref(self.view, self.texts, id, self.spoilers);
         let mut add = |label: &str, refs: Vec<EntityRef>| {
             if !refs.is_empty() {
-                self.stats.links.push(StatLinks { label: label.into(), entities: refs });
+                self.stats.links.push(StatLinks {
+                    label: label.into(),
+                    entities: refs,
+                });
             }
         };
         let str_field = |f: &str| record.get(f).and_then(Value::as_str);
@@ -877,10 +1026,38 @@ impl Builder<'_, '_> {
             .map(r)
             .collect();
         add("Missions granted", missions);
-        add("Requires tech", str_field("requiredTechName").and_then(|n| self.view.find_research(n)).map(r).into_iter().collect());
-        add("Upgrades from", str_field("upgradesFromName").and_then(|n| self.view.find(model::HAB_MODULE, n)).map(r).into_iter().collect());
-        add("Project granted on acquisition", str_field("projectGrantedName").and_then(|n| self.view.find_research(n)).map(r).into_iter().collect());
-        add("Unlocks project", str_field("unlocksProjectName").and_then(|n| self.view.find_research(n)).map(r).into_iter().collect());
+        add(
+            "Requires tech",
+            str_field("requiredTechName")
+                .and_then(|n| self.view.find_research(n))
+                .map(r)
+                .into_iter()
+                .collect(),
+        );
+        add(
+            "Upgrades from",
+            str_field("upgradesFromName")
+                .and_then(|n| self.view.find(model::HAB_MODULE, n))
+                .map(r)
+                .into_iter()
+                .collect(),
+        );
+        add(
+            "Project granted on acquisition",
+            str_field("projectGrantedName")
+                .and_then(|n| self.view.find_research(n))
+                .map(r)
+                .into_iter()
+                .collect(),
+        );
+        add(
+            "Unlocks project",
+            str_field("unlocksProjectName")
+                .and_then(|n| self.view.find_research(n))
+                .map(r)
+                .into_iter()
+                .collect(),
+        );
         if let Some(own) = record.get("dataName").and_then(Value::as_str) {
             let upgrades = self
                 .view
@@ -993,8 +1170,8 @@ fn humanize(s: &str) -> String {
         }
         let prev = i.checked_sub(1).map(|j| chars[j]);
         let next = chars.get(i + 1);
-        let boundary = c.is_uppercase()
-            && prev.is_some_and(|p| p.is_lowercase() || p.is_ascii_digit() || (p.is_uppercase() && next.is_some_and(|n| n.is_lowercase())));
+        let boundary =
+            c.is_uppercase() && prev.is_some_and(|p| p.is_lowercase() || p.is_ascii_digit() || (p.is_uppercase() && next.is_some_and(|n| n.is_lowercase())));
         if boundary && !cur.is_empty() {
             words.push(std::mem::take(&mut cur));
         }
@@ -1053,7 +1230,11 @@ mod tests {
     }
 
     fn value<'s>(s: &'s EntityStats, field: &str) -> &'s Stat {
-        s.groups.iter().flat_map(|g| &g.stats).find(|st| st.field == field).unwrap_or_else(|| panic!("no {field} in {s:#?}"))
+        s.groups
+            .iter()
+            .flat_map(|g| &g.stats)
+            .find(|st| st.field == field)
+            .unwrap_or_else(|| panic!("no {field} in {s:#?}"))
     }
 
     #[test]
@@ -1087,7 +1268,12 @@ mod tests {
         let site = stats(ti_data::space::HAB_SITE, &mars.hab_sites[0]);
         let output = site.groups.iter().find(|g| g.label == "Expected output / month").unwrap();
         assert_eq!(output.stats.len(), 5);
-        assert!(output.stats.iter().all(|s| s.detail.as_ref().is_some_and(|d| d.contains('–')) && !s.value.contains('–')));
+        assert!(
+            output
+                .stats
+                .iter()
+                .all(|s| s.detail.as_ref().is_some_and(|d| d.contains('–')) && !s.value.contains('–'))
+        );
         let orbit = stats(ti_data::space::ORBIT, &mars.orbits[0]);
         assert!(!value(&orbit, "stationCapacity").value.is_empty());
         let site_id = view.find(ti_data::space::HAB_SITE, &mars.hab_sites[0]).unwrap();
@@ -1111,7 +1297,11 @@ mod tests {
         // 250 t × 79% metals × 0.1
         assert_eq!(value(&s, "weightedBuildMaterials.metals").value, "19.8");
         assert_eq!(value(&s, "weightedBuildMaterials.metals").detail.as_deref(), Some("79% of 250 t"));
-        assert!(s.notes.iter().any(|n| n.starts_with("Construction cost and power consumption scale")), "{:?}", s.notes);
+        assert!(
+            s.notes.iter().any(|n| n.starts_with("Construction cost and power consumption scale")),
+            "{:?}",
+            s.notes
+        );
         assert!(s.notes.iter().any(|n| n.contains("only have one")), "{:?}", s.notes);
         assert!(s.notes.iter().any(|n| n.contains("mine size")), "{:?}", s.notes);
         // Helium-3 swaps fissiles for water: 2,400 t × (10% water + 2% fissiles) × 0.1.
@@ -1119,7 +1309,10 @@ mod tests {
         let fissiles = value(&he3, "weightedBuildMaterials.fissiles");
         assert!(fissiles.detail.as_deref().is_some_and(|d| d.ends_with("0 with helium-3")), "{fissiles:?}");
         let water = value(&he3, "weightedBuildMaterials.water");
-        assert_eq!((water.value.as_str(), water.detail.as_deref()), ("24", Some("10% of 2,400 t · 28.8 with helium-3")));
+        assert_eq!(
+            (water.value.as_str(), water.detail.as_deref()),
+            ("24", Some("10% of 2,400 t · 28.8 with helium-3"))
+        );
         // Alien owners pay their crew nothing.
         let alien = stats(model::HAB_MODULE, "AlienSpaceworks");
         assert!(alien.groups.iter().flat_map(|g| &g.stats).all(|st| st.field != "supportMaterials_month.money"));
@@ -1145,9 +1338,15 @@ mod tests {
         let armor = stats("TIShipArmorTemplate", "BoronCarbideArmor");
         assert_eq!(value(&armor, "specialties.XRayResistance").value, "1");
         assert_eq!(value(&armor, "specialties.KineticsResistance").value, "75%");
-        assert_eq!(value(&stats("TIShipArmorTemplate", "SteelArmor"), "weightedBuildMaterials.volatiles").value, "0.002");
+        assert_eq!(
+            value(&stats("TIShipArmorTemplate", "SteelArmor"), "weightedBuildMaterials.volatiles").value,
+            "0.002"
+        );
         let hull = stats("TIShipHullTemplate", "Destroyer");
-        assert_eq!((value(&hull, "missionControl").value.as_str(), value(&hull, "missionControl").sentiment.as_str()), ("2", "bad"));
+        assert_eq!(
+            (value(&hull, "missionControl").value.as_str(), value(&hull, "missionControl").sentiment.as_str()),
+            ("2", "bad")
+        );
         assert_eq!(value(&hull, "shipModuleSlots.Utility").value, "5");
         // Nothing presentational leaks into "Other".
         for s in [&s, &missile, &hull] {
@@ -1169,6 +1368,11 @@ mod tests {
         assert_eq!(value(&s, "techBonuses.Xenology").value, "+10%");
         assert!(s.links.iter().any(|l| l.label == "Missions granted" && l.entities.len() == 4), "{:?}", s.links);
         // `rand*`/`chance*` companions fold into their stat.
-        assert!(s.groups.iter().flat_map(|g| &g.stats).all(|st| !st.field.starts_with("chance") && !st.field.starts_with("rand")));
+        assert!(
+            s.groups
+                .iter()
+                .flat_map(|g| &g.stats)
+                .all(|st| !st.field.starts_with("chance") && !st.field.starts_with("rand"))
+        );
     }
 }

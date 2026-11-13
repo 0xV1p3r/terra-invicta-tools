@@ -22,6 +22,17 @@ pub enum Error {
     NoBuilds,
     #[error("language {0:?} is not part of this build")]
     UnknownLanguage(String),
+    #[error("build has {count} template layers; at most {max} are supported")]
+    TooManyLayers { count: usize, max: usize },
+    #[error("{template} {data_name:?} has {count} records; at most {max} are supported")]
+    TooManyVariants {
+        template: String,
+        data_name: String,
+        count: usize,
+        max: usize,
+    },
+    #[error("build has {count} scenarios; at most {max} are supported")]
+    TooManyScenarios { count: usize, max: usize },
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;

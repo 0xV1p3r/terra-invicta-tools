@@ -53,7 +53,10 @@ impl PrereqGroup {
 
     /// The listed prereq if usable, else the first alternative (used for layering).
     pub fn primary(&self) -> Option<EntityId> {
-        self.options_with_kind().find(|(_, alt)| !alt).or_else(|| self.options_with_kind().next()).map(|(p, _)| p)
+        self.options_with_kind()
+            .find(|(_, alt)| !alt)
+            .or_else(|| self.options_with_kind().next())
+            .map(|(p, _)| p)
     }
 }
 
@@ -89,7 +92,10 @@ pub struct Traversal {
 
 impl Default for Traversal {
     fn default() -> Self {
-        Self { alternatives: true, max_depth: None }
+        Self {
+            alternatives: true,
+            max_depth: None,
+        }
     }
 }
 
@@ -135,7 +141,12 @@ impl ResearchGraph {
             let usable = |p: EntityId| p != id && view.faction_allows(p);
             let mut groups = Vec::with_capacity(listed.len());
             for (i, &p) in listed.iter().enumerate() {
-                let mut group = PrereqGroup { options: Vec::new(), alternative: Vec::new(), hidden: Vec::new(), unresolved: Vec::new() };
+                let mut group = PrereqGroup {
+                    options: Vec::new(),
+                    alternative: Vec::new(),
+                    hidden: Vec::new(),
+                    unresolved: Vec::new(),
+                };
                 let alt = (i < 2)
                     .then(|| record.get(format!("altPrereq{i}")).and_then(Value::as_str))
                     .flatten()
@@ -316,14 +327,37 @@ impl ResearchGraph {
             g.requirements(node)
                 .iter()
                 .flat_map(PrereqGroup::options_with_kind)
-                .map(|(p, alt)| (p, Edge { from: p, to: node, alternative: alt }))
+                .map(|(p, alt)| {
+                    (
+                        p,
+                        Edge {
+                            from: p,
+                            to: node,
+                            alternative: alt,
+                        },
+                    )
+                })
                 .collect()
         })
     }
 
     /// Everything that (transitively) builds on `id`, including `id`.
     pub fn descendants(&self, id: EntityId, t: Traversal) -> Subgraph {
-        self.walk(id, t, |g, node| g.dependents(node).iter().map(|d| (d.node, Edge { from: node, to: d.node, alternative: d.alternative })).collect())
+        self.walk(id, t, |g, node| {
+            g.dependents(node)
+                .iter()
+                .map(|d| {
+                    (
+                        d.node,
+                        Edge {
+                            from: node,
+                            to: d.node,
+                            alternative: d.alternative,
+                        },
+                    )
+                })
+                .collect()
+        })
     }
 
     fn walk(&self, start: EntityId, t: Traversal, next: impl Fn(&Self, EntityId) -> Vec<(EntityId, Edge)>) -> Subgraph {
@@ -352,10 +386,17 @@ impl ResearchGraph {
 
     /// The whole graph as a subgraph (for drawing the full tree).
     pub fn full(&self) -> Subgraph {
-        let mut sub = Subgraph { nodes: self.nodes.iter().copied().collect(), edges: BTreeSet::new() };
+        let mut sub = Subgraph {
+            nodes: self.nodes.iter().copied().collect(),
+            edges: BTreeSet::new(),
+        };
         for (i, groups) in self.requirements.iter().enumerate() {
             for (p, alt) in groups.iter().flat_map(PrereqGroup::options_with_kind) {
-                sub.edges.insert(Edge { from: p, to: self.nodes[i], alternative: alt });
+                sub.edges.insert(Edge {
+                    from: p,
+                    to: self.nodes[i],
+                    alternative: alt,
+                });
             }
         }
         sub
@@ -390,12 +431,13 @@ impl ResearchGraph {
                             continue;
                         }
                         if groups.iter().enumerate().any(|(j, other)| {
-                            j != k
-                                && other.options.len() == 1
-                                && other.options[0] != a
-                                && ancestors[self.index[&other.options[0]]].contains(&self.index[&a])
+                            j != k && other.options.len() == 1 && other.options[0] != a && ancestors[self.index[&other.options[0]]].contains(&self.index[&a])
                         }) {
-                            redundant.insert(Edge { from: a, to: self.nodes[i], alternative: false });
+                            redundant.insert(Edge {
+                                from: a,
+                                to: self.nodes[i],
+                                alternative: false,
+                            });
                         }
                     }
                 }
@@ -459,7 +501,15 @@ mod tests {
 
     fn ds_with(techs: Vec<Value>, projects: Vec<Value>) -> crate::Dataset {
         let factions = vec![json!({"dataName": "F1"}), json!({"dataName": "F2"})];
-        dataset(&[(META, vec![scenario("S", 1, &[], None)]), (model::TECH, techs), (model::PROJECT, projects), (model::FACTION, factions)], json!({}))
+        dataset(
+            &[
+                (META, vec![scenario("S", 1, &[], None)]),
+                (model::TECH, techs),
+                (model::PROJECT, projects),
+                (model::FACTION, factions),
+            ],
+            json!({}),
+        )
     }
 
     #[test]
@@ -519,11 +569,25 @@ mod tests {
         assert_eq!(req[0].primary(), Some(alt));
         assert!(g.is_obtainable(q));
         assert_eq!(g.depth(q), Some(1));
-        let edge = Edge { from: alt, to: q, alternative: true };
+        let edge = Edge {
+            from: alt,
+            to: q,
+            alternative: true,
+        };
         assert!(g.ancestors(q, Traversal::default()).edges.contains(&edge));
         assert!(g.full().edges.contains(&edge));
         assert!(g.descendants(alt, Traversal::default()).edges.contains(&edge));
-        assert!(g.ancestors(q, Traversal { alternatives: false, max_depth: None }).edges.is_empty());
+        assert!(
+            g.ancestors(
+                q,
+                Traversal {
+                    alternatives: false,
+                    max_depth: None
+                }
+            )
+            .edges
+            .is_empty()
+        );
 
         // F1 sees it
         let f1 = id(&ds, model::FACTION, "F1");
@@ -579,11 +643,19 @@ mod tests {
     #[test]
     fn redundant_edges_follow_only_mandatory_requirements() {
         for alternatives in [false, true] {
-            let c = if alternatives { json!({"dataName": "C", "prereqs": ["A", "B"], "altPrereq1": "D"}) } else { tech("C", &["A", "B"]) };
+            let c = if alternatives {
+                json!({"dataName": "C", "prereqs": ["A", "B"], "altPrereq1": "D"})
+            } else {
+                tech("C", &["A", "B"])
+            };
             let ds = ds_with(vec![tech("A", &[]), tech("B", &["A"]), c, tech("D", &[])], vec![]);
             let view = ds.overview();
             let g = view.research_graph();
-            let edge = Edge { from: id(&ds, model::TECH, "A"), to: id(&ds, model::TECH, "C"), alternative: false };
+            let edge = Edge {
+                from: id(&ds, model::TECH, "A"),
+                to: id(&ds, model::TECH, "C"),
+                alternative: false,
+            };
             assert_eq!(g.redundant_edges().contains(&edge), !alternatives);
             assert_eq!(g.redundant_edges().len(), usize::from(!alternatives));
         }
@@ -592,7 +664,12 @@ mod tests {
     #[test]
     fn alternative_edges_are_never_redundant() {
         let ds = ds_with(
-            vec![tech("A", &[]), tech("B", &["A"]), tech("D", &[]), json!({"dataName": "C", "prereqs": ["D", "B"], "altPrereq0": "A"})],
+            vec![
+                tech("A", &[]),
+                tech("B", &["A"]),
+                tech("D", &[]),
+                json!({"dataName": "C", "prereqs": ["D", "B"], "altPrereq0": "A"}),
+            ],
             vec![],
         );
         let view = ds.overview();
@@ -620,7 +697,16 @@ mod tests {
 
     #[test]
     fn cycles_are_strongly_connected_components() {
-        let ds = ds_with(vec![tech("C1", &["C2"]), tech("C2", &["C3"]), tech("C3", &["C1"]), tech("D", &["C1"]), tech("E", &[])], vec![]);
+        let ds = ds_with(
+            vec![
+                tech("C1", &["C2"]),
+                tech("C2", &["C3"]),
+                tech("C3", &["C1"]),
+                tech("D", &["C1"]),
+                tech("E", &[]),
+            ],
+            vec![],
+        );
         let view = ds.overview();
         let g = view.research_graph();
         let cyclic: Vec<&str> = g.cyclic_nodes().iter().map(|i| &*ds.entity(*i).data_name).collect();

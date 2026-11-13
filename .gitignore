@@ -10,6 +10,6 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 
-# Extracted icons are large binary blobs; templates/locale JSON is versioned
-/data/*/assets/
+# Extracted game data (templates, locale, images) is copyrighted and large: never versioned.
+# Regenerate it with `ti-extract extract`.
 /data

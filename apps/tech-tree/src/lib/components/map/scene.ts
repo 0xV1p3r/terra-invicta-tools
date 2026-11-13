@@ -107,6 +107,8 @@ const PRIORITY: Record<ItemType, number> = {
 	asteroidalMoon: 3,
 	comet: 4,
 	asteroid: 5,
+	// Bodies whose objectType the backend does not know are treated as the smallest kind.
+	unknown: 5,
 	lagrange: 6
 };
 
@@ -119,6 +121,7 @@ export const TYPE_COLORS: Record<ItemType, string> = {
 	asteroidalMoon: '#9a8c7c',
 	asteroid: '#a8865a',
 	comet: '#2fb3c9',
+	unknown: '#8a8a8a',
 	lagrange: '#7c8a99'
 };
 
@@ -156,6 +159,7 @@ export const TYPE_LABELS: Record<ItemType, string> = {
 	asteroidalMoon: 'Asteroid moon',
 	asteroid: 'Asteroid',
 	comet: 'Comet',
+	unknown: 'Other body',
 	lagrange: 'Lagrange point'
 };
 
@@ -173,6 +177,7 @@ function orbitTier(info: SpaceBodyInfo): OrbitTier {
 		case 'comet':
 			return 2;
 		case 'asteroid':
+		case 'unknown':
 			return 3;
 	}
 }
@@ -195,6 +200,7 @@ function dotSize(info: SpaceBodyInfo): number {
 		case 'comet':
 			return 2;
 		case 'asteroid':
+		case 'unknown':
 			return clamp(1.4 + 0.6 * Math.log10(r / 10), 1.4, 2.5);
 	}
 }

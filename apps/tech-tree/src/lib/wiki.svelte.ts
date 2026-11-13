@@ -1,6 +1,15 @@
 import type { EntityKey, WikiSection } from '$lib/api';
 import { templateLabel } from '$lib/format';
 class WikiState {
+	reset() {
+		this.open = false;
+		this.section = null;
+		this.selected = null;
+		this.back = [];
+		this.forward = [];
+		this.sections = [];
+		this.spoilers = {};
+	}
 	open = $state(false);
 	section = $state<{ template: string; spoiler: boolean } | null>(null);
 	get template() {

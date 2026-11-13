@@ -65,8 +65,8 @@ impl View<'_> {
         let template = self.text_raw(texts, id, field::DESCRIPTION)?;
         let record = self.record(id)?;
         let env = ViewEnv { view: self, texts };
-        let segments = describe_effect_segments(template, record, ctx, &env)
-            .unwrap_or_else(|_| vec![EffectSegment::Text(to_plain(template).trim().to_string())]);
+        let segments =
+            describe_effect_segments(template, record, ctx, &env).unwrap_or_else(|_| vec![EffectSegment::Text(to_plain(template).trim().to_string())]);
         let visible = segments.iter().any(|s| !matches!(s, EffectSegment::Text(t) if t.trim().is_empty()));
         visible.then_some(segments)
     }

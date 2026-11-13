@@ -5,7 +5,13 @@ use serde_json::Value;
 use std::collections::HashSet;
 use ti_data::{EntityId, View, model::Kind};
 
-pub const STORY: &[&str] = &["TIObjectiveTemplate", "TINarrativeEventTemplate", "TITimeEventTemplate", "TICodexEntryTemplate", "TIVictoryTemplate"];
+pub const STORY: &[&str] = &[
+    "TIObjectiveTemplate",
+    "TINarrativeEventTemplate",
+    "TITimeEventTemplate",
+    "TICodexEntryTemplate",
+    "TIVictoryTemplate",
+];
 
 fn alien_field(value: &Value) -> bool {
     match value {
@@ -22,7 +28,12 @@ fn alien_field(value: &Value) -> bool {
 }
 
 pub fn classify(view: &View<'_>) -> HashSet<EntityId> {
-    let ids: Vec<_> = view.dataset().templates().flat_map(|t| view.dataset().of_template(t).iter().copied()).filter(|&id| view.exists(id)).collect();
+    let ids: Vec<_> = view
+        .dataset()
+        .templates()
+        .flat_map(|t| view.dataset().of_template(t).iter().copied())
+        .filter(|&id| view.exists(id))
+        .collect();
     let mut spoilers = HashSet::new();
     for &id in &ids {
         let e = view.dataset().entity(id);
@@ -130,7 +141,11 @@ mod tests {
     fn classification_ignores_selected_faction() {
         let Some(b) = backend() else { return };
         for faction in ["ResistCouncil", "SubmitCouncil"] {
-            let args = ScopeArgs { scenario: Some("ModernScenario".into()), faction: Some(faction.into()), ..en() };
+            let args = ScopeArgs {
+                scenario: Some("ModernScenario".into()),
+                faction: Some(faction.into()),
+                ..en()
+            };
             let view = b.ds.view(scope::resolve(&b.ds, &args).unwrap());
             let spoilers = b.spoilers(&view).unwrap();
             for name in ["Effect_BlockAlienContact", "Effect_AlienRelationsEstablished", "Effect_AlienECM"] {
@@ -154,7 +169,7 @@ mod tests {
             let count = ids.iter().filter(|id| spoilers.contains(id)).count();
             eprintln!("{template}: {count}/{} spoilers", ids.len());
             assert_eq!(index.iter().filter(|s| s.template == template).map(|s| s.count).sum::<usize>(), ids.len());
-            let normal = commands::get_wiki_entries(&b, &args, template, None).unwrap();
+            let normal = commands::all_wiki_entries(&b, &args, template, None).unwrap();
             assert!(normal.iter().all(|e| !e.entity.spoiler));
             assert_eq!(normal.len() + count, ids.len());
             if STORY.contains(&template) {
@@ -208,13 +223,21 @@ mod tests {
         for template in b.ds.templates() {
             for id in view.entities(template) {
                 if spoilers.contains(&id)
-                    || !matches!(view.kind(id), Kind::Tech | Kind::Project | Kind::HabModule | Kind::ShipPart(_) | Kind::Org | Kind::Trait)
+                    || !matches!(
+                        view.kind(id),
+                        Kind::Tech | Kind::Project | Kind::HabModule | Kind::ShipPart(_) | Kind::Org | Kind::Trait
+                    )
                 {
                     continue;
                 }
                 for effect in view.references_from(id).iter().map(|r| r.to).chain(view.effects(id)) {
                     if matches!(view.kind(effect), Kind::Effect) {
-                        assert!(!spoilers.contains(&effect), "{} references {}", b.ds.entity(id).data_name, b.ds.entity(effect).data_name);
+                        assert!(
+                            !spoilers.contains(&effect),
+                            "{} references {}",
+                            b.ds.entity(id).data_name,
+                            b.ds.entity(effect).data_name
+                        );
                     }
                 }
             }
@@ -227,13 +250,21 @@ mod tests {
             }
         }
         let mars = view.find("TIEffectTemplate", "Effect_ExploreMars").unwrap();
-        let mars_research: Vec<_> = view.references_to(mars).iter().map(|r| r.from).filter(|&id| matches!(view.kind(id), Kind::Tech | Kind::Project)).collect();
+        let mars_research: Vec<_> = view
+            .references_to(mars)
+            .iter()
+            .map(|r| r.from)
+            .filter(|&id| matches!(view.kind(id), Kind::Tech | Kind::Project))
+            .collect();
         assert!(!mars_research.is_empty());
         for id in mars_research {
             assert!(!spoilers.contains(&id), "{}", b.ds.entity(id).data_name);
         }
         assert!(view.entities("TINationTemplate").any(|id| !spoilers.contains(&id)));
-        let human_drive = view.entities("TIDriveTemplate").find(|&id| b.ds.entity(id).data_name.as_ref() == "ApexSolidRocketx1").unwrap();
+        let human_drive = view
+            .entities("TIDriveTemplate")
+            .find(|&id| b.ds.entity(id).data_name.as_ref() == "ApexSolidRocketx1")
+            .unwrap();
         assert!(!spoilers.contains(&human_drive));
     }
 }

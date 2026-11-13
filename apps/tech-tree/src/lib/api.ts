@@ -1,424 +1,82 @@
-// Typed wrapper around the Tauri backend commands. Mirrors src-tauri/src/dto.rs
-// one-to-one; change both together.
+// Tauri command wrappers. DTOs are generated from src-tauri/src/dto.rs.
+// Regenerate from the workspace root: cargo test -p ti-tech-tree export_bindings
 import { convertFileSrc, invoke, isTauri } from '@tauri-apps/api/core';
 
-/** Stable entity address: `"<Template>:<dataName>"`, e.g. `"TITechTemplate:AdAstra"`. */
-export type EntityKey = string;
+import type { EntityKey } from './generated/EntityKey';
+export type { EntityKey } from './generated/EntityKey';
+export type { TechCategory } from './generated/TechCategory';
+import type { ScopeArgs } from './generated/ScopeArgs';
+export type { ScopeArgs } from './generated/ScopeArgs';
+import type { Meta } from './generated/Meta';
+export type { Meta } from './generated/Meta';
+export type { DataDirSource } from './generated/DataDirSource';
+import type { BuildInfo } from './generated/BuildInfo';
+export type { BuildInfo } from './generated/BuildInfo';
+export type { ScenarioInfo } from './generated/ScenarioInfo';
+export type { FactionInfo } from './generated/FactionInfo';
+export type { NodeKind } from './generated/NodeKind';
+import type { TreeFilter } from './generated/TreeFilter';
+export type { TreeFilter } from './generated/TreeFilter';
+export type { PropertyGroup } from './generated/PropertyGroup';
+import type { PropertyInfo } from './generated/PropertyInfo';
+export type { PropertyInfo } from './generated/PropertyInfo';
+export type { Direction } from './generated/Direction';
+import type { SubtreeArgs } from './generated/SubtreeArgs';
+export type { SubtreeArgs } from './generated/SubtreeArgs';
+import type { FullLayout } from './generated/FullLayout';
+export type { FullLayout } from './generated/FullLayout';
+import type { TreeGraph } from './generated/TreeGraph';
+export type { TreeGraph } from './generated/TreeGraph';
+export type { Band } from './generated/Band';
+export type { Span } from './generated/Span';
+import type { TreeNode } from './generated/TreeNode';
+export type { TreeNode } from './generated/TreeNode';
+export type { NodeFlags } from './generated/NodeFlags';
+import type { TreeEdge } from './generated/TreeEdge';
+export type { TreeEdge } from './generated/TreeEdge';
+import type { EntityKind } from './generated/EntityKind';
+export type { EntityKind } from './generated/EntityKind';
+import type { EntityRef } from './generated/EntityRef';
+export type { EntityRef } from './generated/EntityRef';
+import type { SearchHit } from './generated/SearchHit';
+export type { SearchHit } from './generated/SearchHit';
+import type { WikiSection } from './generated/WikiSection';
+export type { WikiSection } from './generated/WikiSection';
+import type { WikiEntry } from './generated/WikiEntry';
+export type { WikiEntry } from './generated/WikiEntry';
+import type { WikiPage } from './generated/WikiPage';
+export type { WikiPage } from './generated/WikiPage';
+export type { RefGroup } from './generated/RefGroup';
+import type { EntityDetail } from './generated/EntityDetail';
+export type { EntityDetail } from './generated/EntityDetail';
+export type { AnnotationsDto as Annotations } from './generated/AnnotationsDto';
+export type { RequirementGroup } from './generated/RequirementGroup';
+export type { EffectSentiment } from './generated/EffectSentiment';
+export type { EffectDomain } from './generated/EffectDomain';
+export type { EffectSegment } from './generated/EffectSegment';
+export type { EffectLine } from './generated/EffectLine';
+export type { UnlockKind } from './generated/UnlockKind';
+export type { UnlockItem } from './generated/UnlockItem';
+export type { EntityStats } from './generated/EntityStats';
+export type { StatGroup } from './generated/StatGroup';
+export type { Stat } from './generated/Stat';
+export type { StatLinks } from './generated/StatLinks';
+import type { SolarSystem } from './generated/SolarSystem';
+export type { SolarSystem } from './generated/SolarSystem';
+export type { BodyType } from './generated/BodyType';
+export type { SpaceResource } from './generated/SpaceResource';
+export type { ResourceRating } from './generated/ResourceRating';
+export type { SpaceBodyInfo } from './generated/SpaceBodyInfo';
+export type { OrbitElements } from './generated/OrbitElements';
+export type { LagrangePointInfo } from './generated/LagrangePointInfo';
 
-export type TechCategory =
-	| 'Energy'
-	| 'InformationScience'
-	| 'LifeScience'
-	| 'Materials'
-	| 'MilitaryScience'
-	| 'SocialScience'
-	| 'SpaceScience'
-	| 'Xenology';
-
-export interface ScopeArgs {
-	/** TIMetaTemplate dataName (e.g. `ModernScenario`); null = overview over all scenarios. */
-	scenario: string | null;
-	/** TIFactionTemplate dataName (e.g. `ResistCouncil`); null = all factions. */
-	faction: string | null;
-	lang: string;
-}
-
-export interface Meta {
-	buildId: string;
-	gameVersion: string | null;
-	dataDir: string;
-	languages: string[];
-	scenarios: ScenarioInfo[];
-	factions: FactionInfo[];
-}
-
-export interface ScenarioInfo {
-	name: string;
-	label: string;
-	listed: boolean;
-	dlc: boolean;
-	tags: string[];
-}
-
-export interface FactionInfo {
-	name: string;
-	label: string;
-	icon: string | null;
-}
-
-export type NodeKind = 'tech' | 'project';
-
-export interface TreeFilter {
-	techs: boolean;
-	projects: boolean;
-	/** Empty = all categories. */
-	categories: TechCategory[];
-	/** Property ids; a node matches if it has any of them. Empty = no property filter. */
-	properties: string[];
-}
-
-export type PropertyGroup = 'effect' | 'ability' | 'unlock';
-
-/** A filterable property of techs/projects (effect it has, or kind of thing it unlocks). */
-export interface PropertyInfo {
-	/** `effect:<context>:up|down`, `effect:<context>` (abilities) or `unlock:<kind>`. */
-	id: string;
-	/** English label, e.g. "Increases control point capacity". */
-	label: string;
-	group: PropertyGroup;
-	/** Techs/projects in scope that have it. */
-	count: number;
-	/** Rendered description of one effect giving it (effects only). */
-	example: string | null;
-	/** For the acting faction, in the labelled direction. */
-	sentiment: EffectSentiment;
-	/** Icon group; null for unlocks. */
-	domain: EffectDomain | null;
-	/** Research category for effects on one science. */
-	category: TechCategory | null;
-	/** Matching game icon (asset path; turn into a URL with `assetUrl`). */
-	icon: string | null;
-}
-
-export type Direction = 'up' | 'down' | 'both';
-
-export interface SubtreeArgs {
-	root: EntityKey;
-	direction: Direction;
-	alternatives: boolean;
-	maxDepth: number | null;
-}
-
-/** Layout of the full tree. */
-export type FullLayout = 'layered' | 'bands';
-
-export interface TreeGraph {
-	nodes: TreeNode[];
-	edges: TreeEdge[];
-	nodeWidth: number;
-	nodeHeight: number;
-	root: EntityKey | null;
-	totalCost: number;
-	/** Category bands, top to bottom (`bands` layout only). */
-	bands: Band[];
-	/** Focus view: requirement groups satisfied by any one of several cards. */
-	anyOf: Span[];
-}
-
-/** Vertical extent of a category band (cards and edge routes), in px. */
-export interface Band {
-	category: TechCategory;
-	top: number;
-	bottom: number;
-}
-
-/** Vertical extent of a group of cards in the column at `x`, in px. */
-export interface Span {
-	x: number;
-	top: number;
-	bottom: number;
-	/** Nesting level of the bracket (0 next to the cards); overlapping groups alternate. */
-	level: number;
-}
-
-export interface TreeNode {
-	key: EntityKey;
-	dataName: string;
-	kind: NodeKind;
-	name: string;
-	category: TechCategory;
-	cost: number;
-	/** Layout column (0 = leftmost). */
-	column: number;
-	/** Top-left position in px. */
-	x: number;
-	y: number;
-	flags: NodeFlags;
-	/** Property ids (see `PropertyInfo`). */
-	properties: string[];
-}
-
-export interface NodeFlags {
-	scenarioSpecific: boolean;
-	variesByScenario: boolean;
-	dlc: boolean;
-	factionLocked: boolean;
-	endGame: boolean;
-	repeatable: boolean;
-	obtainable: boolean;
-}
-
-export interface TreeEdge {
-	from: EntityKey;
-	to: EntityKey;
-	/** Via altPrereqN: render dashed. */
-	alternative: boolean;
-	/** Points `[x, y]` the edge passes between its endpoints, left to right (empty = direct). */
-	points: [number, number][];
-	/** Implied by another chain of listed prereqs: the UI may hide it. */
-	redundant: boolean;
-}
-
-export type EntityKind =
-	| 'tech'
-	| 'project'
-	| 'effect'
-	| 'habModule'
-	| 'shipPart'
-	| 'org'
-	| 'trait'
-	| 'faction'
-	| 'objective'
-	| 'mission'
-	| 'codex'
-	| 'other';
-
-export interface EntityRef {
-	spoiler?: boolean;
-	key: EntityKey;
-	template: string;
-	dataName: string;
-	name: string;
-	kind: EntityKind;
-	subtype: string | null;
-	category: TechCategory | null;
-	/** Asset path; turn into a URL with `assetUrl`. */
-	icon: string | null;
-}
-
-export interface SearchHit {
-	entity: EntityRef;
-	score: number;
-	matched: 'name' | 'dataName' | 'text' | 'value';
-}
-
-export interface WikiSection {
-	spoiler?: boolean;
-	template: string;
-	label: string;
-	group: string;
-	count: number;
-}
-export interface WikiEntry {
-	entity: EntityRef;
-	subtitle?: string | null;
-	effect?: EffectLine | null;
-}
-export interface RefGroup {
-	template: string;
-	field: string;
-	entities: EntityRef[];
-}
-
-export interface EntityDetail {
-	effect?: EffectLine | null;
-	image?: string | null;
-	references: RefGroup[];
-	referencedBy: RefGroup[];
-	entity: EntityRef;
-	summary: string | null;
-	description: string | null;
-	quote: string | null;
-	annotations: Annotations;
-	requirements: RequirementGroup[];
-	/** Listed prereq names that don't exist in this scope (the game ignores them). */
-	droppedPrereqs: string[];
-	effects: EffectLine[];
-	unlocks: UnlockItem[];
-	unlockedBy: EntityRef[];
-	/** Display stats for any wiki template. */
-	stats: EntityStats | null;
-	researchCost: number | null;
-	totalCost: number | null;
-	record: Record<string, unknown>;
-}
-
-export interface Annotations {
-	scenarios: string[];
-	scenarioSpecific: boolean;
-	variesByScenario: boolean;
-	dlc: boolean;
-	factions: string[];
-	factionAlways: string | null;
-	requiresNation: string | null;
-}
-
-export interface RequirementGroup {
-	/** Any one option satisfies the group. */
-	options: EntityRef[];
-	/** Parallel to `options`: option comes from altPrereqN. */
-	alternative: boolean[];
-	/** Prereqs that exist but can't be completed in this scope (other faction's project). */
-	hidden: EntityRef[];
-	/** altPrereqN names that don't exist in this scope. */
-	unresolved: string[];
-}
-
-export type EffectSentiment = 'good' | 'bad' | 'neutral';
-
-export type EffectDomain =
-	| 'research'
-	| 'priority'
-	| 'mission'
-	| 'control'
-	| 'councilor'
-	| 'army'
-	| 'ship'
-	| 'mining'
-	| 'missionControl'
-	| 'exploration'
-	| 'transfer'
-	| 'hab'
-	| 'alien'
-	| 'environment'
-	| 'economy'
-	| 'politics'
-	| 'ability'
-	| 'other';
-
-export interface EffectSegment {
-	/** `value` = a substituted number; `sprite` = inline game icon by name (`metal`, `water`, …). */
-	kind: 'text' | 'value' | 'sprite';
-	text: string;
-	/** Image of a `sprite` (asset path; turn into a URL with `assetUrl`). */
-	icon: string | null;
-}
-
-export interface EffectLine {
-	entity: EntityRef;
-	/** Rendered plain-text description (null if the game hides it). */
-	text: string | null;
-	/** The description split into text, numbers and inline sprites (empty if hidden). */
-	segments: EffectSegment[];
-	/** What the effect changes ("Materials research") or grants ("Can found outposts"). */
-	label: string | null;
-	/** Change of `label`: `+100%`, `−15%`, `+70`, or a new level `→ 12`. */
-	modifier: string | null;
-	/** For the acting faction. */
-	sentiment: EffectSentiment;
-	domain: EffectDomain;
-	/** Research category for effects on one science. */
-	category: TechCategory | null;
-	/** Who it applies to, if not just the acting faction. */
-	target: string | null;
-	/** Matching game icon (asset path; turn into a URL with `assetUrl`); `domain` is the fallback. */
-	icon: string | null;
-}
-
-export type UnlockKind =
-	| 'research'
-	| 'researchAlternative'
-	| 'shipPart'
-	| 'habModule'
-	| 'org'
-	| 'grantedOrg'
-	| 'claim'
-	| 'trait'
-	| 'codex'
-	| 'mission'
-	| 'objective';
-
-export interface UnlockItem {
-	kind: UnlockKind;
-	entity: EntityRef;
-	/** Stats of unlocked hab modules, ship parts and orgs. */
-	stats: EntityStats | null;
-}
-
-/** Every stat of a hab module, ship part or org, grouped for display (see `stats.rs`). */
-export interface EntityStats {
-	/** Short classifications ("Tier 2", "Station", "Fusion Thermal", "Criminal"). */
-	tags: string[];
-	groups: StatGroup[];
-	/** Rules and conditions as sentences (special rules, eligibility, drive notes). */
-	notes: string[];
-	/** Related entities (missions granted, upgrade chain, required tech). */
-	links: StatLinks[];
-}
-
-export interface StatGroup {
-	/** "Combat", "Income / month", "Build materials", … */
-	label: string;
-	stats: Stat[];
-}
-
-export interface Stat {
-	label: string;
-	/** Formatted value with unit ("1,200 t", "+45", "35%"). */
-	value: string;
-	/** Randomized orgs: roll range and chance, e.g. "+0–4 · 50% chance". */
-	detail: string | null;
-	/** For the owning faction: `good`, `bad` or `neutral`. */
-	sentiment: EffectSentiment;
-	/** Game icon (asset path, like `EntityRef::icon`). */
-	icon: string | null;
-	/** Record field the value comes from. */
-	field: string;
-}
-
-export interface StatLinks {
-	label: string;
-	entities: EntityRef[];
-}
-
-// --- Solar system map --------------------------------------------------------
-
-/** Everything the solar system map draws. Positions come from propagating `orbit` (see map/kepler.ts). */
-export interface SolarSystem {
-	/** Start date of the scenario (overview: the base campaign's), `YYYY-MM-DD`. */
-	startDate: string;
-	/** Every space body in scope, parents before children (the Sun first). */
-	bodies: SpaceBodyInfo[];
-	lagrangePoints: LagrangePointInfo[];
-}
-
-export type BodyType =
-	'star' | 'planet' | 'dwarfPlanet' | 'planetaryMoon' | 'asteroidalMoon' | 'asteroid' | 'comet';
-
-export type SpaceResource = 'water' | 'volatiles' | 'metals' | 'nobles' | 'fissiles';
-
-/** Rating the game shows for an unprospected site. */
-export type ResourceRating = 'empty' | 'possible' | 'low' | 'medium' | 'high' | 'max';
-
-export interface SpaceBodyInfo {
-	entity: EntityRef;
-	bodyType: BodyType;
-	/** Key of the body it orbits; null for the Sun. */
-	parent: EntityKey | null;
-	/** Null for the Sun (and bodies without usable elements). */
-	orbit: OrbitElements | null;
-	/** The game's mean radius in km (mean half-dimension for irregular bodies; 0 without size data). */
-	radiusKm: number;
-	massKg: number | null;
-	maxHabSize: number;
-	habSiteCount: number;
-	/** The game's rating of the unprospected body, averaged over its hab sites; empty without hab sites. */
-	resources: Partial<Record<SpaceResource, ResourceRating>>;
-}
-
-/** Keplerian elements as the game uses them (angles in degrees). */
-export interface OrbitElements {
-	semiMajorAxisKm: number;
-	eccentricity: number;
-	inclinationDeg: number;
-	longAscendingNodeDeg: number;
-	argPeriapsisDeg: number;
-	meanAnomalyAtEpochDeg: number;
-	/** Epoch as a Julian year (2000.0 = J2000). */
-	epochJulianYear: number;
-	/** Orbital period around the parent, in days. */
-	periodDays: number;
-	/** Full precession cycles, in years (moons only). The game never applies them. */
-	nodalPrecessionYears: number | null;
-	apsidalPrecessionYears: number | null;
-}
-
-export interface LagrangePointInfo {
-	entity: EntityRef;
-	point: 'L1' | 'L2' | 'L3' | 'L4' | 'L5';
-	/** Body the point belongs to (e.g. Mercury); its parent is the primary. */
-	body: EntityKey;
-	maxHabSize: number;
+/** Text filter and page of `getWikiEntries`. */
+export interface WikiPageArgs {
+	/** Case-insensitive substring of name, dataName or subtitle; empty = all. */
+	filter?: string;
+	offset?: number;
+	/** Null = all remaining entries. */
+	limit?: number | null;
 }
 
 /** The backend's tree filter rule for one node (see `get_tree` in src-tauri/src/commands.rs). */
@@ -436,9 +94,19 @@ export const mockMode = !isTauri();
 const tauriApi = {
 	getWikiIndex: (scope: ScopeArgs, spoilers = false) =>
 		invoke<WikiSection[]>('get_wiki_index', { scope, spoilers }),
-	getWikiEntries: (scope: ScopeArgs, template: string, spoiler = false) =>
-		invoke<WikiEntry[]>('get_wiki_entries', { scope, template, spoiler }),
-	getMeta: () => invoke<Meta>('get_meta'),
+	getWikiEntries: (
+		scope: ScopeArgs,
+		template: string,
+		spoiler = false,
+		{ filter = '', offset = 0, limit = null }: WikiPageArgs = {}
+	) => invoke<WikiPage>('get_wiki_entries', { scope, template, spoiler, filter, offset, limit }),
+	/** Scenario and faction labels are in `lang` (English if the build lacks it). */
+	getMeta: (lang = 'en') => invoke<Meta>('get_meta', { lang }),
+	listBuilds: () => invoke<BuildInfo[]>('list_builds'),
+	/** Load another build of the data folder (null = always the latest) and remember the choice. */
+	setBuild: (buildId: string | null) => invoke<void>('set_build', { buildId }),
+	/** Load the data folder at `path` (it must contain `index.json`) and remember it. */
+	setDataDir: (path: string) => invoke<void>('set_data_dir', { path }),
 	/** `mergeEdges`: long edges run as shared lines (more compact, not traceable one by one). */
 	getTree: (
 		scope: ScopeArgs,
@@ -514,15 +182,56 @@ function focusFromTree(graph: TreeGraph, root: EntityKey): TreeGraph {
 const mockApi: typeof tauriApi = {
 	getWikiIndex: async (_scope, spoilers = false) =>
 		(await fixture<WikiSection[]>('wiki-index')).filter((s) => spoilers || !s.spoiler),
-	getWikiEntries: async (_scope, template, spoiler = false) => {
-		const entries = await fixture<(WikiEntry | EntityRef)[]>(
+	getWikiEntries: async (
+		_scope,
+		template,
+		spoiler = false,
+		{ filter = '', offset = 0, limit = null } = {}
+	) => {
+		const rows = await fixture<(WikiEntry | EntityRef)[]>(
 			`wiki-entries-${spoiler ? 'spoiler-' : ''}${template}`
 		);
-		return entries.map((entry): WikiEntry =>
-			'entity' in entry ? entry : { entity: entry, subtitle: null, effect: null }
-		);
+		const needle = filter.toLowerCase();
+		const entries = rows
+			.map((entry): WikiEntry =>
+				'entity' in entry ? entry : { entity: entry, subtitle: null, effect: null }
+			)
+			.filter((e) =>
+				`${e.entity.name} ${e.entity.dataName} ${e.subtitle ?? ''}`.toLowerCase().includes(needle)
+			);
+		return {
+			total: entries.length,
+			entries: entries.slice(offset, limit === null ? undefined : offset + limit)
+		};
 	},
-	getMeta: () => fixture<Meta>('meta'),
+	// Older fixtures lack the build fields; mock data counts as the latest build of a found folder.
+	getMeta: async () => ({
+		latest: true,
+		pinnedBuild: null,
+		dataDirSource: 'found' as const,
+		...(await fixture<Partial<Meta> & Omit<Meta, 'latest' | 'pinnedBuild' | 'dataDirSource'>>(
+			'meta'
+		))
+	}),
+	listBuilds: async () => {
+		const meta = await fixture<Meta>('meta');
+		return [
+			{
+				dir: meta.buildId,
+				buildId: meta.buildId,
+				lastUpdated: null,
+				gameVersion: meta.gameVersion,
+				loaded: true,
+				latest: true
+			}
+		];
+	},
+	setBuild: async () => {
+		throw 'Switching builds is not available in mock mode';
+	},
+	setDataDir: async () => {
+		throw 'Choosing a data folder is not available in mock mode';
+	},
 	getTree: async (_scope, filter, layout = 'layered') => {
 		const unfiltered = filter.categories.length === 0 && filter.properties.length === 0;
 		if (layout === 'bands') {

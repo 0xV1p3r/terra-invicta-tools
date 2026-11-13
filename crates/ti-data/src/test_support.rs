@@ -47,9 +47,24 @@ pub fn scenario(name: &str, priority: i64, tags: &[&str], postfix: Option<&str>)
 /// A one-layer (base game) dataset. `templates` are loaded in the given order;
 /// `strings` is the English localization table.
 pub fn dataset(templates: &[(&str, Vec<Value>)], strings: Value) -> Dataset {
+    try_dataset(&[("base", templates)], strings).expect("test dataset loads")
+}
+
+pub type TestLayer<'a> = (&'a str, &'a [(&'a str, Vec<Value>)]);
+
+/// A dataset with one layer per `(id, templates)` (the first is the base game), or the load error.
+pub fn try_dataset(layers: &[TestLayer<'_>], strings: Value) -> Result<Dataset> {
     let mut files = HashMap::new();
     let mut put = |path: String, v: &Value| files.insert(path, serde_json::to_vec(v).unwrap());
-    let names: Vec<&str> = templates.iter().map(|(t, _)| *t).collect();
+    let manifest_layers: Vec<Value> = layers
+        .iter()
+        .enumerate()
+        .map(|(i, (layer, templates))| {
+            let names: Vec<&str> = templates.iter().map(|(t, _)| *t).collect();
+            let kind = if i == 0 { "base" } else { "dlc" };
+            json!({"id": layer, "kind": kind, "dlc": null, "folder": null, "templates": names})
+        })
+        .collect();
     put(
         "manifest.json".into(),
         &json!({
@@ -57,17 +72,19 @@ pub fn dataset(templates: &[(&str, Vec<Value>)], strings: Value) -> Dataset {
             "extractor": {"name": "test", "version": "0"},
             "extractedAt": "",
             "game": {"appId": "0", "buildId": "test", "lastUpdated": null},
-            "layers": [{"id": "base", "kind": "base", "dlc": null, "folder": null, "templates": names}],
+            "layers": manifest_layers,
             "languages": ["en"],
             "hasAssets": false,
         }),
     );
     put("schema.json".into(), &json!({"refFields": []}));
     put("locale/en/strings.json".into(), &strings);
-    for (t, records) in templates {
-        put(format!("templates/base/{t}.json"), &Value::Array(records.clone()));
+    for (layer, templates) in layers {
+        for (t, records) in *templates {
+            put(format!("templates/{layer}/{t}.json"), &Value::Array(records.clone()));
+        }
     }
-    Dataset::from_source(Box::new(MemSource(files))).expect("test dataset loads")
+    Dataset::from_source(Box::new(MemSource(files)))
 }
 
 pub fn id(ds: &Dataset, template: &str, name: &str) -> EntityId {

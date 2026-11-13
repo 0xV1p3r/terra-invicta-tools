@@ -82,7 +82,11 @@ pub fn parse_rich(text: &str) -> Vec<Span> {
     let mut buf = String::new();
     let flush = |buf: &mut String, spans: &mut Vec<Span>, style: Style, colors: &[String]| {
         if !buf.is_empty() {
-            spans.push(Span::Text { text: std::mem::take(buf), style, color: colors.last().cloned() });
+            spans.push(Span::Text {
+                text: std::mem::take(buf),
+                style,
+                color: colors.last().cloned(),
+            });
         }
     };
     let mut rest = text;
@@ -172,13 +176,36 @@ mod tests {
         assert_eq!(
             spans,
             vec![
-                Span::Text { text: "a ".into(), style: Style::default(), color: None },
-                Span::Text { text: "b".into(), style: Style { italic: true, ..Default::default() }, color: None },
+                Span::Text {
+                    text: "a ".into(),
+                    style: Style::default(),
+                    color: None
+                },
+                Span::Text {
+                    text: "b".into(),
+                    style: Style {
+                        italic: true,
+                        ..Default::default()
+                    },
+                    color: None
+                },
                 Span::LineBreak,
                 Span::Placeholder("x".into()),
-                Span::Text { text: " ".into(), style: Style::default(), color: None },
-                Span::Text { text: "c".into(), style: Style::default(), color: Some("#FF0000".into()) },
-                Span::Text { text: " 1 < 2".into(), style: Style::default(), color: None },
+                Span::Text {
+                    text: " ".into(),
+                    style: Style::default(),
+                    color: None
+                },
+                Span::Text {
+                    text: "c".into(),
+                    style: Style::default(),
+                    color: Some("#FF0000".into())
+                },
+                Span::Text {
+                    text: " 1 < 2".into(),
+                    style: Style::default(),
+                    color: None
+                },
             ]
         );
     }
@@ -210,8 +237,15 @@ pub mod field {
 const SCENARIO_POSTFIX_TEMPLATES: [&str; 4] = ["TINationTemplate", "TIRegionTemplate", "TIOrgTemplate", "TIFactionTemplate"];
 /// Templates whose keys all use `localizationName` (`localizationAlias ?? dataName`). For other
 /// templates only `displayName` (inherited from `TIDataTemplate`) does; their other fields use `dataName`.
-const ALIASED_TEMPLATES: [&str; 7] =
-    ["TITechTemplate", "TIProjectTemplate", "TIEffectTemplate", "TIObjectiveTemplate", "TINationTemplate", "TIRegionTemplate", "TIOrgTemplate"];
+const ALIASED_TEMPLATES: [&str; 7] = [
+    "TITechTemplate",
+    "TIProjectTemplate",
+    "TIEffectTemplate",
+    "TIObjectiveTemplate",
+    "TINationTemplate",
+    "TIRegionTemplate",
+    "TIOrgTemplate",
+];
 /// Individual aliased fields of templates not in [`ALIASED_TEMPLATES`].
 const ALIASED_FIELDS: [(&str, &str); 1] = [("TIFactionTemplate", "leader.description")];
 /// Leader tokens in tech quotes, replaced by `TIFactionTemplate.fullLeader.<X>Council`.
@@ -287,7 +321,11 @@ impl Texts {
         {
             return Some(v);
         }
-        self.get(&key).or_else(|| (template == "TIObjectiveTemplate").then(|| self.objective_field(data_name, record, field, None)).flatten())
+        self.get(&key).or_else(|| {
+            (template == "TIObjectiveTemplate")
+                .then(|| self.objective_field(data_name, record, field, None))
+                .flatten()
+        })
     }
 
     /// Objectives try the unsuffixed key, scoped faction, record factions, then a
@@ -301,13 +339,25 @@ impl Texts {
         if let Some(v) = faction.and_then(|f| self.get(&format!("{key}.{f}"))) {
             return Some(v);
         }
-        for f in record.and_then(|r| r.get("factionDataNames")).and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str) {
+        for f in record
+            .and_then(|r| r.get("factionDataNames"))
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+        {
             if let Some(v) = self.get(&format!("{key}.{f}")) {
                 return Some(v);
             }
         }
         let prefix = format!("{key}.");
-        let matched = self.primary.entries().chain(self.fallback.iter().flat_map(|l| l.entries())).map(|(k, _)| k).filter(|k| k.starts_with(&prefix)).min()?;
+        let matched = self
+            .primary
+            .entries()
+            .chain(self.fallback.iter().flat_map(|l| l.entries()))
+            .map(|(k, _)| k)
+            .filter(|k| k.starts_with(&prefix))
+            .min()?;
         self.get(matched)
     }
 
@@ -339,9 +389,10 @@ impl Texts {
         let mut out = text.to_string();
         for (token, faction) in LEADER_TOKENS {
             if out.contains(token)
-                && let Some(name) = self.get(&format!("TIFactionTemplate.fullLeader.{faction}")) {
-                    out = out.replace(token, &to_plain(name));
-                }
+                && let Some(name) = self.get(&format!("TIFactionTemplate.fullLeader.{faction}"))
+            {
+                out = out.replace(token, &to_plain(name));
+            }
         }
         out
     }

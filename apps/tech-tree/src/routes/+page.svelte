@@ -1,11 +1,12 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { untrack } from 'svelte';
 	import type { Attachment } from 'svelte/attachments';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import PanelLeftClose from '@lucide/svelte/icons/panel-left-close';
 	import PanelLeftOpen from '@lucide/svelte/icons/panel-left-open';
 	import PanelRightClose from '@lucide/svelte/icons/panel-right-close';
 	import PanelRightOpen from '@lucide/svelte/icons/panel-right-open';
+	import FolderOpen from '@lucide/svelte/icons/folder-open';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 	import { api, mockMode, type TreeGraph } from '$lib/api';
 	import DetailPanel from '$lib/components/detail/DetailPanel.svelte';
@@ -27,6 +28,7 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Tooltip from '$lib/components/ui/tooltip/index.js';
 	import { app } from '$lib/state.svelte';
+	import { wiki } from '$lib/wiki.svelte';
 
 	// The map mounts on first use and then stays (like the tree) so switching back is instant.
 	let mapMounted = $state(false);
@@ -112,12 +114,86 @@
 		};
 	};
 
-	onMount(() => {
-		api.getMeta().then(
-			(meta) => (app.meta = meta),
-			(e) => (app.error = String(e))
-		);
+	// Scenario and faction names are localized: refetch on a language change (the old metadata
+	// stays on screen meanwhile).
+	$effect(() => {
+		const lang = app.scope.lang;
+		untrack(() => void loadMeta(lang).catch(() => {}));
 	});
+
+	let metaRequest = 0;
+	async function loadMeta(lang = app.scope.lang, switched = false) {
+		const request = ++metaRequest;
+		try {
+			const meta = await api.getMeta(lang);
+			if (request !== metaRequest) return;
+			app.meta = meta;
+			app.error = null;
+		} catch (cause) {
+			if (request !== metaRequest) return;
+			if (!app.meta || switched) app.error = String(cause);
+			throw cause;
+		}
+	}
+
+	let dataRevision = $state(0);
+	function resetData() {
+		app.showFullTree();
+		app.selected = null;
+		app.focus = null;
+		app.mapSystem = null;
+		app.mapFocus = null;
+		app.back = [];
+		app.forward = [];
+		app.treeKeys = new Set();
+		app.clearFilters();
+		wiki.reset();
+		mapState.data = null;
+		mapState.playing = false;
+		mapState.time = NaN;
+		mapState.start = NaN;
+		treeGraph = null;
+		mapMounted = false;
+		dataRevision += 1;
+	}
+
+	async function chooseDataDir(current?: string) {
+		const { open } = await import('@tauri-apps/plugin-dialog');
+		const path = await open({ directory: true, defaultPath: current });
+		if (typeof path !== 'string') return;
+		await api.setDataDir(path);
+		try {
+			await loadMeta(app.scope.lang, true);
+		} finally {
+			resetData();
+		}
+	}
+
+	async function switchBuild(buildId: string | null) {
+		await api.setBuild(buildId);
+		try {
+			await loadMeta(app.scope.lang, true);
+		} finally {
+			resetData();
+		}
+	}
+
+	let choosing = $state(false);
+	let chooseError = $state('');
+	async function chooseFolder() {
+		choosing = true;
+		chooseError = '';
+		try {
+			await chooseDataDir();
+		} catch (cause) {
+			chooseError = String(cause);
+		} finally {
+			choosing = false;
+		}
+	}
+
+	/** Remounts everything below on a data switch, so no component keeps data of the old build. */
+	const dataKey = $derived(dataRevision);
 </script>
 
 <Tooltip.Provider delayDuration={300}>
@@ -134,6 +210,17 @@
 					Set <code class="text-foreground">TI_DATA_DIR</code> to the extracted data directory, or
 					run <code class="text-foreground">ti-extract</code> to extract it from your Terra Invicta installation.
 				</p>
+				{#if !mockMode}
+					<div class="mt-4 flex flex-col items-start gap-2">
+						<Button variant="outline" disabled={choosing} onclick={chooseFolder}>
+							{#if choosing}<LoaderCircle class="animate-spin" />{:else}<FolderOpen />{/if}
+							Choose data folder
+						</Button>
+						{#if chooseError}
+							<p class="text-sm text-destructive" role="alert">{chooseError}</p>
+						{/if}
+					</div>
+				{/if}
 			</div>
 		</main>
 	{:else if !app.meta}
@@ -143,111 +230,113 @@
 			>
 		</main>
 	{:else}
-		<div class="flex h-screen flex-col overflow-hidden">
-			<h1 class="sr-only">Terra Invicta Tech Tree</h1>
-			<!--
+		{#key dataKey}
+			<div class="flex h-screen flex-col overflow-hidden">
+				<h1 class="sr-only">Terra Invicta Tech Tree</h1>
+				<!--
 				Toolbar band across the window, so the details panel doesn't squeeze it. The groups wrap
 				as wholes, and the utilities stay at the right end of the first row: `pinUtilities` moves
 				them in the DOM to just after the last group that fits beside them, so Tab order follows
 				the rows.
 			-->
-			<div
-				class="@container relative z-10 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-b bg-card px-3 py-1.5 shadow-sm"
-				role="region"
-				aria-label={app.page === 'map' ? 'Map toolbar' : 'Tree toolbar'}
-				{@attach pinUtilities}
-			>
-				{#if app.page === 'map'}
-					<!-- Side panel toggles sit outermost, on their panel's side. -->
-					<Pill aria-label="Bodies pane">
-						<Tip text={mapState.paneOpen ? 'Hide bodies pane' : 'Show bodies pane'}>
+				<div
+					class="@container relative z-10 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-b bg-card px-3 py-1.5 shadow-sm"
+					role="region"
+					aria-label={app.page === 'map' ? 'Map toolbar' : 'Tree toolbar'}
+					{@attach pinUtilities}
+				>
+					{#if app.page === 'map'}
+						<!-- Side panel toggles sit outermost, on their panel's side. -->
+						<Pill aria-label="Bodies pane">
+							<Tip text={mapState.paneOpen ? 'Hide bodies pane' : 'Show bodies pane'}>
+								<Button
+									variant="ghost"
+									size="icon"
+									class={pillIcon}
+									aria-label="Bodies pane"
+									aria-pressed={mapState.paneOpen}
+									onclick={() => (mapState.paneOpen = !mapState.paneOpen)}
+								>
+									{#if mapState.paneOpen}<PanelLeftClose />{:else}<PanelLeftOpen />{/if}
+								</Button>
+							</Tip>
+						</Pill>
+					{/if}
+					<ViewBar graph={treeGraph} />
+					<ScopeBar />
+					<div
+						role="group"
+						aria-label="Filters"
+						class="flex max-w-full flex-wrap items-center gap-x-3 gap-y-1.5"
+					>
+						{#if app.page === 'tree'}
+							<TreeFilters />
+						{:else}
+							<MapToolbar />
+						{/if}
+					</div>
+					<Pill class="ml-auto gap-0.5" aria-label="Search and settings" data-utilities>
+						<SearchPalette />
+						<WikiDialog />
+						<PillDivider />
+						<SettingsDialog {chooseDataDir} {switchBuild} />
+						<Tip
+							text={app.selected
+								? app.panelOpen
+									? 'Hide details panel'
+									: 'Show details panel'
+								: app.page === 'map'
+									? 'Select a body to see its details'
+									: 'Select a tech or project to see its details'}
+						>
+							<!-- aria-disabled rather than disabled, so keyboard users can reach the explanation. -->
 							<Button
 								variant="ghost"
 								size="icon"
-								class={pillIcon}
-								aria-label="Bodies pane"
-								aria-pressed={mapState.paneOpen}
-								onclick={() => (mapState.paneOpen = !mapState.paneOpen)}
+								class="{pillIcon} aria-disabled:cursor-default aria-disabled:opacity-50 aria-disabled:hover:bg-transparent"
+								aria-label="Details panel"
+								aria-pressed={app.panelOpen}
+								aria-disabled={!app.selected}
+								onclick={() => {
+									if (app.selected) app.panelOpen = !app.panelOpen;
+								}}
 							>
-								{#if mapState.paneOpen}<PanelLeftClose />{:else}<PanelLeftOpen />{/if}
+								{#if app.panelOpen}<PanelRightClose />{:else}<PanelRightOpen />{/if}
 							</Button>
 						</Tip>
 					</Pill>
-				{/if}
-				<ViewBar graph={treeGraph} />
-				<ScopeBar />
-				<div
-					role="group"
-					aria-label="Filters"
-					class="flex max-w-full flex-wrap items-center gap-x-3 gap-y-1.5"
-				>
-					{#if app.page === 'tree'}
-						<TreeFilters />
-					{:else}
-						<MapToolbar />
+				</div>
+				<div class="flex min-h-0 flex-1">
+					{#if app.page === 'map' && mapState.paneOpen}
+						<div class="w-80 shrink-0">
+							<MapPane />
+						</div>
+					{/if}
+					<main class="min-w-0 flex-1" class:hidden={app.page !== 'tree'}>
+						<TreeCanvas bind:graph={treeGraph} />
+					</main>
+					{#if mapMounted}
+						<main class="min-w-0 flex-1" class:hidden={app.page !== 'map'}>
+							<SolarMap />
+						</main>
+					{/if}
+					{#if app.panelOpen && app.selected}
+						<div class="w-[420px] shrink-0">
+							<DetailPanel />
+						</div>
 					{/if}
 				</div>
-				<Pill class="ml-auto gap-0.5" aria-label="Search and settings" data-utilities>
-					<SearchPalette />
-					<WikiDialog />
-					<PillDivider />
-					<SettingsDialog />
-					<Tip
-						text={app.selected
-							? app.panelOpen
-								? 'Hide details panel'
-								: 'Show details panel'
-							: app.page === 'map'
-								? 'Select a body to see its details'
-								: 'Select a tech or project to see its details'}
+				{#if mockMode}
+					<!-- Dev-only marker; kept out of the toolbar flow so it can't push the pills around. -->
+					<Badge
+						variant="outline"
+						class="pointer-events-none fixed left-1/2 z-20 -translate-x-1/2 bg-card/90 text-amber-400 {app.page ===
+						'map'
+							? 'bottom-28'
+							: 'bottom-3'}">mock data</Badge
 					>
-						<!-- aria-disabled rather than disabled, so keyboard users can reach the explanation. -->
-						<Button
-							variant="ghost"
-							size="icon"
-							class="{pillIcon} aria-disabled:cursor-default aria-disabled:opacity-50 aria-disabled:hover:bg-transparent"
-							aria-label="Details panel"
-							aria-pressed={app.panelOpen}
-							aria-disabled={!app.selected}
-							onclick={() => {
-								if (app.selected) app.panelOpen = !app.panelOpen;
-							}}
-						>
-							{#if app.panelOpen}<PanelRightClose />{:else}<PanelRightOpen />{/if}
-						</Button>
-					</Tip>
-				</Pill>
-			</div>
-			<div class="flex min-h-0 flex-1">
-				{#if app.page === 'map' && mapState.paneOpen}
-					<div class="w-80 shrink-0">
-						<MapPane />
-					</div>
-				{/if}
-				<main class="min-w-0 flex-1" class:hidden={app.page !== 'tree'}>
-					<TreeCanvas bind:graph={treeGraph} />
-				</main>
-				{#if mapMounted}
-					<main class="min-w-0 flex-1" class:hidden={app.page !== 'map'}>
-						<SolarMap />
-					</main>
-				{/if}
-				{#if app.panelOpen && app.selected}
-					<div class="w-[420px] shrink-0">
-						<DetailPanel />
-					</div>
 				{/if}
 			</div>
-			{#if mockMode}
-				<!-- Dev-only marker; kept out of the toolbar flow so it can't push the pills around. -->
-				<Badge
-					variant="outline"
-					class="pointer-events-none fixed left-1/2 z-20 -translate-x-1/2 bg-card/90 text-amber-400 {app.page ===
-					'map'
-						? 'bottom-28'
-						: 'bottom-3'}">mock data</Badge
-				>
-			{/if}
-		</div>
+		{/key}
 	{/if}
 </Tooltip.Provider>

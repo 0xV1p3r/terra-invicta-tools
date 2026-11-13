@@ -30,11 +30,17 @@ impl Scope {
     pub const OVERVIEW: Scope = Scope { scenario: None, faction: None };
 
     pub fn scenario(s: ScenarioIdx) -> Scope {
-        Scope { scenario: Some(s), faction: None }
+        Scope {
+            scenario: Some(s),
+            faction: None,
+        }
     }
 
     pub fn with_faction(self, faction: EntityId) -> Scope {
-        Scope { faction: Some(faction), ..self }
+        Scope {
+            faction: Some(faction),
+            ..self
+        }
     }
 }
 
@@ -102,7 +108,13 @@ impl Dataset {
         for s in self.scenarios() {
             all.insert(s.idx);
         }
-        View { ds: self, scope, all_scenarios: all, graph: OnceLock::new(), region_nations: OnceLock::new() }
+        View {
+            ds: self,
+            scope,
+            all_scenarios: all,
+            graph: OnceLock::new(),
+            region_nations: OnceLock::new(),
+        }
     }
 
     pub fn overview(&self) -> View<'_> {
@@ -220,11 +232,12 @@ impl<'d> View<'d> {
             ..Default::default()
         };
         if &*self.ds.entity(id).template == model::PROJECT
-            && let Some(p) = self.project(id) {
-                a.factions = p.faction_prereq;
-                a.faction_always = p.faction_always;
-                a.requires_nation = p.requires_nation;
-            }
+            && let Some(p) = self.project(id)
+        {
+            a.factions = p.faction_prereq;
+            a.faction_always = p.faction_always;
+            a.requires_nation = p.requires_nation;
+        }
         a
     }
 
@@ -268,7 +281,9 @@ impl<'d> View<'d> {
             return to_plain(raw);
         }
         let localized = texts.entity_field(&e.template, &e.data_name, record, field::DISPLAY_NAME, self.localization_postfix());
-        let friendly = record.and_then(|r| r.get("friendlyName").or_else(|| r.get("displayName"))).and_then(Value::as_str);
+        let friendly = record
+            .and_then(|r| r.get("friendlyName").or_else(|| r.get("displayName")))
+            .and_then(Value::as_str);
         if localized.is_none_or(|s| to_plain(s).trim().is_empty())
             && friendly.is_none_or(str::is_empty)
             && let Some(name) = self.derived_name(texts, id, record)
@@ -303,7 +318,11 @@ impl<'d> View<'d> {
                     .count()
                     > 1;
                 let region = crate::text::humanize(e.data_name.strip_prefix("map_").unwrap_or(&e.data_name));
-                Some(if multiple && region != nation { format!("{nation}: {region}") } else { nation.to_string() })
+                Some(if multiple && region != nation {
+                    format!("{nation}: {region}")
+                } else {
+                    nation.to_string()
+                })
             }
             "TIStartTimeTemplate" => {
                 let scenario = self.ds.scenarios().iter().find(|s| s.start_time == Some(id))?;
@@ -328,7 +347,9 @@ impl<'d> View<'d> {
             let faction = self.scope.faction.map(|f| &*self.ds.entity(f).data_name);
             return texts.objective_field(&e.data_name, record, field, faction).filter(|s| !s.trim().is_empty());
         }
-        texts.entity_field(&e.template, &e.data_name, record, field, self.localization_postfix()).filter(|t| !t.trim().is_empty())
+        texts
+            .entity_field(&e.template, &e.data_name, record, field, self.localization_postfix())
+            .filter(|t| !t.trim().is_empty())
     }
 
     /// Plain text of a field, with tech-quote leader tokens resolved and the project
@@ -339,7 +360,11 @@ impl<'d> View<'d> {
         }
         let (source, field) = self.text_source(texts, id, field);
         let raw = self.text_raw(texts, source, field)?;
-        let raw = if field == field::QUOTE { texts.replace_leader_tokens(raw) } else { raw.to_string() };
+        let raw = if field == field::QUOTE {
+            texts.replace_leader_tokens(raw)
+        } else {
+            raw.to_string()
+        };
         Some(to_plain(&raw))
     }
 
@@ -403,7 +428,10 @@ impl<'d> View<'d> {
                         if r.get("initialOwner").and_then(Value::as_bool) != Some(true) {
                             return None;
                         }
-                        Some((self.find("TIRegionTemplate", r.get("region1")?.as_str()?)?, self.find("TINationTemplate", r.get("nation1")?.as_str()?)?))
+                        Some((
+                            self.find("TIRegionTemplate", r.get("region1")?.as_str()?)?,
+                            self.find("TINationTemplate", r.get("nation1")?.as_str()?)?,
+                        ))
                     })
                     .collect()
             })
@@ -460,10 +488,14 @@ impl<'d> View<'d> {
             "TIHabSiteTemplate" => related("TISpaceBodyTemplate", "parentBodyName"),
             "TIPlayerTemplate" => related(model::FACTION, "council"),
             "TISpaceShipTemplate" | "TISpaceFleetTemplate" => related(model::FACTION, "factionName"),
-            "TIHabTemplate" => r.pointer("/sectors/0/faction").and_then(Value::as_str).and_then(|n| self.find(model::FACTION, n)),
+            "TIHabTemplate" => r
+                .pointer("/sectors/0/faction")
+                .and_then(Value::as_str)
+                .and_then(|n| self.find(model::FACTION, n)),
             "TIFactionIdeologyTemplate" | "TIVictoryTemplate" => {
                 let ideology = e.data_name.strip_prefix("vc_").and_then(|n| n.strip_suffix("Victory")).unwrap_or(&e.data_name);
-                self.entities(model::FACTION).find(|&f| self.record(f).and_then(|r| r.get("ideologyName")).and_then(Value::as_str) == Some(ideology))
+                self.entities(model::FACTION)
+                    .find(|&f| self.record(f).and_then(|r| r.get("ideologyName")).and_then(Value::as_str) == Some(ideology))
             }
             "TICouncilorTemplate" => related("TICouncilorAppearanceTemplate", "appearanceTemplateName"),
             _ => None,
@@ -472,7 +504,10 @@ impl<'d> View<'d> {
             return self.icon_resource_inner(target, depth + 1);
         }
         if &*e.template == "TISpaceBodyTemplate" {
-            return self.ds.body_icon(&e.data_name).or_else(|| field("friendlyName").and_then(|name| self.ds.body_icon(name)));
+            return self
+                .ds
+                .body_icon(&e.data_name)
+                .or_else(|| field("friendlyName").and_then(|name| self.ds.body_icon(name)));
         }
         if self.kind(id).is_research() {
             let category = field("techCategory").and_then(model::TechCategory::parse).unwrap_or_default();
@@ -485,7 +520,16 @@ impl<'d> View<'d> {
     pub fn image_resource(&self, id: EntityId) -> Option<String> {
         self.asset_field(
             self.record(id)?,
-            &["illustrationPathStrs", "imgPath", "portraitYoung", "backgroundPath", "councilIcon256", "flagResource", "illustrationResource", "combatUIpath"],
+            &[
+                "illustrationPathStrs",
+                "imgPath",
+                "portraitYoung",
+                "backgroundPath",
+                "councilIcon256",
+                "flagResource",
+                "illustrationResource",
+                "combatUIpath",
+            ],
         )
     }
 
@@ -510,8 +554,7 @@ impl<'d> View<'d> {
                 return self.ds.selected_index(s, r.to).is_some();
             }
             let record = |id| self.ds.selected_variant(s, id).map(|v| &v.record);
-            record(r.from).is_some_and(|v| self.faction_allows_record(r.from, v))
-                && record(r.to).is_some_and(|v| self.faction_allows_record(r.to, v))
+            record(r.from).is_some_and(|v| self.faction_allows_record(r.from, v)) && record(r.to).is_some_and(|v| self.faction_allows_record(r.to, v))
         };
         match self.scope.scenario {
             Some(s) => in_scenario(s),
@@ -562,7 +605,10 @@ impl<'d> View<'d> {
             .research_graph()
             .dependents(id)
             .iter()
-            .map(|d| Unlock { kind: UnlockKind::Research { alternative: d.alternative }, entity: d.node })
+            .map(|d| Unlock {
+                kind: UnlockKind::Research { alternative: d.alternative },
+                entity: d.node,
+            })
             .collect();
         for r in self.references_to(id) {
             let from_template = &*self.ds.entity(r.from).template;
@@ -580,9 +626,13 @@ impl<'d> View<'d> {
             out.push(Unlock { kind, entity: r.from });
         }
         if let Some(org) = self.record(id).and_then(|r| r.get("orgGranted")).and_then(Value::as_str)
-            && let Some(o) = self.find(model::ORG, org) {
-                out.push(Unlock { kind: UnlockKind::GrantedOrg, entity: o });
-            }
+            && let Some(o) = self.find(model::ORG, org)
+        {
+            out.push(Unlock {
+                kind: UnlockKind::GrantedOrg,
+                entity: o,
+            });
+        }
         out.sort_by_key(|u| (u.kind, u.entity));
         out.dedup_by(|a, b| a.kind == b.kind && a.entity == b.entity);
         out
@@ -595,7 +645,14 @@ impl<'d> View<'d> {
             return Vec::new();
         };
         let mut out = Vec::new();
-        for key in ["requiredProjectName", "requiredTechName", "projectDataName", "unlockTech", "knowledgeProject", "projectUnlockName"] {
+        for key in [
+            "requiredProjectName",
+            "requiredTechName",
+            "projectDataName",
+            "unlockTech",
+            "knowledgeProject",
+            "projectUnlockName",
+        ] {
             if let Some(name) = record.get(key).and_then(Value::as_str) {
                 out.extend(self.find_research(name));
             }
@@ -618,12 +675,23 @@ mod tests {
         let ds = dataset(
             &[
                 (META, vec![scenario("S", 1, &[], None)]),
-                (model::PROJECT, vec![json!({"dataName": "Ship"}), json!({"dataName": "Hab"}), json!({"dataName": "Habs"}), json!({"dataName": "Plain"})]),
+                (
+                    model::PROJECT,
+                    vec![
+                        json!({"dataName": "Ship"}),
+                        json!({"dataName": "Hab"}),
+                        json!({"dataName": "Habs"}),
+                        json!({"dataName": "Plain"}),
+                    ],
+                ),
                 // template load order decides which ship part comes first
                 ("TIShipArmorTemplate", vec![json!({"dataName": "Armor", "requiredProjectName": "Ship"})]),
                 (
                     "TIUtilityModuleTemplate",
-                    vec![json!({"dataName": "Util2", "requiredProjectName": "Ship"}), json!({"dataName": "Util1", "requiredProjectName": "Ship"})],
+                    vec![
+                        json!({"dataName": "Util2", "requiredProjectName": "Ship"}),
+                        json!({"dataName": "Util1", "requiredProjectName": "Ship"}),
+                    ],
                 ),
                 (
                     model::HAB_MODULE,
@@ -650,7 +718,10 @@ mod tests {
         let p = |n| id(&ds, model::PROJECT, n);
         let summary = |n| view.text(&texts, p(n), field::SUMMARY);
         assert_eq!(summary("Ship").as_deref(), Some("Armor description"));
-        assert_eq!(view.text_source(&texts, p("Ship"), field::SUMMARY), (id(&ds, "TIShipArmorTemplate", "Armor"), field::DESCRIPTION));
+        assert_eq!(
+            view.text_source(&texts, p("Ship"), field::SUMMARY),
+            (id(&ds, "TIShipArmorTemplate", "Armor"), field::DESCRIPTION)
+        );
         assert_eq!(summary("Hab").as_deref(), Some("Module description"));
         // several hab modules: the game keeps the sentinel
         assert_eq!(view.text_source(&texts, p("Habs"), field::SUMMARY), (p("Habs"), field::SUMMARY));

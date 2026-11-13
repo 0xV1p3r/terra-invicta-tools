@@ -20,3 +20,7 @@ serde_json.workspace = true
 thiserror.workspace = true
 percent-encoding = "2"
 ti-data = { path = "../../../crates/ti-data" }
+tauri-plugin-dialog = "2"
+
+[dev-dependencies]
+ts-rs = "11"

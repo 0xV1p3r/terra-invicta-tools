@@ -41,7 +41,13 @@ const LOWER_IS_BETTER: &[&str] = &[
 ];
 
 /// Contexts whose direction is a trade-off or a switch rather than a gain.
-const NEUTRAL: &[&str] = &["BreakawayChance", "CanContactAliens", "CanTransferTerritoryToAliens", "LaserDefenseFreq", "LaserDefenseType"];
+const NEUTRAL: &[&str] = &[
+    "BreakawayChance",
+    "CanContactAliens",
+    "CanTransferTerritoryToAliens",
+    "LaserDefenseFreq",
+    "LaserDefenseType",
+];
 
 /// Research category of single-science contexts.
 const SCIENCES: &[(&str, &str)] = &[
@@ -212,10 +218,31 @@ const MISSION_ICONS: &[(&str, &str)] = &[
 
 /// Councilor mission icon files that exist (`councilor_missions/ICO_<name>_on.png`).
 const MISSION_FILES: &[&str] = &[
-    "abductions", "assassinate", "assaultfacility", "assumecontrol", "contact", "controlspaceasset", "coup",
-    "crackdown", "defendinterest", "enthrallelites", "enthrallpublic", "gain_influence", "hostiletakeover",
-    "inspire", "propaganda", "purge", "sabotagefacilities", "sabotagehab", "sabotageproject", "seizespaceasset",
-    "stabilize", "stealproject", "turn", "unrest", "Xenoform",
+    "abductions",
+    "assassinate",
+    "assaultfacility",
+    "assumecontrol",
+    "contact",
+    "controlspaceasset",
+    "coup",
+    "crackdown",
+    "defendinterest",
+    "enthrallelites",
+    "enthrallpublic",
+    "gain_influence",
+    "hostiletakeover",
+    "inspire",
+    "propaganda",
+    "purge",
+    "sabotagefacilities",
+    "sabotagehab",
+    "sabotageproject",
+    "seizespaceasset",
+    "stabilize",
+    "stealproject",
+    "turn",
+    "unrest",
+    "Xenoform",
 ];
 
 /// Asset file of an icon table entry: a path under `assets/`, or `sprite:<name>` for an
@@ -234,7 +261,10 @@ fn game_icon(name: &str) -> Option<String> {
     }
     let rest = name.strip_prefix("Mission_")?;
     let mission = rest.rsplit_once('_').map_or(rest, |(m, _)| m);
-    let icon = MISSION_ICONS.iter().find(|(m, _)| *m == mission).map_or_else(|| mission.to_lowercase(), |(_, i)| (*i).to_string());
+    let icon = MISSION_ICONS
+        .iter()
+        .find(|(m, _)| *m == mission)
+        .map_or_else(|| mission.to_lowercase(), |(_, i)| (*i).to_string());
     MISSION_FILES.contains(&icon.as_str()).then(|| format!("councilor_missions/ICO_{icon}_on.png"))
 }
 
@@ -242,9 +272,7 @@ fn game_icon(name: &str) -> Option<String> {
 fn domain(name: &str) -> &'static str {
     let has = |parts: &[&str]| parts.iter().any(|p| name.contains(p));
     let starts = |parts: &[&str]| parts.iter().any(|p| name.starts_with(p));
-    if SCIENCES.iter().any(|(c, _)| *c == name)
-        || has(&["Research", "ProjectUnlock", "ProjectTrigger", "RerollMissingProjects", "TechLevel", "Miltech"])
-    {
+    if SCIENCES.iter().any(|(c, _)| *c == name) || has(&["Research", "ProjectUnlock", "ProjectTrigger", "RerollMissingProjects", "TechLevel", "Miltech"]) {
         "research"
     } else if name.ends_with("Priority") {
         "priority"
@@ -252,7 +280,15 @@ fn domain(name: &str) -> &'static str {
         "mission"
     } else if starts(&["ControlPoint"]) {
         "control"
-    } else if has(&["Recruit", "Councilor", "CouncilSize", "Lifespan", "Augmentation", "Interrogation", "MissionSlider"]) {
+    } else if has(&[
+        "Recruit",
+        "Councilor",
+        "CouncilSize",
+        "Lifespan",
+        "Augmentation",
+        "Interrogation",
+        "MissionSlider",
+    ]) {
         "councilor"
     } else if has(&["MissionControl", "MCFree"]) {
         "missionControl"
@@ -260,7 +296,17 @@ fn domain(name: &str) -> &'static str {
         "alien"
     } else if starts(&["Army", "Bombardment", "NuclearStrike", "DefendInterests", "AdvancedAircraft"]) {
         "army"
-    } else if starts(&["Ship", "DamageReduction", "Combat_", "TargetingComputer", "STOFighter", "LaserDefense", "HumanECM", "GlobalECM", "NationSetCanBuild"]) {
+    } else if starts(&[
+        "Ship",
+        "DamageReduction",
+        "Combat_",
+        "TargetingComputer",
+        "STOFighter",
+        "LaserDefense",
+        "HumanECM",
+        "GlobalECM",
+        "NationSetCanBuild",
+    ]) {
         "ship"
     } else if has(&["Mining", "MineSize", "ResourceMarket", "CanAmass", "Exotics", "SpaceResource"]) {
         "mining"
@@ -272,7 +318,16 @@ fn domain(name: &str) -> &'static str {
         "hab"
     } else if starts(&["Welfare_", "Environment", "EndofOil", "NationSetCanDecontaminate"]) {
         "environment"
-    } else if starts(&["Economy_", "Spoils", "DirectInvest", "OrgPurchase", "Corruption", "MaxAvailableOrgs", "MapRegionGDP", "GlobalIP"]) {
+    } else if starts(&[
+        "Economy_",
+        "Spoils",
+        "DirectInvest",
+        "OrgPurchase",
+        "Corruption",
+        "MaxAvailableOrgs",
+        "MapRegionGDP",
+        "GlobalIP",
+    ]) {
         "economy"
     } else if starts(&[
         "PostRegime",
@@ -327,7 +382,12 @@ pub(crate) fn context_style(view: &View<'_>, context: &str, up: Option<bool>, ab
         .and_then(|i| resolve(view, &i))
         .or_else(|| (dom == "alien").then(|| "mapicons/ICO_geoscape_councilor_alien_generic.png".to_string()));
     let category = SCIENCES.iter().find(|(c, _)| *c == context).map(|(_, cat)| cat.to_string());
-    ContextStyle { domain: dom, sentiment, category, icon }
+    ContextStyle {
+        domain: dom,
+        sentiment,
+        category,
+        icon,
+    }
 }
 
 fn target_label(target: &str) -> Option<&'static str> {
@@ -379,13 +439,21 @@ pub fn effect_line(view: &View<'_>, texts: &Texts, id: EntityId, entity: EntityR
     });
     let percent = first_value.is_some_and(|v| v.ends_with('%'));
     let (mut label, mut modifier_text, mut sentiment, mut dom, mut category) = (None, None, "neutral", "other", None);
-    let icon = EFFECT_ICONS.iter().find(|(n, _)| *n == effect.data_name).map(|(_, f)| (*f).to_string()).or_else(|| {
-        // Councilor attribute changes name the attribute in strValue.
-        let attribute = effect.str_value.as_ref().and_then(|v| v.as_str()).map(|a| format!("sprite:attribute_{}", a.to_lowercase()));
-        attribute
-            .filter(|a| resolve(view, a).is_some())
-            .or_else(|| effect.contexts.first().or(effect.instant_effect.as_ref()).and_then(|n| game_icon(n)))
-    });
+    let icon = EFFECT_ICONS
+        .iter()
+        .find(|(n, _)| *n == effect.data_name)
+        .map(|(_, f)| (*f).to_string())
+        .or_else(|| {
+            // Councilor attribute changes name the attribute in strValue.
+            let attribute = effect
+                .str_value
+                .as_ref()
+                .and_then(|v| v.as_str())
+                .map(|a| format!("sprite:attribute_{}", a.to_lowercase()));
+            attribute
+                .filter(|a| resolve(view, a).is_some())
+                .or_else(|| effect.contexts.first().or(effect.instant_effect.as_ref()).and_then(|n| game_icon(n)))
+        });
     let icon = icon.and_then(|i| resolve(view, &i));
     if let Some(context) = effect.contexts.first() {
         let (kind, text) = effect_label(context);
@@ -462,7 +530,10 @@ mod tests {
             .collect();
         assert!(missing.is_empty(), "{missing:?}");
         assert_eq!(game_icon("Mission_Purge_Att").as_deref(), Some("councilor_missions/ICO_purge_on.png"));
-        assert_eq!(game_icon("Mission_GainControlPoint").as_deref(), Some("councilor_missions/ICO_assumecontrol_on.png"));
+        assert_eq!(
+            game_icon("Mission_GainControlPoint").as_deref(),
+            Some("councilor_missions/ICO_assumecontrol_on.png")
+        );
         assert_eq!(game_icon("Mission_Terrorize_Def"), None);
     }
 
@@ -476,7 +547,11 @@ mod tests {
         for &e in &effects {
             let spoilers = &*b.spoilers(&view).unwrap();
             let l = effect_line(&view, &texts, e, entity_ref(&view, &texts, e, spoilers));
-            let text: String = l.segments.iter().map(|s| if s.kind == "value" { format!("[{}]", s.text) } else { s.text.clone() }).collect();
+            let text: String = l
+                .segments
+                .iter()
+                .map(|s| if s.kind == "value" { format!("[{}]", s.text) } else { s.text.clone() })
+                .collect();
             assert!(!text.starts_with('-'), "{text}");
             dump += &format!(
                 "{:<45} {:<14} {:<55} {:<8} {:<7} {:<45} {:<9} {}\n",
@@ -501,7 +576,10 @@ mod tests {
         let ship = line("Effect_BSBE_ShipConstructionTimePenalty");
         assert_eq!((ship.modifier.as_deref(), ship.sentiment.as_str()), (Some("+50%"), "bad"));
         let cp = line("Effect_BSBE_CPMaintenanceRepair");
-        assert_eq!((cp.modifier.as_deref(), cp.sentiment.as_str(), cp.domain.as_str()), (Some("+70"), "good", "control"));
+        assert_eq!(
+            (cp.modifier.as_deref(), cp.sentiment.as_str(), cp.domain.as_str()),
+            (Some("+70"), "good", "control")
+        );
         let mats = line("Effect_BS_MaterialScienceBonusA");
         assert_eq!((mats.modifier.as_deref(), mats.category.as_deref()), (Some("+100%"), Some("Materials")));
         assert_eq!(line("Effect_BS_LifeSciencePenalty").modifier.as_deref(), Some("−50%"));
@@ -511,10 +589,23 @@ mod tests {
         assert_eq!(line("Effect_PostRegimeLossUnrestIncrease").sentiment, "good");
         assert_eq!(line("Effect_MiningMetalsBonus").icon.as_deref(), Some("icons_2d/ICO_metal.png"));
         assert_eq!(line("Effect_AllHumanFactionsGainExotics").icon.as_deref(), Some("icons_2d/ICO_exotics.png"));
-        assert_eq!(line("Effect_AllRecruitsInvestigation2").icon.as_deref(), Some("sprites/attribute_investigation.png"));
+        assert_eq!(
+            line("Effect_AllRecruitsInvestigation2").icon.as_deref(),
+            Some("sprites/attribute_investigation.png")
+        );
         assert_eq!(cp.icon.as_deref(), Some("sprites/control_point.png"));
         let metal = line("Effect_MiningMetalsBonus");
-        assert!(metal.segments.iter().any(|s| s.kind == "sprite" && s.icon.as_deref() == Some("sprites/metal.png")));
-        assert!(line("Effect_MiningMetalsBonus").segments.iter().any(|s| s.kind == "sprite" && s.text == "metal"));
+        assert!(
+            metal
+                .segments
+                .iter()
+                .any(|s| s.kind == "sprite" && s.icon.as_deref() == Some("sprites/metal.png"))
+        );
+        assert!(
+            line("Effect_MiningMetalsBonus")
+                .segments
+                .iter()
+                .any(|s| s.kind == "sprite" && s.text == "metal")
+        );
     }
 }

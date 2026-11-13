@@ -14,12 +14,13 @@ use crate::layout::{self, LayoutEdge};
 use crate::properties;
 use crate::refs::{self, entity_ref};
 use crate::scope;
-use crate::state::Backend;
+use crate::state::{Backend, WikiRow};
 use crate::stats::entity_stats;
 
-pub fn get_meta(b: &Backend) -> CmdResult<Meta> {
+/// Build, data folder, languages, and scenarios and factions labelled in `lang`.
+pub fn get_meta(b: &Backend, lang: &str) -> CmdResult<Meta> {
     let ds = &*b.ds;
-    let texts = b.texts("en")?;
+    let texts = b.texts(lang)?;
     let view = ds.overview();
     let scenarios = ds
         .scenarios()
@@ -28,7 +29,11 @@ pub fn get_meta(b: &Backend) -> CmdResult<Meta> {
             let label = view.name(&texts, s.meta);
             ScenarioInfo {
                 name: s.data_name.clone(),
-                label: if label == s.data_name && !s.friendly_name.is_empty() { s.friendly_name.clone() } else { label },
+                label: if label == s.data_name && !s.friendly_name.is_empty() {
+                    s.friendly_name.clone()
+                } else {
+                    label
+                },
                 listed: s.listed,
                 dlc: s.is_dlc(),
                 tags: s.tags.clone(),
@@ -50,11 +55,40 @@ pub fn get_meta(b: &Backend) -> CmdResult<Meta> {
     Ok(Meta {
         build_id: ds.build_id().to_string(),
         game_version: ds.game_version().map(str::to_string),
+        latest: b.latest_build_id() == Some(ds.build_id()),
+        pinned_build: b.pinned_build.clone(),
         data_dir: b.data_dir.display().to_string(),
+        data_dir_source: b.data_dir_source,
         languages: ds.languages().to_vec(),
         scenarios,
         factions,
     })
+}
+
+/// Builds of the data root, re-read from `index.json` so newly extracted builds show up.
+pub fn list_builds(b: &Backend) -> CmdResult<Vec<BuildInfo>> {
+    let root = ti_data::DataRoot::open(&b.data_dir).unwrap_or_else(|_| b.root.clone());
+    let latest = root.index.latest.as_deref();
+    Ok(root
+        .index
+        .builds
+        .iter()
+        .map(|entry| {
+            let loaded = entry.build_id == b.ds.build_id();
+            BuildInfo {
+                dir: entry.dir.clone(),
+                build_id: entry.build_id.clone(),
+                last_updated: entry.last_updated,
+                game_version: if loaded {
+                    b.ds.game_version().map(str::to_string)
+                } else {
+                    root.manifest(entry).ok().and_then(|m| m.game.version)
+                },
+                loaded,
+                latest: latest == Some(entry.dir.as_str()),
+            }
+        })
+        .collect())
 }
 
 /// Entities of a template that exist in the scope. Unlike `View::entities`, projects of
@@ -90,24 +124,71 @@ pub fn get_wiki_index(b: &Backend, scope: &ScopeArgs, show_spoilers: Option<bool
     Ok(sections)
 }
 
-/// Every scoped entity of a known template, ordered by localized name.
-pub fn get_wiki_entries(b: &Backend, scope: &ScopeArgs, template: &str, spoiler: Option<bool>) -> CmdResult<Vec<WikiEntry>> {
+/// Every scoped entity of a known template, ordered by localized name, with its filter text.
+/// Cached per (scope, language, template, spoiler), so paging and filtering stay cheap.
+fn wiki_rows(b: &Backend, scope: &ScopeArgs, template: &str, spoiler: Option<bool>) -> CmdResult<std::sync::Arc<Vec<WikiRow>>> {
     if !b.ds.templates().any(|t| t == template) {
         return Err(CmdError::msg(format!("Unknown template {template:?}")));
     }
-    let texts = b.texts(&scope.lang)?;
-    let view = b.ds.view(scope::resolve(&b.ds, scope)?);
-    let spoilers = &*b.spoilers(&view)?;
-    let mut entries: Vec<_> = wiki_entities(&view, template)
-        .filter(|id| spoilers.contains(id) == (spoiler == Some(true)))
-        .map(|id| WikiEntry {
-            entity: entity_ref(&view, &texts, id, spoilers),
-            subtitle: crate::wiki::subtitle(&view, &texts, id),
-            effect: (template == model::EFFECT).then(|| effect_line(&view, &texts, id, entity_ref(&view, &texts, id, spoilers))),
-        })
-        .collect();
-    entries.sort_by_cached_key(|e| (e.entity.name.to_lowercase(), e.entity.data_name.clone()));
-    Ok(entries)
+    let resolved = scope::resolve(&b.ds, scope)?;
+    let spoiler = spoiler == Some(true);
+    let key = (resolved, b.language(&scope.lang).to_string(), template.to_string(), spoiler);
+    b.wiki_rows(key, || {
+        let texts = b.texts(&scope.lang)?;
+        let view = b.ds.view(resolved);
+        let spoilers = &*b.spoilers(&view)?;
+        let mut rows: Vec<_> = wiki_entities(&view, template)
+            .filter(|id| spoilers.contains(id) == spoiler)
+            .map(|id| {
+                let entry = WikiEntry {
+                    entity: entity_ref(&view, &texts, id, spoilers),
+                    subtitle: crate::wiki::subtitle(&view, &texts, id),
+                    effect: (template == model::EFFECT).then(|| effect_line(&view, &texts, id, entity_ref(&view, &texts, id, spoilers))),
+                };
+                // What the wiki list filter matches: name, dataName and subtitle.
+                let haystack = format!(
+                    "{} {} {}",
+                    entry.entity.name,
+                    entry.entity.data_name,
+                    entry.subtitle.as_deref().unwrap_or_default()
+                )
+                .to_lowercase();
+                WikiRow { haystack, entry }
+            })
+            .collect();
+        rows.sort_by_cached_key(|r| (r.entry.entity.name.to_lowercase(), r.entry.entity.data_name.clone()));
+        Ok(rows)
+    })
+}
+
+/// A page of a wiki section: entries whose name, dataName or subtitle contain `filter`
+/// (case-insensitive), skipping `offset`, at most `limit` (`None` = all).
+pub fn get_wiki_entries(
+    b: &Backend,
+    scope: &ScopeArgs,
+    template: &str,
+    spoiler: Option<bool>,
+    filter: &str,
+    offset: usize,
+    limit: Option<usize>,
+) -> CmdResult<WikiPage> {
+    let rows = wiki_rows(b, scope, template, spoiler)?;
+    let needle = filter.to_lowercase();
+    let mut total = 0;
+    let mut entries = Vec::new();
+    for row in rows.iter().filter(|r| r.haystack.contains(&needle)) {
+        if total >= offset && limit.is_none_or(|l| entries.len() < l) {
+            entries.push(row.entry.clone());
+        }
+        total += 1;
+    }
+    Ok(WikiPage { total, entries })
+}
+
+/// Every entry of a wiki section (tests and mock fixtures).
+#[cfg(test)]
+pub fn all_wiki_entries(b: &Backend, scope: &ScopeArgs, template: &str, spoiler: Option<bool>) -> CmdResult<Vec<WikiEntry>> {
+    Ok(get_wiki_entries(b, scope, template, spoiler, "", 0, None)?.entries)
 }
 
 /// Use the referencing record's field path for both directions.
@@ -116,7 +197,10 @@ fn reference_groups(view: &View<'_>, texts: &ti_data::Texts, id: EntityId, incom
     let references = if incoming { view.references_to(id) } else { view.references_from(id) };
     for reference in references {
         let other = if incoming { reference.from } else { reference.to };
-        groups.entry((view.dataset().entity(other).template.to_string(), reference.path.to_string())).or_default().insert(other);
+        groups
+            .entry((view.dataset().entity(other).template.to_string(), reference.path.to_string()))
+            .or_default()
+            .insert(other);
     }
     groups
         .into_iter()
@@ -139,9 +223,25 @@ pub fn get_tree(b: &Backend, scope: &ScopeArgs, filter: &TreeFilter, layout: Ful
         .filter(|&id| matches_kind_and_category(&view, id, filter))
         .filter(|&id| filter.properties.is_empty() || properties::of(&view, id).iter().any(|p| filter.properties.contains(p)))
         .collect();
-    let edges: BTreeSet<Edge> = graph.full().edges.into_iter().filter(|e| nodes.contains(&e.from) && nodes.contains(&e.to)).collect();
+    let edges: BTreeSet<Edge> = graph
+        .full()
+        .edges
+        .into_iter()
+        .filter(|e| nodes.contains(&e.from) && nodes.contains(&e.to))
+        .collect();
     let unfiltered = filter.techs && filter.projects && filter.categories.is_empty() && filter.properties.is_empty();
-    let mut tree = build_graph(&view, &texts, &nodes, &edges, None, GraphLayout { bands: layout == FullLayout::Bands, merge_edges }, unfiltered);
+    let mut tree = build_graph(
+        &view,
+        &texts,
+        &nodes,
+        &edges,
+        None,
+        GraphLayout {
+            bands: layout == FullLayout::Bands,
+            merge_edges,
+        },
+        unfiltered,
+    );
     tree.total_cost = tree.nodes.iter().map(|n| n.cost).filter(|c| *c > 0.0).sum();
     Ok(tree)
 }
@@ -164,7 +264,10 @@ pub fn get_subtree(b: &Backend, scope: &ScopeArgs, args: &SubtreeArgs, merge_edg
     if !graph.contains(root) {
         return Err(CmdError::msg(format!("{} is not a tech or project in this scope", args.root)));
     }
-    let t = Traversal { alternatives: args.alternatives, max_depth: args.max_depth };
+    let t = Traversal {
+        alternatives: args.alternatives,
+        max_depth: args.max_depth,
+    };
     let mut sub = match args.direction {
         Direction::Up => graph.ancestors(root, t),
         Direction::Down => graph.descendants(root, t),
@@ -177,7 +280,15 @@ pub fn get_subtree(b: &Backend, scope: &ScopeArgs, args: &SubtreeArgs, merge_edg
     }
     // Implying chains are complete only when the walk follows every edge without a depth limit.
     let complete = args.alternatives && args.max_depth.is_none();
-    let mut tree = build_graph(&view, &texts, &sub.nodes, &sub.edges, Some(root), GraphLayout { bands: false, merge_edges }, complete);
+    let mut tree = build_graph(
+        &view,
+        &texts,
+        &sub.nodes,
+        &sub.edges,
+        Some(root),
+        GraphLayout { bands: false, merge_edges },
+        complete,
+    );
     tree.total_cost = required_cost(graph, &view, root);
     Ok(tree)
 }
@@ -187,13 +298,26 @@ pub fn get_subtree(b: &Backend, scope: &ScopeArgs, args: &SubtreeArgs, merge_edg
 pub fn get_properties(b: &Backend, scope: &ScopeArgs, filter: &TreeFilter) -> CmdResult<Vec<PropertyInfo>> {
     let texts = b.texts(&scope.lang)?;
     let view = b.ds.view(scope::resolve(&b.ds, scope)?);
-    let nodes = view.research_graph().nodes().iter().copied().filter(|&id| matches_kind_and_category(&view, id, filter));
+    let nodes = view
+        .research_graph()
+        .nodes()
+        .iter()
+        .copied()
+        .filter(|&id| matches_kind_and_category(&view, id, filter));
     Ok(properties::catalog(&view, &texts, nodes))
 }
 
 /// Research cost of everything that must be researched for `id`, including it (listed prereqs only).
 fn required_cost(graph: &ResearchGraph, view: &View<'_>, id: EntityId) -> f64 {
-    graph.ancestors(id, Traversal { alternatives: false, max_depth: None }).research_cost(view)
+    graph
+        .ancestors(
+            id,
+            Traversal {
+                alternatives: false,
+                max_depth: None,
+            },
+        )
+        .research_cost(view)
 }
 
 fn research_cost(view: &View<'_>, id: EntityId) -> f64 {
@@ -234,7 +358,11 @@ fn build_graph(
     let layout_edges: Vec<LayoutEdge> = kept
         .iter()
         .filter(|e| !redundant.contains(e))
-        .map(|e| LayoutEdge { from: index[&e.from], to: index[&e.to], alternative: e.alternative })
+        .map(|e| LayoutEdge {
+            from: index[&e.from],
+            to: index[&e.to],
+            alternative: e.alternative,
+        })
         .collect();
     let costs: Vec<f64> = order.iter().map(|&id| research_cost(view, id)).collect();
     // Band order: category name (matches the frontend's category order).
@@ -242,13 +370,24 @@ fn build_graph(
     let mut band_names: Vec<String> = if options.bands { categories.clone() } else { Vec::new() };
     band_names.sort_unstable();
     band_names.dedup();
-    let groups: Vec<usize> = if options.bands { categories.iter().map(|c| band_names.binary_search(c).unwrap()).collect() } else { Vec::new() };
+    let groups: Vec<usize> = if options.bands {
+        categories.iter().map(|c| band_names.binary_search(c).unwrap()).collect()
+    } else {
+        Vec::new()
+    };
     let routed = layout::route_grouped(order.len(), &layout_edges, &costs, &groups, options.merge_edges);
     let placements = routed.nodes;
-    let tree_bands =
-        band_names.into_iter().zip(routed.groups).filter_map(|(category, span)| span.map(|(top, bottom)| Band { category, top, bottom })).collect();
+    let tree_bands = band_names
+        .into_iter()
+        .zip(routed.groups)
+        .filter_map(|(category, span)| span.map(|(top, bottom)| Band { category, top, bottom }))
+        .collect();
     let obtainable = view.research_graph().obtainable_set();
-    let tree_nodes = order.iter().zip(&placements).map(|(&id, p)| tree_node(view, texts, id, p.column, p.x, p.y, obtainable.contains(&id))).collect();
+    let tree_nodes = order
+        .iter()
+        .zip(&placements)
+        .map(|(&id, p)| tree_node(view, texts, id, p.column, p.x, p.y, obtainable.contains(&id)))
+        .collect();
     let mut waypoints = routed.waypoints.into_iter();
     let tree_edges = kept
         .iter()
@@ -257,7 +396,11 @@ fn build_graph(
             to: refs::key(view, e.to),
             alternative: e.alternative,
             redundant: redundant.contains(e),
-            points: if redundant.contains(e) { Vec::new() } else { waypoints.next().expect("routed edge") },
+            points: if redundant.contains(e) {
+                Vec::new()
+            } else {
+                waypoints.next().expect("routed edge")
+            },
         })
         .collect();
     TreeGraph {
@@ -277,7 +420,11 @@ fn tree_node(view: &View<'_>, texts: &ti_data::Texts, id: EntityId, column: usiz
     TreeNode {
         key: refs::key(view, id),
         data_name: view.dataset().entity(id).data_name.to_string(),
-        kind: if view.kind(id) == model::Kind::Tech { NodeKind::Tech } else { NodeKind::Project },
+        kind: if view.kind(id) == model::Kind::Tech {
+            NodeKind::Tech
+        } else {
+            NodeKind::Project
+        },
         name: view.name(texts, id),
         category: refs::category(view, id).unwrap_or_default(),
         cost: research_cost(view, id),
@@ -326,15 +473,27 @@ pub fn get_focus(b: &Backend, scope: &ScopeArgs, root: &str) -> CmdResult<TreeGr
     while !pending.is_empty() {
         let next = groups
             .last()
-            .and_then(|last| (0..pending.len()).max_by_key(|&i| (shared(last, &pending[i]), std::cmp::Reverse(i))).filter(|&i| shared(last, &pending[i]) > 0))
+            .and_then(|last| {
+                (0..pending.len())
+                    .max_by_key(|&i| (shared(last, &pending[i]), std::cmp::Reverse(i)))
+                    .filter(|&i| shared(last, &pending[i]) > 0)
+            })
             .unwrap_or(0);
         groups.push(pending.remove(next));
     }
-    let mut dependents: Vec<(EntityId, bool)> =
-        graph.dependents(root_id).iter().filter(|d| graph.contains(d.node) && !groups.iter().flatten().any(|(o, _)| *o == d.node) && placed.insert(d.node)).map(|d| (d.node, d.alternative)).collect();
+    let mut dependents: Vec<(EntityId, bool)> = graph
+        .dependents(root_id)
+        .iter()
+        .filter(|d| graph.contains(d.node) && !groups.iter().flatten().any(|(o, _)| *o == d.node) && placed.insert(d.node))
+        .map(|d| (d.node, d.alternative))
+        .collect();
     dependents.sort_by_cached_key(|&(id, _)| {
         let cost = research_cost(&view, id);
-        (refs::category(&view, id).unwrap_or_default(), cost.max(0.0) as u64, ds.entity(id).data_name.clone())
+        (
+            refs::category(&view, id).unwrap_or_default(),
+            cost.max(0.0) as u64,
+            ds.entity(id).data_name.clone(),
+        )
     });
 
     let (w, h, gap) = (layout::NODE_WIDTH, layout::NODE_HEIGHT, layout::GAP_Y);
@@ -376,7 +535,13 @@ pub fn get_focus(b: &Backend, scope: &ScopeArgs, root: &str) -> CmdResult<TreeGr
     let obtainable = graph.obtainable_set();
     let node = |id: EntityId, column: usize, y: f64| tree_node(&view, &texts, id, column, column_x(column), y, obtainable.contains(&id));
     let key = |id: EntityId| refs::key(&view, id);
-    let edge = |from: EntityId, to: EntityId, alternative: bool| TreeEdge { from: key(from), to: key(to), alternative, redundant: false, points: Vec::new() };
+    let edge = |from: EntityId, to: EntityId, alternative: bool| TreeEdge {
+        from: key(from),
+        to: key(to),
+        alternative,
+        redundant: false,
+        points: Vec::new(),
+    };
     let mut nodes = vec![node(root_id, 1, root_y)];
     let mut edges = Vec::new();
     for &(id, alt, y) in &left {
@@ -387,8 +552,15 @@ pub fn get_focus(b: &Backend, scope: &ScopeArgs, root: &str) -> CmdResult<TreeGr
         nodes.push(node(id, 2, right_off + i as f64 * (h + gap)));
         edges.push(edge(root_id, id, alt));
     }
-    let any_of =
-        spans.into_iter().map(|(top, bottom, level)| Span { x: column_x(0), top: top + left_off, bottom: bottom + left_off, level }).collect();
+    let any_of = spans
+        .into_iter()
+        .map(|(top, bottom, level)| Span {
+            x: column_x(0),
+            top: top + left_off,
+            bottom: bottom + left_off,
+            level,
+        })
+        .collect();
     Ok(TreeGraph {
         nodes,
         edges,
@@ -456,11 +628,7 @@ pub fn get_entity(b: &Backend, scope: &ScopeArgs, key: &str) -> CmdResult<Entity
             })
             .collect(),
         dropped_prereqs: graph.dropped_prereqs(id).to_vec(),
-        effects: view
-            .effects(id)
-            .into_iter()
-            .map(|e| effect_line(&view, &texts, e, r(e)))
-            .collect(),
+        effects: view.effects(id).into_iter().map(|e| effect_line(&view, &texts, e, r(e))).collect(),
         unlocks: view
             .unlocks(id)
             .into_iter()
@@ -468,9 +636,12 @@ pub fn get_entity(b: &Backend, scope: &ScopeArgs, key: &str) -> CmdResult<Entity
                 kind: unlock_kind_name(u.kind).into(),
                 entity: r(u.entity),
                 // Unlock cards show stats of modules, parts and orgs only (a project can unlock 1,000+ claims).
-                stats: matches!(u.kind, UnlockKind::ShipPart(_) | UnlockKind::HabModule | UnlockKind::Org | UnlockKind::GrantedOrg)
-                    .then(|| entity_stats(&view, &texts, u.entity, spoilers))
-                    .flatten(),
+                stats: matches!(
+                    u.kind,
+                    UnlockKind::ShipPart(_) | UnlockKind::HabModule | UnlockKind::Org | UnlockKind::GrantedOrg
+                )
+                .then(|| entity_stats(&view, &texts, u.entity, spoilers))
+                .flatten(),
             })
             .collect(),
         unlocked_by: view.unlocked_by(id).into_iter().map(r).collect(),
@@ -491,8 +662,7 @@ pub fn search(b: &Backend, scope: &ScopeArgs, query: &str, limit: usize, all: bo
     let view = b.ds.view(scope::resolve(&b.ds, scope)?);
     let spoilers = &*b.spoilers(&view)?;
     let hits = index.search(query, limit, &|id| {
-        (if all { view.exists(id) } else { view.contains(id) })
-            && (kinds.is_empty() || kinds.iter().any(|k| k == refs::kind_name(view.kind(id))))
+        (if all { view.exists(id) } else { view.contains(id) }) && (kinds.is_empty() || kinds.iter().any(|k| k == refs::kind_name(view.kind(id))))
     });
     Ok(hits
         .into_iter()
@@ -573,7 +743,11 @@ pub fn get_solar_system(b: &Backend, scope: &ScopeArgs) -> CmdResult<SolarSystem
             })
         })
         .collect();
-    Ok(SolarSystem { start_date: start_date(&view).unwrap_or_default(), bodies, lagrange_points })
+    Ok(SolarSystem {
+        start_date: start_date(&view).unwrap_or_default(),
+        bodies,
+        lagrange_points,
+    })
 }
 
 #[cfg(test)]
@@ -598,34 +772,41 @@ pub(crate) mod tests {
     }
 
     pub fn en() -> ScopeArgs {
-        ScopeArgs { scenario: None, faction: None, lang: "en".into() }
+        ScopeArgs {
+            scenario: None,
+            faction: None,
+            lang: "en".into(),
+        }
     }
 
     #[test]
     fn wiki_images_effects_and_context() {
         let Some(b) = backend() else { return };
-        let effects = get_wiki_entries(&b, &en(), model::EFFECT, None).unwrap();
+        let effects = all_wiki_entries(&b, &en(), model::EFFECT, None).unwrap();
         assert!(effects.iter().all(|e| e.effect.is_some() && e.subtitle.is_none()));
         let effect = get_entity(&b, &en(), &effects[0].entity.key).unwrap();
         assert_eq!(effect.effect.unwrap().entity.key, effects[0].entity.key);
         let region = get_entity(&b, &en(), "TIRegionTemplate:Afghanistan").unwrap();
         assert!(region.image.is_some());
         assert!(region.effect.is_none());
-        let entries = get_wiki_entries(&b, &en(), "TIRegionTemplate", None).unwrap();
+        let entries = all_wiki_entries(&b, &en(), "TIRegionTemplate", None).unwrap();
         assert!(entries.iter().find(|e| e.entity.data_name == "Afghanistan").unwrap().subtitle.is_some());
     }
 
     #[test]
     fn wiki_templates_and_entries() {
         let Some(b) = backend() else { return };
-        for scope in std::iter::once(en()).chain(get_meta(&b).unwrap().scenarios.into_iter().map(|s| ScopeArgs { scenario: Some(s.name), ..en() })) {
+        for scope in std::iter::once(en()).chain(get_meta(&b, "en").unwrap().scenarios.into_iter().map(|s| ScopeArgs {
+            scenario: Some(s.name),
+            ..en()
+        })) {
             let view = b.ds.view(scope::resolve(&b.ds, &scope).unwrap());
             let index = get_wiki_index(&b, &scope, Some(true)).unwrap();
             let expected: BTreeSet<_> = b.ds.templates().filter(|t| view.entities(t).next().is_some()).collect();
             assert_eq!(index.iter().map(|s| s.template.as_str()).collect::<BTreeSet<_>>(), expected);
 
             for section in index {
-                let entries = get_wiki_entries(&b, &scope, &section.template, Some(section.spoiler)).unwrap();
+                let entries = all_wiki_entries(&b, &scope, &section.template, Some(section.spoiler)).unwrap();
                 assert_eq!(section.count, entries.len());
                 assert!(
                     entries
@@ -634,14 +815,94 @@ pub(crate) mod tests {
                 );
             }
         }
-        assert!(get_wiki_entries(&b, &en(), "TIUnknownTemplate", None).is_err());
+        assert!(all_wiki_entries(&b, &en(), "TIUnknownTemplate", None).is_err());
+    }
+
+    #[test]
+    fn wiki_pages_and_filters() {
+        let Some(b) = backend() else { return };
+        let all = all_wiki_entries(&b, &en(), model::TECH, None).unwrap();
+        let keys = |entries: &[WikiEntry]| entries.iter().map(|e| e.entity.key.clone()).collect::<Vec<_>>();
+        let page = get_wiki_entries(&b, &en(), model::TECH, None, "", 10, Some(5)).unwrap();
+        assert_eq!(page.total, all.len());
+        assert_eq!(keys(&page.entries), keys(&all[10..15]));
+
+        // Same rule as the old client-side filter: name, dataName, subtitle; case-insensitive substring.
+        for filter in ["ENERGY", "adastra", "a f", "zzzz-no-match"] {
+            let needle = filter.to_lowercase();
+            let expected: Vec<_> = all
+                .iter()
+                .filter(|e| {
+                    format!("{} {} {}", e.entity.name, e.entity.data_name, e.subtitle.as_deref().unwrap_or_default())
+                        .to_lowercase()
+                        .contains(&needle)
+                })
+                .cloned()
+                .collect();
+            let page = get_wiki_entries(&b, &en(), model::TECH, None, filter, 0, Some(200)).unwrap();
+            assert_eq!(page.total, expected.len(), "{filter}");
+            assert_eq!(keys(&page.entries), keys(&expected[..expected.len().min(200)]), "{filter}");
+        }
+        let past = get_wiki_entries(&b, &en(), model::TECH, None, "", all.len() + 5, Some(200)).unwrap();
+        assert_eq!((past.total, past.entries.len()), (all.len(), 0));
+    }
+
+    /// Prints the time of 200-row pages of the largest wiki section (run with `--release --nocapture`).
+    #[test]
+    fn wiki_page_timing() {
+        let Some(b) = backend() else { return };
+        let template = "TIBilateralTemplate";
+        let time = |offset: usize, filter: &str| {
+            let started = std::time::Instant::now();
+            let page = get_wiki_entries(&b, &en(), template, None, filter, offset, Some(200)).unwrap();
+            (started.elapsed(), page)
+        };
+        let (cold, page) = time(0, "");
+        let (warm, _) = time(200, "");
+        let (filtered, filtered_page) = time(0, "united");
+        let bytes = serde_json::to_vec(&page).unwrap().len();
+        eprintln!(
+            "{template}: {} rows; first page {cold:?} (builds the list), next page {warm:?}, filtered ({} rows) {filtered:?}; page JSON {bytes} bytes",
+            page.total, filtered_page.total
+        );
+        assert_eq!(page.entries.len(), 200.min(page.total));
+    }
+
+    #[test]
+    fn meta_follows_the_language() {
+        let Some(b) = backend() else { return };
+        let en = get_meta(&b, "en").unwrap();
+        assert_eq!(
+            get_meta(&b, "no-such-language").unwrap().factions.iter().map(|f| &f.label).collect::<Vec<_>>(),
+            en.factions.iter().map(|f| &f.label).collect::<Vec<_>>()
+        );
+        let Some(lang) = en.languages.iter().find(|l| *l != "en") else { return };
+        let other = get_meta(&b, lang).unwrap();
+        assert!(
+            other.factions.iter().zip(&en.factions).any(|(o, e)| o.name == e.name && o.label != e.label),
+            "{lang} faction labels match English"
+        );
+    }
+
+    #[test]
+    fn builds_listed() {
+        let Some(b) = backend() else { return };
+        let builds = list_builds(&b).unwrap();
+        let loaded: Vec<_> = builds.iter().filter(|x| x.loaded).collect();
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].build_id, b.ds.build_id());
+        assert_eq!(loaded[0].game_version.as_deref(), b.ds.game_version());
+        assert_eq!(builds.iter().filter(|x| x.latest).count(), 1);
+        let meta = get_meta(&b, "en").unwrap();
+        assert_eq!(meta.latest, loaded[0].latest);
+        assert_eq!(meta.pinned_build, None);
     }
 
     #[test]
     fn overview_armies_name_their_scenarios() {
         let Some(b) = backend() else { return };
-        let rows = get_wiki_entries(&b, &en(), "TIArmyTemplate", None).unwrap();
-        let labels = get_meta(&b).unwrap().scenarios;
+        let rows = all_wiki_entries(&b, &en(), "TIArmyTemplate", None).unwrap();
+        let labels = get_meta(&b, "en").unwrap().scenarios;
         let mut subtitles = BTreeSet::new();
         for name in ["USAArmy4", "2026_USAArmy4", "2070_USAArmy2"] {
             let row = rows.iter().find(|r| r.entity.data_name == name).unwrap();
@@ -659,7 +920,7 @@ pub(crate) mod tests {
     #[test]
     fn wiki_nation_capitals() {
         let Some(b) = backend() else { return };
-        let entries = get_wiki_entries(&b, &en(), "TINationTemplate", None).unwrap();
+        let entries = all_wiki_entries(&b, &en(), "TINationTemplate", None).unwrap();
         let usa = entries.iter().find(|e| e.entity.data_name == "USA").unwrap();
         assert!(usa.subtitle.as_deref().is_some_and(|s| s.contains("Capital: ")), "{:?}", usa.subtitle);
     }
@@ -667,10 +928,19 @@ pub(crate) mod tests {
     #[test]
     fn wiki_keeps_other_factions_projects() {
         let Some(b) = backend() else { return };
-        let scenario = ScopeArgs { scenario: Some("ModernScenario".into()), ..en() };
-        let faction = ScopeArgs { faction: Some("ResistCouncil".into()), ..scenario.clone() };
+        let scenario = ScopeArgs {
+            scenario: Some("ModernScenario".into()),
+            ..en()
+        };
+        let faction = ScopeArgs {
+            faction: Some("ResistCouncil".into()),
+            ..scenario.clone()
+        };
         let projects = |scope: &ScopeArgs| {
-            [None, Some(true)].into_iter().map(|spoiler| get_wiki_entries(&b, scope, model::PROJECT, spoiler).unwrap().len()).sum::<usize>()
+            [None, Some(true)]
+                .into_iter()
+                .map(|spoiler| all_wiki_entries(&b, scope, model::PROJECT, spoiler).unwrap().len())
+                .sum::<usize>()
         };
         assert_eq!(projects(&faction), projects(&scenario));
         // The tree search still hides them; the wiki search does not.
@@ -685,12 +955,19 @@ pub(crate) mod tests {
         let view = b.ds.overview();
         let id = view.entities(model::TECH).find(|&id| !view.effects(id).is_empty()).expect("tech with effects");
         let tech = get_entity(&b, &en(), &refs::key(&view, id)).unwrap();
-        let effects = tech.references.iter().find(|g| g.template == model::EFFECT && g.field == "effects[]").expect("tech effects group");
+        let effects = tech
+            .references
+            .iter()
+            .find(|g| g.template == model::EFFECT && g.field == "effects[]")
+            .expect("tech effects group");
         assert!(!effects.entities.is_empty());
         for effect in &effects.entities {
             let detail = get_entity(&b, &en(), &effect.key).unwrap();
             assert!(
-                detail.referenced_by.iter().any(|g| g.template == model::TECH && g.field == "effects[]" && g.entities.iter().any(|e| e.key == tech.entity.key))
+                detail
+                    .referenced_by
+                    .iter()
+                    .any(|g| g.template == model::TECH && g.field == "effects[]" && g.entities.iter().any(|e| e.key == tech.entity.key))
             );
         }
     }
@@ -698,7 +975,7 @@ pub(crate) mod tests {
     #[test]
     fn meta() {
         let Some(b) = backend() else { return };
-        let m = get_meta(&b).unwrap();
+        let m = get_meta(&b, "en").unwrap();
         // Game menu order (by listPriority), not "default first".
         assert!(m.scenarios.iter().take_while(|s| s.listed).any(|s| s.name == "ModernScenario"));
         assert!(m.scenarios.iter().skip_while(|s| s.listed).all(|s| !s.listed));
@@ -714,11 +991,29 @@ pub(crate) mod tests {
     #[test]
     fn full_tree() {
         let Some(b) = backend() else { return };
-        let filter = TreeFilter { techs: true, projects: true, categories: vec![], properties: vec![] };
+        let filter = TreeFilter {
+            techs: true,
+            projects: true,
+            categories: vec![],
+            properties: vec![],
+        };
         let t = std::time::Instant::now();
         let tree = get_tree(&b, &en(), &filter, FullLayout::Layered, true).unwrap();
-        eprintln!("get_tree (overview, all): {} nodes, {} edges in {:?}", tree.nodes.len(), tree.edges.len(), t.elapsed());
+        eprintln!(
+            "get_tree (overview, all): {} nodes, {} edges in {:?}",
+            tree.nodes.len(),
+            tree.edges.len(),
+            t.elapsed()
+        );
         assert!(tree.nodes.len() > 800);
+        // The frontend types promise one of the known categories (`dto.rs` `TechCategory`).
+        let unknown: Vec<_> = tree
+            .nodes
+            .iter()
+            .filter(|n| model::TechCategory::parse(&n.category).is_none_or(|c| c == model::TechCategory::Unknown))
+            .map(|n| &n.key)
+            .collect();
+        assert!(unknown.is_empty(), "research without a known category: {unknown:?}");
         assert!(tree.total_cost > 0.0);
         let keys: std::collections::HashSet<&str> = tree.nodes.iter().map(|n| n.key.as_str()).collect();
         assert!(tree.edges.iter().all(|e| keys.contains(e.from.as_str()) && keys.contains(e.to.as_str())));
@@ -737,12 +1032,33 @@ pub(crate) mod tests {
         assert!(tree.nodes.iter().any(|n| n.flags.faction_locked));
         assert!(tree.nodes.iter().filter(|n| n.flags.obtainable).count() > 800);
 
-        let techs =
-            get_tree(&b, &en(), &TreeFilter { techs: true, projects: false, categories: vec![], properties: vec![] }, FullLayout::Layered, true).unwrap();
+        let techs = get_tree(
+            &b,
+            &en(),
+            &TreeFilter {
+                techs: true,
+                projects: false,
+                categories: vec![],
+                properties: vec![],
+            },
+            FullLayout::Layered,
+            true,
+        )
+        .unwrap();
         assert!(techs.nodes.iter().all(|n| n.kind == NodeKind::Tech));
-        let energy =
-            get_tree(&b, &en(), &TreeFilter { techs: true, projects: true, categories: vec!["Energy".into()], properties: vec![] }, FullLayout::Layered, true)
-                .unwrap();
+        let energy = get_tree(
+            &b,
+            &en(),
+            &TreeFilter {
+                techs: true,
+                projects: true,
+                categories: vec!["Energy".into()],
+                properties: vec![],
+            },
+            FullLayout::Layered,
+            true,
+        )
+        .unwrap();
         assert!(!energy.nodes.is_empty() && energy.nodes.iter().all(|n| n.category == "Energy"));
     }
 
@@ -753,15 +1069,22 @@ pub(crate) mod tests {
         let Some(b) = backend() else { return };
         let root = "TIProjectTemplate:Project_AutomatedOutpostCore";
         let mut shared_seen = false;
-        for scenario in get_meta(&b).unwrap().scenarios {
-            let scope = ScopeArgs { scenario: Some(scenario.name.clone()), ..en() };
+        for scenario in get_meta(&b, "en").unwrap().scenarios {
+            let scope = ScopeArgs {
+                scenario: Some(scenario.name.clone()),
+                ..en()
+            };
             let Ok(f) = get_focus(&b, &scope, root) else {
                 continue;
             };
             let detail = get_entity(&b, &scope, root).unwrap();
             let y: HashMap<&str, f64> = f.nodes.iter().filter(|n| n.column == 0).map(|n| (n.key.as_str(), n.y)).collect();
-            let groups: Vec<Vec<&str>> =
-                detail.requirements.iter().map(|g| g.options.iter().map(|o| o.key.as_str()).collect()).filter(|g: &Vec<&str>| !g.is_empty()).collect();
+            let groups: Vec<Vec<&str>> = detail
+                .requirements
+                .iter()
+                .map(|g| g.options.iter().map(|o| o.key.as_str()).collect())
+                .filter(|g: &Vec<&str>| !g.is_empty())
+                .collect();
             for g in &groups {
                 assert!(g.iter().all(|k| y.contains_key(k)), "{}: {g:?} missing", scenario.name);
                 if g.len() > 1 {
@@ -772,7 +1095,10 @@ pub(crate) mod tests {
                     assert_eq!(y.values().filter(|&&v| v >= top && v < bottom).count(), g.len(), "{}: {g:?}", scenario.name);
                 }
             }
-            shared_seen |= groups.iter().enumerate().any(|(i, g)| groups[i + 1..].iter().any(|h| h.iter().any(|k| g.contains(k))));
+            shared_seen |= groups
+                .iter()
+                .enumerate()
+                .any(|(i, g)| groups[i + 1..].iter().any(|h| h.iter().any(|k| g.contains(k))));
         }
         assert!(shared_seen, "no scenario with a shared requirement option");
     }
@@ -804,7 +1130,12 @@ pub(crate) mod tests {
     #[test]
     fn filtered_trees_keep_redundant_edges() {
         let Some(b) = backend() else { return };
-        let filter = TreeFilter { techs: true, projects: true, categories: vec!["Energy".into()], properties: vec![] };
+        let filter = TreeFilter {
+            techs: true,
+            projects: true,
+            categories: vec!["Energy".into()],
+            properties: vec![],
+        };
         let tree = get_tree(&b, &en(), &filter, FullLayout::Layered, true).unwrap();
         assert!(tree.edges.iter().all(|e| !e.redundant));
     }
@@ -812,7 +1143,12 @@ pub(crate) mod tests {
     #[test]
     fn category_bands() {
         let Some(b) = backend() else { return };
-        let filter = TreeFilter { techs: true, projects: true, categories: vec![], properties: vec![] };
+        let filter = TreeFilter {
+            techs: true,
+            projects: true,
+            categories: vec![],
+            properties: vec![],
+        };
         let tree = get_tree(&b, &en(), &filter, FullLayout::Bands, true).unwrap();
         assert_eq!(tree.bands.len(), 8);
         assert!(tree.bands.windows(2).all(|w| w[0].bottom < w[1].top && w[0].category < w[1].category));
@@ -826,14 +1162,22 @@ pub(crate) mod tests {
     #[test]
     fn properties() {
         let Some(b) = backend() else { return };
-        let all = TreeFilter { techs: true, projects: true, categories: vec![], properties: vec![] };
+        let all = TreeFilter {
+            techs: true,
+            projects: true,
+            categories: vec![],
+            properties: vec![],
+        };
         let catalog = get_properties(&b, &en(), &all).unwrap();
         let find = |id: &str| catalog.iter().find(|p| p.id == id).unwrap_or_else(|| panic!("{id} missing"));
         let cp = find("effect:ControlPointMaintenance:up");
         assert_eq!(cp.label, "Increases control point capacity");
         assert!(cp.count > 20, "{}", cp.count);
         assert!(cp.example.as_deref().is_some_and(|e| e.contains("control point")), "{:?}", cp.example);
-        assert_eq!(find("effect:MCFreeSpaceMineNetwork:up").label, "Increases mining modules free of Mission Control cost");
+        assert_eq!(
+            find("effect:MCFreeSpaceMineNetwork:up").label,
+            "Increases mining modules free of Mission Control cost"
+        );
         assert_eq!(find("effect:CanFoundTier1Base").group, "ability");
         assert!(find("unlock:habModule").count > 10);
         assert!(find("unlock:shipPart:drive").count > 10);
@@ -853,9 +1197,22 @@ pub(crate) mod tests {
         // The options follow the other filters but not the selected properties.
         assert_eq!(cp.sentiment, "good");
         assert_eq!(cp.icon.as_deref(), Some("sprites/control_point.png"));
-        let energy = TreeFilter { categories: vec!["Energy".into()], ..filter.clone() };
+        let energy = TreeFilter {
+            categories: vec!["Energy".into()],
+            ..filter.clone()
+        };
         let faceted = get_properties(&b, &en(), &energy).unwrap();
-        let energy_tree = get_tree(&b, &en(), &TreeFilter { properties: vec![], ..energy.clone() }, FullLayout::Layered, true).unwrap();
+        let energy_tree = get_tree(
+            &b,
+            &en(),
+            &TreeFilter {
+                properties: vec![],
+                ..energy.clone()
+            },
+            FullLayout::Layered,
+            true,
+        )
+        .unwrap();
         assert!(faceted.len() < catalog.len());
         for p in &faceted {
             let on_screen = energy_tree.nodes.iter().filter(|n| n.properties.contains(&p.id)).count();
@@ -872,7 +1229,11 @@ pub(crate) mod tests {
         let edges: Vec<LayoutEdge> = full
             .edges
             .iter()
-            .map(|e| LayoutEdge { from: index[&e.from], to: index[&e.to], alternative: e.alternative })
+            .map(|e| LayoutEdge {
+                from: index[&e.from],
+                to: index[&e.to],
+                alternative: e.alternative,
+            })
             .collect();
         let costs: Vec<f64> = full.nodes.iter().map(|&id| research_cost(&view, id)).collect();
         let t = std::time::Instant::now();
@@ -923,7 +1284,12 @@ pub(crate) mod tests {
     #[test]
     fn subtrees() {
         let Some(b) = backend() else { return };
-        let args = |root: &str, direction| SubtreeArgs { root: root.into(), direction, alternatives: true, max_depth: None };
+        let args = |root: &str, direction| SubtreeArgs {
+            root: root.into(),
+            direction,
+            alternatives: true,
+            max_depth: None,
+        };
         let up = get_subtree(&b, &en(), &args("TIProjectTemplate:Project_ProtiumConverterTorch", Direction::Up), true).unwrap();
         assert_eq!(up.root.as_deref(), Some("TIProjectTemplate:Project_ProtiumConverterTorch"));
         assert!(up.nodes.len() > 10);
@@ -932,10 +1298,24 @@ pub(crate) mod tests {
         let both = get_subtree(&b, &en(), &args("TITechTemplate:AdAstra", Direction::Both), true).unwrap();
         assert!(both.nodes.len() >= down.nodes.len());
         assert_eq!(down.total_cost, both.total_cost);
-        let shallow = get_subtree(&b, &en(), &SubtreeArgs { max_depth: Some(1), ..args("TITechTemplate:AdAstra", Direction::Down) }, true).unwrap();
+        let shallow = get_subtree(
+            &b,
+            &en(),
+            &SubtreeArgs {
+                max_depth: Some(1),
+                ..args("TITechTemplate:AdAstra", Direction::Down)
+            },
+            true,
+        )
+        .unwrap();
         let root = shallow.root.as_deref().unwrap();
         assert!(shallow.nodes.len() > 1);
-        assert!(shallow.nodes.iter().all(|n| { n.key == root || shallow.edges.iter().any(|e| e.from == root && e.to == n.key) }));
+        assert!(
+            shallow
+                .nodes
+                .iter()
+                .all(|n| { n.key == root || shallow.edges.iter().any(|e| e.from == root && e.to == n.key) })
+        );
         assert!(get_subtree(&b, &en(), &args("TITechTemplate:Nope", Direction::Up), true).is_err());
     }
 
@@ -961,12 +1341,7 @@ pub(crate) mod tests {
         assert_eq!(d.entity.subtype.as_deref(), Some("drive"));
         assert!(d.research_cost.is_none());
 
-        let with_effects = b
-            .ds
-            .overview()
-            .entities(model::TECH)
-            .find(|t| !b.ds.overview().effects(*t).is_empty())
-            .unwrap();
+        let with_effects = b.ds.overview().entities(model::TECH).find(|t| !b.ds.overview().effects(*t).is_empty()).unwrap();
         let d = get_entity(&b, &en(), &refs::key(&b.ds.overview(), with_effects)).unwrap();
         assert!(d.effects.iter().all(|e| e.entity.kind == "effect"));
 
@@ -981,15 +1356,48 @@ pub(crate) mod tests {
     #[test]
     fn scoped_queries() {
         let Some(b) = backend() else { return };
-        let scope = ScopeArgs { scenario: Some("ModernScenario".into()), faction: Some("ResistCouncil".into()), lang: "en".into() };
-        let tree =
-            get_tree(&b, &scope, &TreeFilter { techs: true, projects: true, categories: vec![], properties: vec![] }, FullLayout::Layered, true).unwrap();
+        let scope = ScopeArgs {
+            scenario: Some("ModernScenario".into()),
+            faction: Some("ResistCouncil".into()),
+            lang: "en".into(),
+        };
+        let tree = get_tree(
+            &b,
+            &scope,
+            &TreeFilter {
+                techs: true,
+                projects: true,
+                categories: vec![],
+                properties: vec![],
+            },
+            FullLayout::Layered,
+            true,
+        )
+        .unwrap();
         assert!(!tree.nodes.is_empty());
-        let bad = ScopeArgs { scenario: Some("NoSuchScenario".into()), ..en() };
+        let bad = ScopeArgs {
+            scenario: Some("NoSuchScenario".into()),
+            ..en()
+        };
         assert!(
-            get_tree(&b, &bad, &TreeFilter { techs: true, projects: true, categories: vec![], properties: vec![] }, FullLayout::Layered, true).is_err()
+            get_tree(
+                &b,
+                &bad,
+                &TreeFilter {
+                    techs: true,
+                    projects: true,
+                    categories: vec![],
+                    properties: vec![]
+                },
+                FullLayout::Layered,
+                true
+            )
+            .is_err()
         );
-        let bad = ScopeArgs { faction: Some("NoSuchFaction".into()), ..en() };
+        let bad = ScopeArgs {
+            faction: Some("NoSuchFaction".into()),
+            ..en()
+        };
         assert!(search(&b, &bad, "laser", 5, false, &[]).is_err());
     }
 
@@ -1032,9 +1440,16 @@ pub(crate) mod tests {
         assert!(s.bodies.iter().flat_map(|b| b.resources.values()).all(|r| ratings.contains(&r.as_str())));
         assert!(s.bodies.iter().any(|b| b.resources.values().any(|r| r == "max")));
         assert!(s.lagrange_points.len() > 100);
-        assert!(s.lagrange_points.iter().all(|l| index.contains_key(l.body.as_str()) && l.point.starts_with('L')));
+        assert!(
+            s.lagrange_points
+                .iter()
+                .all(|l| index.contains_key(l.body.as_str()) && l.point.starts_with('L'))
+        );
 
-        let scenario = ScopeArgs { scenario: Some("2003Scenario".into()), ..en() };
+        let scenario = ScopeArgs {
+            scenario: Some("2003Scenario".into()),
+            ..en()
+        };
         assert_eq!(get_solar_system(&b, &scenario).unwrap().start_date, "2003-03-31");
     }
 }

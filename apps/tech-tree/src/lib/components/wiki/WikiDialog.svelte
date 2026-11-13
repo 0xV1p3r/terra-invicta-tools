@@ -1,6 +1,10 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { BookOpen, ArrowLeft, ArrowRight, EyeOff, Wrench } from '@lucide/svelte';
+	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
+	import ArrowRight from '@lucide/svelte/icons/arrow-right';
+	import BookOpen from '@lucide/svelte/icons/book-open';
+	import EyeOff from '@lucide/svelte/icons/eye-off';
+	import Wrench from '@lucide/svelte/icons/wrench';
 	import { api, type EntityRef, type WikiEntry, type SearchHit } from '$lib/api';
 	import { wikiIcon } from '$lib/wiki-icons';
 	import { SENTIMENT } from '$lib/effect-style';
@@ -28,10 +32,22 @@
 	$effect(() => {
 		if (!settings.wikiSpoilers) untrack(() => wiki.hideSpoilers());
 	});
+	/** Entries fetched per request ("Show more" fetches the next page). */
+	const PAGE = 200;
 	let sectionFilter = $state('');
 	let filter = $state('');
+	/** `filter` once typing pauses: what the loaded entries match. */
+	let appliedFilter = $state('');
 	let query = $state('');
+	/** Loaded pages of the section's entries matching `appliedFilter`. */
 	let entries = $state.raw<WikiEntry[]>([]);
+	/** All entries matching `appliedFilter`, loaded or not. */
+	let total = $state(0);
+	let loadingMore = $state(false);
+	/** Bumped by every fresh entry request; responses of older ones are dropped. */
+	let generation = 0;
+	/** Section and scope of the loaded entries, so a filter change keeps them on screen. */
+	let entriesFor = '';
 	let hits = $state.raw<SearchHit[]>([]);
 	let indexLoading = $state(false);
 	let loading = $state(false);
@@ -42,7 +58,6 @@
 	let indexRetry = $state(0);
 	let entriesRetry = $state(0);
 	let searchRetry = $state(0);
-	let limit = $state(200);
 	let cursor = $state(0);
 	const global = $derived(!!query.trim());
 	const browsing = $derived(global || !!wiki.template);
@@ -67,13 +82,12 @@
 			? hits
 					.filter((h) => settings.wikiSpoilers || !h.entity.spoiler)
 					.map((h): WikiEntry => ({ entity: h.entity, subtitle: null, effect: null }))
-			: (wiki.template ? entries : []).filter((e) =>
-					`${e.entity.name} ${e.entity.dataName} ${e.subtitle ?? ''}`
-						.toLowerCase()
-						.includes(filter.toLowerCase())
-				)
+			: wiki.template
+				? entries
+				: []
 	);
-	const visible = $derived(matching.slice(0, limit));
+	const matchCount = $derived(global ? matching.length : total);
+	const remaining = $derived(global ? 0 : total - entries.length);
 	$effect(() => {
 		const scope = $state.snapshot(app.scope);
 		const spoilers = settings.wikiSpoilers;
@@ -118,35 +132,82 @@
 		};
 	});
 	$effect(() => {
+		const text = filter;
+		if (!text) {
+			appliedFilter = '';
+			return;
+		}
+		const timer = setTimeout(() => (appliedFilter = text), 150);
+		return () => clearTimeout(timer);
+	});
+	$effect(() => {
 		const scope = $state.snapshot(app.scope);
 		void entriesRetry;
 		const template = wiki.template;
 		const spoiler = wiki.section?.spoiler ?? false;
+		const text = appliedFilter;
+		void settings.wikiSpoilers;
 		if (!wiki.open || !template) return;
-		let stale = false;
-		entries = [];
+		const id = ++generation;
+		const key = JSON.stringify([scope, template, spoiler]);
+		// Another section starts empty; a new filter keeps the old matches until the new ones arrive.
+		if (key !== entriesFor) {
+			entries = [];
+			total = 0;
+			entriesFor = key;
+		}
 		loading = true;
+		loadingMore = false;
 		error = '';
+		cursor = 0;
 		api
-			.getWikiEntries(scope, template, spoiler)
+			.getWikiEntries(scope, template, spoiler, { filter: text, offset: 0, limit: PAGE })
 			.then(
-				(result) => {
-					if (!stale) {
-						entries = result;
-						for (const e of result) wiki.remember(e.entity.key, !!e.entity.spoiler);
-					}
+				(page) => {
+					if (id !== generation) return;
+					entries = page.entries;
+					total = page.total;
+					for (const e of page.entries) wiki.remember(e.entity.key, !!e.entity.spoiler);
 				},
 				(cause) => {
-					if (!stale) error = String(cause);
+					if (id === generation) error = String(cause);
 				}
 			)
 			.finally(() => {
-				if (!stale) loading = false;
+				if (id === generation) loading = false;
 			});
 		return () => {
-			stale = true;
+			// Makes this request's late response stale.
+			if (id === generation) generation++;
 		};
 	});
+	/** Append the next page of the current section and filter. */
+	function loadMore() {
+		const template = wiki.template;
+		if (!template || loading || loadingMore || entries.length >= total) return;
+		const id = generation;
+		loadingMore = true;
+		api
+			.getWikiEntries($state.snapshot(app.scope), template, wiki.section?.spoiler ?? false, {
+				filter: appliedFilter,
+				offset: entries.length,
+				limit: PAGE
+			})
+			.then(
+				(page) => {
+					if (id !== generation) return;
+					entries = [...entries, ...page.entries];
+					total = page.total;
+					for (const e of page.entries) wiki.remember(e.entity.key, !!e.entity.spoiler);
+				},
+				(cause) => {
+					if (id === generation) error = String(cause);
+				}
+			)
+			.finally(() => {
+				if (id === generation) loadingMore = false;
+			});
+	}
 	$effect(() => {
 		const scope = $state.snapshot(app.scope);
 		void searchRetry;
@@ -154,6 +215,7 @@
 		hits = [];
 		searchError = '';
 		searching = false;
+		cursor = 0;
 		if (!wiki.open || !text) return;
 		let stale = false;
 		searching = true;
@@ -182,11 +244,6 @@
 		void wiki.section?.spoiler;
 		filter = '';
 	});
-	$effect(() => {
-		void matching;
-		limit = 200;
-		cursor = 0;
-	});
 	function openEntity(entity: EntityRef) {
 		if (!entity.spoiler || settings.wikiSpoilers) wiki.openEntity(entity.key, !!entity.spoiler);
 	}
@@ -199,7 +256,7 @@
 				0,
 				Math.min(matching.length - 1, cursor + (event.key === 'ArrowDown' ? 1 : -1))
 			);
-			limit = Math.max(limit, cursor + 1);
+			if (cursor >= matching.length - 1 && remaining > 0) loadMore();
 			document.getElementById(`wiki-entry-${cursor}`)?.scrollIntoView({ block: 'nearest' });
 		}
 		if (event.key === 'Enter' && matching[cursor]) {
@@ -370,8 +427,7 @@
 						</Select.Content>
 					</Select.Root><Card.Title
 						>{global ? 'Search results' : (section?.label ?? 'Entries')}</Card.Title
-					>{#if browsing}<Card.Description
-							>{matching.length.toLocaleString()} entries</Card.Description
+					>{#if browsing}<Card.Description>{matchCount.toLocaleString()} entries</Card.Description
 						>{/if}{#if global && hiddenHits}<Card.Description
 							>{hiddenHits} spoiler results hidden</Card.Description
 						>{/if}
@@ -383,7 +439,7 @@
 				>
 				<ScrollArea class="min-h-0 flex-1"
 					><Card.Content class="flex flex-col gap-1 p-2">
-						{#if global ? searching : loading}<Skeleton
+						{#if global ? searching : loading && !entries.length}<Skeleton
 								class="h-24 w-full"
 							/>{:else if global ? searchError : error}<Card.Description role="alert"
 								>{global
@@ -399,9 +455,10 @@
 								}}>Retry</Button
 							>{:else if !browsing}<Card.Description class="p-2 leading-relaxed"
 								>Choose a section or search all entries.</Card.Description
-							>{:else if !matching.length}<Card.Description>No entries found.</Card.Description
+							>{:else if !matching.length && !(loading && !global)}<Card.Description
+								>No entries found.</Card.Description
 							>{/if}
-						{#each visible as entry, i (entry.entity.key)}
+						{#each matching as entry, i (entry.entity.key)}
 							{@const entity = entry.entity}
 							{@const tone = SENTIMENT[entry.effect?.sentiment ?? 'neutral']}
 							<Button
@@ -446,8 +503,13 @@
 										>{/if}</Card.Content
 								>
 							</Button>{/each}
-						{#if matching.length > limit}<Button variant="outline" onclick={() => (limit += 200)}
-								>Show more ({matching.length - limit} remaining)</Button
+						{#if remaining > 0 && !error}<Button
+								variant="outline"
+								disabled={loadingMore}
+								onclick={loadMore}
+								>{loadingMore
+									? 'Loading…'
+									: `Show more (${remaining.toLocaleString()} remaining)`}</Button
 							>{/if}
 					</Card.Content></ScrollArea
 				></Card.Root

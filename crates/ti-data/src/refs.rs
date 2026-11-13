@@ -68,7 +68,11 @@ pub(crate) fn build(ds: &mut Dataset, schema: &Schema) {
         let targets: Vec<String> = targets.iter().map(|t| t.to_string()).collect();
         match fields.iter_mut().find(|f| f.template == *template && f.path == *path) {
             Some(f) => f.targets = targets,
-            None => fields.push(RefField { template: template.to_string(), path: path.to_string(), targets }),
+            None => fields.push(RefField {
+                template: template.to_string(),
+                path: path.to_string(),
+                targets,
+            }),
         }
     }
     // Ship parts: `requiredProjectName` is their only reference.
@@ -92,7 +96,12 @@ pub(crate) fn build(ds: &mut Dataset, schema: &Schema) {
                     let Some(name) = v.as_str() else { return };
                     for t in &targets {
                         if let Some(to) = ds.find(t, name).filter(|to| *to != from) {
-                            refs.push(Reference { from, variant: vi as u16, path: path.clone(), to });
+                            refs.push(Reference {
+                                from,
+                                variant: vi as u16,
+                                path: path.clone(),
+                                to,
+                            });
                         }
                     }
                 });

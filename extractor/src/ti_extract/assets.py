@@ -18,9 +18,11 @@ import sys
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Literal
 
 from .output import sha256_file
+
+ImageFormat = Literal["png", "webp"]
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tga", ".psd", ".tif", ".tiff", ".bmp", ".exr"}
 
@@ -104,8 +106,8 @@ def collect_resources(strings: Iterable[str], bundles: dict[str, Bundle]) -> set
     return found
 
 
-def _file_name(stem: str) -> str:
-    return _SAFE.sub("_", stem) + ".png"
+def _file_name(stem: str, image_format: ImageFormat = "png") -> str:
+    return _SAFE.sub("_", stem) + f".{image_format}"
 
 
 @dataclass
@@ -137,7 +139,7 @@ def _plan(resources: set[str], bundles: dict[str, Bundle]):
     return plan, missing
 
 
-def _export_bundle(bundle: Bundle, wanted: dict[str, list[str]], out_dir: Path) -> dict[str, dict[str, Any]]:
+def _export_bundle(bundle: Bundle, wanted: dict[str, list[str]], out_dir: Path, image_format: ImageFormat = "png") -> dict[str, dict[str, Any]]:
     import UnityPy  # heavy import, only needed when extracting
 
     want = {stem.lower(): stem for stem in wanted}
@@ -160,21 +162,27 @@ def _export_bundle(bundle: Bundle, wanted: dict[str, list[str]], out_dir: Path) 
             except Exception as e:  # undecodable texture format
                 print(f"  ! {bundle.name}/{name}: {e}", file=sys.stderr)
                 continue
-            rel = f"{bundle.name}/{_file_name(stem)}"
+            rel = f"{bundle.name}/{_file_name(stem, image_format)}"
             dest = out_dir / rel
             dest.parent.mkdir(parents=True, exist_ok=True)
-            image.save(dest, format="PNG", optimize=False)
+            if image_format == "webp":
+                image.save(dest, format="WEBP", lossless=True, exact=True)
+            else:
+                image.save(dest, format="PNG", optimize=False)
             exported[stem] = {"file": rel, "width": image.width, "height": image.height}
     del env
     gc.collect()
     return exported
 
 
-def _reuse(prev_assets: Path, prev_bundle: dict[str, Any], out_dir: Path, wanted: set[str]) -> dict[str, dict[str, Any]] | None:
+def _reuse(prev_assets: Path, prev_bundle: dict[str, Any], out_dir: Path, wanted: set[str],
+           image_format: ImageFormat = "png") -> dict[str, dict[str, Any]] | None:
     exported = prev_bundle.get("exported")
     if not isinstance(exported, dict):
         return None
     exported = {k: v for k, v in exported.items() if k in wanted}
+    if any(Path(meta["file"]).suffix != f".{image_format}" for meta in exported.values()):
+        return None
     for meta in exported.values():
         src, dest = prev_assets / meta["file"], out_dir / meta["file"]
         if not src.is_file():
@@ -196,6 +204,7 @@ def extract(
     *,
     skip_bundles: set[str] = frozenset(),
     previous: list[tuple[Path, dict[str, Any]]] = (),
+    image_format: ImageFormat = "png",
 ) -> AssetResult:
     """Export images to `out_dir`. `previous` = [(assets dir, its index.json)] used to
     reuse output for bundles whose file hash did not change."""
@@ -211,14 +220,14 @@ def extract(
         for prev_dir, prev_index in previous:
             prev = prev_index.get("bundles", {}).get(bname, {})
             if prev.get("sha256") == digest and set(prev.get("exported", {})) >= set(plan[bname]):
-                exported = _reuse(prev_dir, prev, out_dir, set(plan[bname]))
+                exported = _reuse(prev_dir, prev, out_dir, set(plan[bname]), image_format)
                 if exported is not None:
                     exported = {k: v for k, v in exported.items() if k in plan[bname]}
                     print(f"  = {bname}: reused {len(exported)} images")
                     break
         if exported is None:
             print(f"  + {bname}: exporting {len(plan[bname])} images from {bundle.path.name}")
-            exported = _export_bundle(bundle, plan[bname], out_dir)
+            exported = _export_bundle(bundle, plan[bname], out_dir, image_format)
         result.bundles[bname] = {"sha256": digest, "exported": dict(sorted(exported.items()))}
         resource_images: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for stem, res_list in plan[bname].items():
@@ -243,7 +252,7 @@ def glyph_box(rect: dict[str, int], sheet_height: int) -> tuple[int, int, int, i
     return rect["m_X"], top, rect["m_X"] + rect["m_Width"], top + rect["m_Height"]
 
 
-def _export_inline_sprites(bundle: Bundle, out_dir: Path) -> dict[str, dict[str, Any]]:
+def _export_inline_sprites(bundle: Bundle, out_dir: Path, image_format: ImageFormat = "png") -> dict[str, dict[str, Any]]:
     import UnityPy
 
     env = UnityPy.load(str(bundle.path))
@@ -268,10 +277,13 @@ def _export_inline_sprites(bundle: Bundle, out_dir: Path) -> dict[str, dict[str,
             if not name or rect is None or name in exported or rect["m_Width"] <= 0 or rect["m_Height"] <= 0:
                 continue
             image = sheet.crop(glyph_box(rect, sheet.height))
-            rel = f"{INLINE_SPRITE_DIR}/{_file_name(name)}"
+            rel = f"{INLINE_SPRITE_DIR}/{_file_name(name, image_format)}"
             dest = out_dir / rel
             dest.parent.mkdir(parents=True, exist_ok=True)
-            image.save(dest, format="PNG", optimize=False)
+            if image_format == "webp":
+                image.save(dest, format="WEBP", lossless=True, exact=True)
+            else:
+                image.save(dest, format="PNG", optimize=False)
             exported[name] = {"file": rel, "width": image.width, "height": image.height}
     del env
     gc.collect()
@@ -283,9 +295,10 @@ def extract_inline_sprites(
     out_dir: Path,
     *,
     previous: list[tuple[Path, dict[str, Any]]] = (),
+    image_format: ImageFormat = "png",
 ) -> dict[str, Any] | None:
     """Export the glyphs of the game's inline sprite sheet (`<sprite name="metal">`) to
-    `sprites/<name>.png`. Returns `{"sha256", "exported": {name: image}}`, or None
+    `sprites/<name>.<image_format>`. Returns `{"sha256", "exported": {name: image}}`, or None
     without the `ui` bundle."""
     bundle = bundles.get(INLINE_SPRITE_BUNDLE)
     if bundle is None:
@@ -294,10 +307,10 @@ def extract_inline_sprites(
     for prev_dir, prev_index in previous:
         prev = prev_index.get("sprites") or {}
         if prev.get("sha256") == digest:
-            exported = _reuse(prev_dir, prev, out_dir, set(prev.get("exported", {})))
+            exported = _reuse(prev_dir, prev, out_dir, set(prev.get("exported", {})), image_format)
             if exported is not None:
                 print(f"  = inline sprites: reused {len(exported)} images")
                 return {"sha256": digest, "exported": dict(sorted(exported.items()))}
     print(f"  + inline sprites: exporting from {bundle.path.name}")
-    exported = _export_inline_sprites(bundle, out_dir)
+    exported = _export_inline_sprites(bundle, out_dir, image_format)
     return {"sha256": digest, "exported": dict(sorted(exported.items()))}
