@@ -13,3 +13,6 @@ __pycache__/
 # Extracted game data (templates, locale, images) is copyrighted and large: never versioned.
 # Regenerate it with `ti-extract extract`.
 /data
+
+# Release bundles (scripts/release.sh)
+/dist/

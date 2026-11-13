@@ -78,6 +78,18 @@ The app takes the first data folder it finds in this order:
 
 Give it the data root, not a single build folder. It opens the latest build unless you pick another one in settings.
 
+## Build release bundles
+
+`scripts/release.sh` writes a `.deb` and a Windows installer (`-setup.exe`) to `dist/<version>/`. Pass `deb` or `exe` to build only one of them. The bundles do not contain game data.
+
+The Windows installer is cross-compiled on Linux with cargo-xwin. The first build downloads the MSVC CRT and Windows SDK. It needs:
+
+```sh
+rustup target add x86_64-pc-windows-msvc
+cargo install --locked cargo-xwin
+sudo apt-get install -y nsis lld llvm clang
+```
+
 ### Browser development
 
 `pnpm dev` runs the UI in a browser without Tauri. It reads JSON fixtures from `apps/tech-tree/static/mock/`, which you generate from your local data:
