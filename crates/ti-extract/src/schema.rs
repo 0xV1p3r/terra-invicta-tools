@@ -1,4 +1,4 @@
-//! Data-driven schema discovery (port of `schema.py`).
+//! Data-driven schema discovery.
 //!
 //! For every template, records each field path (`a`, `a[]`, `a[].b`), the JSON
 //! types seen and, for string values, which templates own a record with that

@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use serde::Deserialize;
 
-/// Data format version this library understands (see `ti_extract.FORMAT_VERSION`).
+/// Data format version this library understands (see `ti_extract::FORMAT_VERSION`).
 pub const FORMAT_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, Deserialize)]

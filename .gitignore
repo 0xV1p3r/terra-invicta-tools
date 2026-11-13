@@ -6,9 +6,6 @@
 
 # Python
 __pycache__/
-.venv/
-*.egg-info/
-.pytest_cache/
 
 # Extracted game data (templates, locale, images) is copyrighted and large: never versioned.
 # Regenerate it with `ti-extract extract`.

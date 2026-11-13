@@ -1,5 +1,5 @@
 //! Deterministic file output so that re-extracting an unchanged game yields identical bytes
-//! (port of `output.py`). Serialization matches Python's `json.dumps(ensure_ascii=False)`.
+//! Serialization matches Python's `json.dumps(ensure_ascii=False)`.
 
 use std::fmt::Write as _;
 use std::io::Read as _;

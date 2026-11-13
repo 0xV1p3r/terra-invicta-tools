@@ -1,4 +1,4 @@
-//! Game-compatible line parsing and one merged dictionary per language (port of `locale.py`).
+//! Game-compatible line parsing and one merged dictionary per language.
 //!
 //! Base files load by name with first-key-wins diagnostics. All DLC language
 //! files then load by relative path and replace earlier values. Mods are excluded.

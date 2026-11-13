@@ -1,4 +1,4 @@
-//! End-to-end extraction of small fake installs (port of the `cli.main` tests in `test_parsing.py`).
+//! End-to-end extraction of small fake installs.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;

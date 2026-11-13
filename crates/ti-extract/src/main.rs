@@ -1,4 +1,4 @@
-//! `ti-extract` command line (port of `cli.py`).
+//! `ti-extract` command line.
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;

@@ -1,4 +1,4 @@
-//! Changelog between two extracted builds, keyed by layer/template/dataName (port of `diff.py`).
+//! Changelog between two extracted builds, keyed by layer/template/dataName.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;

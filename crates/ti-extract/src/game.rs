@@ -1,4 +1,4 @@
-//! Locating the game install and reading its data layers (port of `game.py`).
+//! Locating the game install and reading its data layers.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};

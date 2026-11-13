@@ -1,4 +1,4 @@
-//! Image export from the game's asset bundles (port of `assets.py`).
+//! Image export from the game's asset bundles.
 //!
 //! Templates reference resources as `<bundle>/<assetName>` (e.g. `shipbuildericons/ICO_SteelArmor`).
 //! Each bundle ships a plain-text `<bundle>.manifest` listing its asset paths, which decides which
