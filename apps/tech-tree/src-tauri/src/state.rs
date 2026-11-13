@@ -416,18 +416,25 @@ impl AppState {
             .ok_or_else(|| CmdError::msg("Could not determine the app data folder to extract into."))
     }
 
-    /// Load the latest build of a data root an extraction just wrote to. `TI_DATA_DIR` overrides
-    /// the settings anyway, so only a pin of it is dropped; any other folder is remembered.
-    pub fn load_extracted(&self, dir: PathBuf) -> CmdResult<()> {
-        if self.0.locator.env.as_deref() != Some(dir.as_path()) {
-            return self.set_data_dir(dir);
-        }
+    /// Load build `build` (id or directory) of a data root an extraction just wrote to. It is
+    /// pinned unless it is the root's latest build (e.g. the game was rolled back). `TI_DATA_DIR`
+    /// overrides the settings anyway, so only the pin is saved for it; any other folder is remembered.
+    pub fn load_extracted(&self, dir: PathBuf, build: &str) -> CmdResult<()> {
         let _reload = self.0.reloading.lock().unwrap_or_else(|e| e.into_inner());
-        let next = Backend::load(dir, None, DataDirSource::Env)?;
+        let env = self.0.locator.env.as_deref() == Some(dir.as_path());
+        let (dir, source) = if env {
+            (dir, DataDirSource::Env)
+        } else {
+            (dir.canonicalize().unwrap_or(dir), DataDirSource::Settings)
+        };
+        let mut next = Backend::load(dir.clone(), Some(build), source)?;
+        let latest = next.latest_build_id() == Some(next.ds.build_id());
+        next.pinned_build = (!latest).then(|| next.ds.build_id().to_string());
+        let config = self.0.locator.config();
         self.0.locator.save(&DataConfig {
-            build: None,
-            build_root: None,
-            ..self.0.locator.config()
+            data_dir: if env { config.data_dir } else { Some(dir.clone()) },
+            build: next.pinned_build.clone(),
+            build_root: next.pinned_build.is_some().then_some(dir),
         })?;
         self.swap(next);
         Ok(())
@@ -497,16 +504,16 @@ pub fn find_ancestor_data_dir() -> Option<PathBuf> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use serde_json::json;
 
     use super::*;
 
     /// A fresh directory under the system temp dir, removed on drop.
-    struct TempDir(PathBuf);
+    pub(crate) struct TempDir(pub(crate) PathBuf);
 
     impl TempDir {
-        fn new(name: &str) -> Self {
+        pub(crate) fn new(name: &str) -> Self {
             let dir = std::env::temp_dir().join(format!("ti-tech-tree-{}-{name}", std::process::id()));
             let _ = std::fs::remove_dir_all(&dir);
             std::fs::create_dir_all(&dir).unwrap();
@@ -526,7 +533,7 @@ mod tests {
     }
 
     /// A data root with two empty builds, `1` (dir `b1`) and the latest `2` (dir `b2`).
-    fn data_root(dir: &Path) {
+    pub(crate) fn data_root(dir: &Path) {
         let entry = |id: &str| json!({"dir": format!("b{id}"), "buildId": id, "lastUpdated": 1, "formatVersion": ti_data::manifest::FORMAT_VERSION});
         write(&dir.join("index.json"), json!({"latest": "b2", "builds": [entry("1"), entry("2")]}));
         for id in ["1", "2"] {
@@ -552,7 +559,7 @@ mod tests {
         None
     }
 
-    fn locator(env: Option<PathBuf>, config_path: PathBuf) -> Locator {
+    pub(crate) fn locator(env: Option<PathBuf>, config_path: PathBuf) -> Locator {
         Locator {
             env,
             config_path: Some(config_path),
@@ -561,7 +568,7 @@ mod tests {
         }
     }
 
-    fn loaded_build(state: &AppState) -> String {
+    pub(crate) fn loaded_build(state: &AppState) -> String {
         state.backend().unwrap().ds.build_id().to_string()
     }
 
@@ -633,7 +640,7 @@ mod tests {
         assert!(state.backend().is_err());
         assert_eq!(state.extract_target().unwrap(), default);
         data_root(&default);
-        state.load_extracted(default.clone()).unwrap();
+        state.load_extracted(default.clone(), "2").unwrap();
         assert_eq!(state.backend().unwrap().data_dir, default);
         assert_eq!(DataConfig::load(&config).data_dir, Some(default.clone()));
 
@@ -642,10 +649,48 @@ mod tests {
         assert!(state.backend().is_err());
         assert_eq!(state.extract_target().unwrap(), env);
         data_root(&env);
-        state.load_extracted(env.clone()).unwrap();
+        state.load_extracted(env.clone(), "2").unwrap();
         let b = state.backend().unwrap();
         assert_eq!((b.data_dir.as_path(), b.data_dir_source), (env.as_path(), DataDirSource::Env));
         assert_eq!(DataConfig::load(&config).data_dir, Some(default));
+    }
+
+    #[test]
+    fn loads_the_extracted_build_even_if_it_is_not_the_latest() {
+        let tmp = TempDir::new("extracted");
+        let root = tmp.0.join("root");
+        data_root(&root);
+        let config = tmp.0.join("settings.json");
+        let state = AppState::new(locator(None, config.clone()));
+
+        // The game was rolled back: build 1 was extracted, the root's latest is still 2.
+        state.load_extracted(root.clone(), "1").unwrap();
+        let b = state.backend().unwrap();
+        assert_eq!((b.ds.build_id(), b.pinned_build.as_deref()), ("1", Some("1")));
+        let pinned = DataConfig {
+            data_dir: Some(root.clone()),
+            build: Some("1".into()),
+            build_root: Some(root.clone()),
+        };
+        assert_eq!(DataConfig::load(&config), pinned);
+
+        // Extracting the latest build keeps following the latest one.
+        state.load_extracted(root.clone(), "2").unwrap();
+        let b = state.backend().unwrap();
+        assert_eq!((b.ds.build_id(), b.pinned_build.as_deref()), ("2", None));
+        assert_eq!(
+            DataConfig::load(&config),
+            DataConfig {
+                data_dir: Some(root.clone()),
+                ..Default::default()
+            }
+        );
+
+        // TI_DATA_DIR: only the pin is saved.
+        let state = AppState::new(locator(Some(root.clone()), config.clone()));
+        state.load_extracted(root.clone(), "1").unwrap();
+        assert_eq!(state.backend().unwrap().data_dir_source, DataDirSource::Env);
+        assert_eq!(DataConfig::load(&config), pinned);
     }
 
     #[test]

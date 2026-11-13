@@ -7,11 +7,17 @@ import {
 	type ExtractEvent,
 	type ExtractResult,
 	type ExtractStage,
+	type ExtractStatus,
 	type GameInfo
 } from '$lib/api';
 import { settings } from '$lib/settings.svelte';
 
 export { gameLabel, gameUpdate } from '$lib/game';
+
+/** How often `resume` asks the backend for the progress of an extraction it cannot follow. */
+const STATUS_POLL_MS = 500;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Extraction phases in order, as shown in the progress list. */
 export const STAGES: { id: ExtractStage; label: string }[] = [
@@ -103,6 +109,40 @@ class Extraction {
 			this.running = false;
 			this.cancelling = false;
 		}
+	}
+
+	/**
+	 * Follow an extraction the backend is already running (one started before a window reload,
+	 * whose progress channel is gone) until it ends, so no conflicting action is offered
+	 * meanwhile. Resolves true when one ran and was not cancelled: its build may be loaded now.
+	 */
+	async resume(): Promise<boolean> {
+		if (this.running) return false;
+		let status = await api.extractionStatus().catch(() => null);
+		if (!status || this.running) return false;
+		this.running = true;
+		this.cancelling = false;
+		this.error = null;
+		try {
+			while (status) {
+				this.show(status);
+				await sleep(STATUS_POLL_MS);
+				status = await api.extractionStatus().catch(() => null);
+			}
+			// The outcome is unknown here; a cancel is the one failure we can tell.
+			if (this.cancelling) this.error = EXTRACTION_CANCELLED;
+			return !this.cancelling;
+		} finally {
+			this.running = false;
+			this.cancelling = false;
+		}
+	}
+
+	private show(status: ExtractStatus) {
+		this.stage = status.stage;
+		this.done = status.done;
+		this.total = status.total;
+		this.label = status.label;
 	}
 
 	private report(event: ExtractEvent) {

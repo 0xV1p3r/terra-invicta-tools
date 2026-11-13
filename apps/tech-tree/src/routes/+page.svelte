@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import type { Attachment } from 'svelte/attachments';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import PanelLeftClose from '@lucide/svelte/icons/panel-left-close';
@@ -178,6 +178,20 @@
 			resetData();
 		}
 	}
+
+	// After a window reload, follow an extraction that is still running; then show its build.
+	onMount(() => {
+		void extraction.resume().then(async (finished) => {
+			if (!finished) return;
+			try {
+				await loadMeta(app.scope.lang, true);
+			} catch {
+				// Shown by `app.error`.
+			} finally {
+				resetData();
+			}
+		});
+	});
 
 	/** Extract the game data; once the backend has loaded the new build, show it. */
 	async function extract(args: ExtractArgs) {

@@ -25,6 +25,8 @@ import type { ExtractEvent } from './generated/ExtractEvent';
 export type { ExtractEvent } from './generated/ExtractEvent';
 import type { ExtractResult } from './generated/ExtractResult';
 export type { ExtractResult } from './generated/ExtractResult';
+import type { ExtractStatus } from './generated/ExtractStatus';
+export type { ExtractStatus } from './generated/ExtractStatus';
 export type { ScenarioInfo } from './generated/ScenarioInfo';
 export type { FactionInfo } from './generated/FactionInfo';
 export type { NodeKind } from './generated/NodeKind';
@@ -141,6 +143,8 @@ const tauriApi = {
 		return invoke<ExtractResult>('extract_game_data', { args, onProgress });
 	},
 	cancelExtraction: () => invoke<void>('cancel_extraction'),
+	/** Progress of the running extraction (also one started before a window reload); null if none. */
+	extractionStatus: () => invoke<ExtractStatus | null>('extraction_status'),
 	/** Native folder picker; null when dismissed. */
 	pickFolder: async (title: string, defaultPath?: string) => {
 		const { open } = await import('@tauri-apps/plugin-dialog');
@@ -355,6 +359,8 @@ const mockApi: typeof tauriApi = {
 	cancelExtraction: async () => {
 		mockCancel = true;
 	},
+	// A page reload restarts the mock: no extraction survives it.
+	extractionStatus: async () => null,
 	// No native dialog in a browser.
 	pickFolder: async (title, defaultPath) => prompt(title, defaultPath ?? MOCK_GAME_ROOT),
 	getTree: async (_scope, filter, layout = 'layered') => {
