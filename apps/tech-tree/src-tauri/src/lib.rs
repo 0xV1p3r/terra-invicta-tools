@@ -77,17 +77,27 @@ async fn list_builds(state: State<'_, AppState>) -> CmdResult<Vec<BuildInfo>> {
 }
 
 /// Load another build of the data folder (`None` = always the latest) and remember it.
+/// Refused while an extraction runs.
 #[tauri::command]
-async fn set_build(state: State<'_, AppState>, build_id: Option<String>) -> CmdResult<()> {
-    let state = AppState::clone(&state);
-    spawn(move || state.set_build(build_id)).await
+async fn set_build(state: State<'_, AppState>, extractor: State<'_, Extractor>, build_id: Option<String>) -> CmdResult<()> {
+    let (state, extractor) = (AppState::clone(&state), Extractor::clone(&extractor));
+    spawn(move || {
+        let _ops = extractor.exclusive("switching builds")?;
+        state.set_build(build_id)
+    })
+    .await
 }
 
 /// Load the latest build of another data folder (the one containing `index.json`) and remember it.
+/// Refused while an extraction runs.
 #[tauri::command]
-async fn set_data_dir(state: State<'_, AppState>, path: String) -> CmdResult<()> {
-    let state = AppState::clone(&state);
-    spawn(move || state.set_data_dir(path.into())).await
+async fn set_data_dir(state: State<'_, AppState>, extractor: State<'_, Extractor>, path: String) -> CmdResult<()> {
+    let (state, extractor) = (AppState::clone(&state), Extractor::clone(&extractor));
+    spawn(move || {
+        let _ops = extractor.exclusive("choosing another data folder")?;
+        state.set_data_dir(path.into())
+    })
+    .await
 }
 
 /// Disk usage of the data root's builds (walks the build folders; call when needed).
@@ -117,13 +127,21 @@ async fn inspect_game(path: String) -> CmdResult<GameInfo> {
 
 /// Extract the game data, streaming progress to `on_progress`, then load the new build.
 #[tauri::command]
-async fn extract_game_data(app: tauri::AppHandle, args: ExtractArgs, on_progress: Channel<ExtractEvent>) -> CmdResult<ExtractResult> {
+async fn extract_game_data(
+    state: State<'_, AppState>,
+    extractor: State<'_, Extractor>,
+    args: ExtractArgs,
+    on_progress: Channel<ExtractEvent>,
+) -> CmdResult<ExtractResult> {
+    // Registered before the blocking work starts, so a cancel right after cannot be lost.
+    let running = extractor.start()?;
+    let state = AppState::clone(&state);
     spawn(move || {
         let mut send = |event: ExtractEvent| {
             // The window may be gone (reloaded); the extraction finishes anyway.
             let _ = on_progress.send(event);
         };
-        app.state::<Extractor>().run(&app.state::<AppState>(), &args, &mut send)
+        running.extract(&state, &args, &mut send)
     })
     .await
 }
@@ -132,6 +150,12 @@ async fn extract_game_data(app: tauri::AppHandle, args: ExtractArgs, on_progress
 #[tauri::command]
 fn cancel_extraction(extractor: State<'_, Extractor>) {
     extractor.cancel();
+}
+
+/// Progress of the running extraction; `None` when none runs (e.g. to recover after a reload).
+#[tauri::command]
+fn extraction_status(extractor: State<'_, Extractor>) -> Option<ExtractStatus> {
+    extractor.status()
 }
 
 #[tauri::command]
@@ -244,6 +268,7 @@ pub fn run() {
             inspect_game,
             extract_game_data,
             cancel_extraction,
+            extraction_status,
             get_tree,
             get_subtree,
             get_focus,

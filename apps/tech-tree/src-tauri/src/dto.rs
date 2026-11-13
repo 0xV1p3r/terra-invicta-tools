@@ -158,6 +158,23 @@ pub enum ExtractEvent {
     Log { message: String },
 }
 
+/// Progress of the running extraction (`extraction_status`), e.g. after a window reload lost
+/// its progress channel.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
+#[serde(rename_all = "camelCase")]
+pub struct ExtractStatus {
+    /// Current phase; `None` before the first report.
+    pub stage: Option<ExtractStage>,
+    #[cfg_attr(test, ts(type = "number"))]
+    pub done: u64,
+    #[cfg_attr(test, ts(type = "number"))]
+    pub total: u64,
+    /// Label of the current step or the latest log line.
+    pub label: Option<String>,
+}
+
 /// Outcome of `extract_game_data`; the new build is loaded by then.
 #[derive(Debug, Clone, Serialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
