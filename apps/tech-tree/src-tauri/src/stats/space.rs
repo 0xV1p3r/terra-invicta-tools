@@ -5,7 +5,17 @@ use ti_data::space::{self as game, Resource, System};
 pub(super) fn stats(view: &View<'_>, texts: &Texts, id: EntityId, spoilers: &HashSet<EntityId>) -> Option<EntityStats> {
     let record = view.record(id)?;
     let map = record.as_object()?;
-    let mut b = Builder { view, texts, spoilers, stats: EntityStats { tags: vec![], groups: vec![], notes: vec![], links: vec![] } };
+    let mut b = Builder {
+        view,
+        texts,
+        spoilers,
+        stats: EntityStats {
+            tags: vec![],
+            groups: vec![],
+            notes: vec![],
+            links: vec![],
+        },
+    };
     let template = view.dataset().entity(id).template.as_ref();
     match template {
         game::SPACE_BODY => {
@@ -16,7 +26,9 @@ pub(super) fn stats(view: &View<'_>, texts: &Texts, id: EntityId, spoilers: &Has
                 b.field(&f("objectType", "", Fmt::TagEnum("TISpaceBodyTemplate.ObjectType."), ""), v, map);
             }
             if let Some(value) = map.get("atmosphere").and_then(Value::as_str).filter(|s| !s.is_empty()) {
-                b.stats.tags.push(format!("Atmosphere: {}", b.enum_text("TISpaceBodyTemplate.Atmosphere.", value)));
+                b.stats
+                    .tags
+                    .push(format!("Atmosphere: {}", b.enum_text("TISpaceBodyTemplate.Atmosphere.", value)));
             }
             let size = match d.max_hab_size {
                 1 => "Outpost",
@@ -27,7 +39,10 @@ pub(super) fn stats(view: &View<'_>, texts: &Texts, id: EntityId, spoilers: &Has
             let size = if size.is_empty() {
                 d.max_hab_size.to_string()
             } else {
-                b.texts.get(&format!("UI.Habs.Tier{}Base", d.max_hab_size)).map(plain).unwrap_or_else(|| size.into())
+                b.texts
+                    .get(&format!("UI.Habs.Tier{}Base", d.max_hab_size))
+                    .map(plain)
+                    .unwrap_or_else(|| size.into())
             };
             b.space_text("Habitation", "maxHabSize", "Max hab size", size);
             b.space_number("Habitation", "habSites", "Hab sites", d.hab_sites.len() as f64, "");
@@ -58,7 +73,12 @@ pub(super) fn stats(view: &View<'_>, texts: &Texts, id: EntityId, spoilers: &Has
                 b.space_number("Physical", "escapeVelocity_kps", "Escape velocity", d.escape_velocity_mps() / 1000.0, " km/s");
             }
             if let Some(hours) = system.rotation_period_hours(body) {
-                b.space_text("Physical", "rotationPeriod_strHours", "Rotation period", duration(hours, 72.0, 24.0, "hour", "day"));
+                b.space_text(
+                    "Physical",
+                    "rotationPeriod_strHours",
+                    "Rotation period",
+                    duration(hours, 72.0, 24.0, "hour", "day"),
+                );
             }
             if d.rotation_period_hours.as_deref() == Some("Lock") {
                 b.space_text("Physical", "tidallyLocked", "Tidally locked", "Yes".into());
@@ -71,7 +91,13 @@ pub(super) fn stats(view: &View<'_>, texts: &Texts, id: EntityId, spoilers: &Has
                 b.space_links("Parent body", vec![parent.id]);
                 if let Some(axis) = d.semi_major_axis_m() {
                     let sun = parent.data.object_type == game::BodyType::Star;
-                    b.space_number("Orbit", "semiMajorAxis", "Semi-major axis", axis / if sun { game::AU_M } else { 1000.0 }, if sun { " AU" } else { " km" });
+                    b.space_number(
+                        "Orbit",
+                        "semiMajorAxis",
+                        "Semi-major axis",
+                        axis / if sun { game::AU_M } else { 1000.0 },
+                        if sun { " AU" } else { " km" },
+                    );
                 }
             }
             if let Some(seconds) = system.orbital_period_s(body) {
@@ -86,9 +112,25 @@ pub(super) fn stats(view: &View<'_>, texts: &Texts, id: EntityId, spoilers: &Has
             if let Some(v) = d.inclination_deg {
                 b.space_number("Orbit", "inclination_Deg", "Inclination", (v * 100.0).round() / 100.0, "°");
             }
-            b.space_links("Moons", system.bodies.iter().filter(|m| system.parent(m).is_some_and(|p| p.id == id)).map(|m| m.id).collect());
+            b.space_links(
+                "Moons",
+                system
+                    .bodies
+                    .iter()
+                    .filter(|m| system.parent(m).is_some_and(|p| p.id == id))
+                    .map(|m| m.id)
+                    .collect(),
+            );
             b.space_names("Orbits", game::ORBIT, &d.orbits);
-            b.space_links("Lagrange points", system.lagrange_points.iter().filter(|(_, p)| p.related_object == d.data_name).map(|(id, _)| *id).collect());
+            b.space_links(
+                "Lagrange points",
+                system
+                    .lagrange_points
+                    .iter()
+                    .filter(|(_, p)| p.related_object == d.data_name)
+                    .map(|(id, _)| *id)
+                    .collect(),
+            );
             if let Some(name) = record.get("effectToExplore").and_then(Value::as_str) {
                 b.space_names("Explore effect", model::EFFECT, &[name.into()]);
             }
@@ -150,9 +192,10 @@ pub(super) fn stats(view: &View<'_>, texts: &Texts, id: EntityId, spoilers: &Has
             let orbit: game::Orbit = model::parse(record);
             b.space_number("Orbit", "stationCapacity", "Station capacity", orbit.station_capacity as f64, "");
             b.space_number("Orbit", "irradiatedMultiplier", "Irradiation multiplier", orbit.irradiated_multiplier, "×");
-            for spec in
-                [f("eccentricity", "Eccentricity", Fmt::Num(""), "Orbit").always(), f("inclination_Deg", "Inclination", Fmt::Num("°"), "Orbit").always()]
-            {
+            for spec in [
+                f("eccentricity", "Eccentricity", Fmt::Num(""), "Orbit").always(),
+                f("inclination_Deg", "Inclination", Fmt::Num("°"), "Orbit").always(),
+            ] {
                 if let Some(v) = map.get(spec.field) {
                     b.field(&spec, v, map);
                 }
@@ -178,7 +221,9 @@ pub(super) fn stats(view: &View<'_>, texts: &Texts, id: EntityId, spoilers: &Has
             }
             b.space_links(
                 "Hab sites",
-                view.entities(game::HAB_SITE).filter(|&site| view.record(site).is_some_and(|r| r["miningProfileName"] == profile.data_name)).collect(),
+                view.entities(game::HAB_SITE)
+                    .filter(|&site| view.record(site).is_some_and(|r| r["miningProfileName"] == profile.data_name))
+                    .collect(),
             );
         }
         _ => return None,
@@ -188,7 +233,17 @@ pub(super) fn stats(view: &View<'_>, texts: &Texts, id: EntityId, spoilers: &Has
 
 impl Builder<'_, '_> {
     fn space_text(&mut self, group: &str, field: &str, label: &str, value: String) {
-        self.push(group, Stat { label: label.into(), value, detail: None, sentiment: "neutral".into(), icon: None, field: field.into() });
+        self.push(
+            group,
+            Stat {
+                label: label.into(),
+                value,
+                detail: None,
+                sentiment: "neutral".into(),
+                icon: None,
+                field: field.into(),
+            },
+        );
     }
 
     fn space_number(&mut self, group: &str, field: &str, label: &str, value: f64, unit: &str) {
@@ -200,14 +255,25 @@ impl Builder<'_, '_> {
     fn space_resource(&mut self, group: &str, resource: Resource, value: String, detail: Option<String>) {
         let key = if resource == Resource::Nobles { "nobleMetals" } else { resource.key() };
         let (label, icon) = self.material(key);
-        self.push(group, Stat { label, value, detail, sentiment: "neutral".into(), icon, field: resource.key().into() });
+        self.push(
+            group,
+            Stat {
+                label,
+                value,
+                detail,
+                sentiment: "neutral".into(),
+                icon,
+                field: resource.key().into(),
+            },
+        );
     }
 
     fn space_links(&mut self, label: &str, ids: Vec<EntityId>) {
         if !ids.is_empty() {
-            self.stats
-                .links
-                .push(StatLinks { label: label.into(), entities: ids.into_iter().map(|id| entity_ref(self.view, self.texts, id, self.spoilers)).collect() });
+            self.stats.links.push(StatLinks {
+                label: label.into(),
+                entities: ids.into_iter().map(|id| entity_ref(self.view, self.texts, id, self.spoilers)).collect(),
+            });
         }
     }
 

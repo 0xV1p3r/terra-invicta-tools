@@ -1,10 +1,17 @@
+<script module lang="ts">
+	// Outside the instance: a data switch remounts the page (and this dialog); it stays open.
+	let open = $state(false);
+</script>
+
 <script lang="ts">
 	import ArrowDownLeft from '@lucide/svelte/icons/arrow-down-left';
 	import ArrowDownRight from '@lucide/svelte/icons/arrow-down-right';
 	import ArrowUpLeft from '@lucide/svelte/icons/arrow-up-left';
 	import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
 	import Tip from '$lib/components/toolbar/Tip.svelte';
+	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import Settings from '@lucide/svelte/icons/settings';
+	import { api, mockMode, type BuildInfo } from '$lib/api';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
@@ -32,6 +39,65 @@
 		kor: '한국어'
 	};
 
+	interface Props {
+		/** Pick a data folder, load it and reload the page's data; resolves after the switch. */
+		chooseDataDir: (current?: string) => Promise<void>;
+		/** Load another build (null = always the latest) and reload the page's data. */
+		switchBuild: (buildId: string | null) => Promise<void>;
+	}
+	let { chooseDataDir, switchBuild }: Props = $props();
+
+	const LATEST = 'latest';
+	let builds = $state.raw<BuildInfo[]>([]);
+	let switching = $state(false);
+	let dataError = $state('');
+	$effect(() => {
+		void app.meta?.buildId;
+		void app.meta?.dataDir;
+		if (!open || mockMode) return;
+		let stale = false;
+		api.listBuilds().then(
+			(result) => {
+				if (!stale) builds = result;
+			},
+			(cause) => {
+				if (!stale) dataError = String(cause);
+			}
+		);
+		return () => {
+			stale = true;
+		};
+	});
+
+	function buildLabel(build: BuildInfo | undefined, id: string) {
+		if (!build) return `Build ${id}`;
+		const version = `${build.gameVersion ? `v${build.gameVersion}` : 'Unknown version'} · ${build.buildId}`;
+		const date = build.lastUpdated ? new Date(build.lastUpdated * 1000).toLocaleDateString() : null;
+		return date ? `${version} (${date})` : version;
+	}
+	const latestBuild = $derived(builds.find((b) => b.latest));
+	const buildValue = $derived(app.meta?.pinnedBuild ?? LATEST);
+	const buildTriggerLabel = $derived(
+		buildValue === LATEST
+			? `Latest: ${buildLabel(latestBuild, app.meta?.buildId ?? '')}`
+			: buildLabel(
+					builds.find((b) => b.buildId === buildValue),
+					buildValue
+				)
+	);
+
+	async function run(action: () => Promise<unknown>) {
+		switching = true;
+		dataError = '';
+		try {
+			await action();
+		} catch (cause) {
+			dataError = String(cause);
+		} finally {
+			switching = false;
+		}
+	}
+
 	const CORNER_OPTIONS = [
 		{ value: 'top-left', label: 'Top left', icon: ArrowUpLeft },
 		{ value: 'top-right', label: 'Top right', icon: ArrowUpRight },
@@ -40,7 +106,7 @@
 	] as const;
 </script>
 
-<Dialog.Root>
+<Dialog.Root bind:open>
 	<Tip text="Settings">
 		<Dialog.Trigger>
 			{#snippet child({ props })}
@@ -82,6 +148,69 @@
 					>
 				</Select.Root>
 			</div>
+			{#if !mockMode && app.meta}
+				<h2 class="font-semibold">Game data</h2>
+				<div class="flex items-start justify-between gap-4">
+					<div class="grid min-w-0 gap-1">
+						<span id="setting-data-dir" class="font-medium">Data folder</span>
+						<span class="truncate text-xs text-muted-foreground" title={app.meta.dataDir}
+							>{app.meta.dataDir}</span
+						>
+						{#if app.meta.dataDirSource === 'env'}
+							<span class="text-xs text-muted-foreground"
+								>TI_DATA_DIR overrides the saved folder. Change the environment variable to use
+								another folder.</span
+							>
+						{/if}
+					</div>
+					<Button
+						variant="outline"
+						size="sm"
+						aria-describedby="setting-data-dir"
+						disabled={switching || app.meta.dataDirSource === 'env'}
+						onclick={() => run(() => chooseDataDir(app.meta?.dataDir))}>Change…</Button
+					>
+				</div>
+				{#if builds.length > 1}
+					<div class="flex items-center justify-between gap-4">
+						<span id="setting-build" class="font-medium">Game build</span>
+						<Select.Root
+							type="single"
+							value={buildValue}
+							disabled={switching}
+							onValueChange={(value) => {
+								if (value !== buildValue) run(() => switchBuild(value === LATEST ? null : value));
+							}}
+						>
+							<Select.Trigger size="sm" aria-labelledby="setting-build"
+								>{buildTriggerLabel}</Select.Trigger
+							>
+							<Select.Content
+								><Select.Group>
+									<Select.Item value={LATEST} label="Always the latest"
+										>Always the latest</Select.Item
+									>
+									{#each builds as build (build.buildId)}<Select.Item
+											value={build.buildId}
+											label={buildLabel(build, build.buildId)}
+											>{buildLabel(build, build.buildId)}{#if build.latest}<span
+													class="ml-auto text-xs text-muted-foreground">latest</span
+												>{/if}</Select.Item
+										>{/each}
+								</Select.Group></Select.Content
+							>
+						</Select.Root>
+					</div>
+				{/if}
+				{#if switching}
+					<p class="flex items-center gap-2 text-muted-foreground" role="status">
+						<LoaderCircle class="size-4 animate-spin" /> Loading game data…
+					</p>
+				{/if}
+				{#if dataError}
+					<p class="text-destructive" role="alert">{dataError}</p>
+				{/if}
+			{/if}
 			<h2 class="font-semibold">Wiki</h2>
 			<div class="flex items-start justify-between gap-4">
 				<Label for="setting-wiki-spoilers" class="grid gap-2 font-normal"

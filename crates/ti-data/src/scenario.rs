@@ -26,6 +26,7 @@ use std::sync::Arc;
 use serde_json::Value;
 
 use crate::dataset::{Dataset, EntityId, Variant};
+use crate::error::{Error, Result};
 
 pub const META: &str = "TIMetaTemplate";
 pub const START_TIME: &str = "TIStartTimeTemplate";
@@ -37,6 +38,9 @@ pub const DEFAULT_SCENARIO: &str = "ModernScenario";
 pub struct ScenarioIdx(pub(crate) u8);
 
 impl ScenarioIdx {
+    /// Most scenarios a dataset can have (one bit each in [`ScenarioSet`]).
+    pub const MAX_SCENARIOS: usize = u64::BITS as usize;
+
     pub fn index(self) -> usize {
         self.0 as usize
     }
@@ -142,7 +146,7 @@ fn collect_meta(ds: &Dataset, id: EntityId, visited: &mut HashSet<EntityId>, out
     }
 }
 
-pub(crate) fn build(ds: &mut Dataset) {
+pub(crate) fn build(ds: &mut Dataset) -> Result<()> {
     let metas: Vec<EntityId> = ds.of_template(META).to_vec();
     // Disabled records listed by a meta template are registered anyway.
     let force_enabled: HashSet<String> = metas
@@ -162,7 +166,10 @@ pub(crate) fn build(ds: &mut Dataset) {
         let list_priority = r.get("listPriority").and_then(Value::as_i64).unwrap_or(0);
         let mut instantiated: BTreeMap<String, Vec<String>> = BTreeMap::new();
         collect_meta(ds, m, &mut HashSet::new(), &mut instantiated);
-        let start_time = instantiated.get(START_TIME).and_then(|names| names.first()).and_then(|n| ds.find(START_TIME, n));
+        let start_time = instantiated
+            .get(START_TIME)
+            .and_then(|names| names.first())
+            .and_then(|n| ds.find(START_TIME, n));
         scenarios.push(Scenario {
             idx: ScenarioIdx(0),
             meta: m,
@@ -179,14 +186,25 @@ pub(crate) fn build(ds: &mut Dataset) {
     }
     // Menu order: listed first, by priority; the default scenario wins ties.
     scenarios.sort_by_key(|s| (!s.listed, s.list_priority, s.data_name != DEFAULT_SCENARIO, s.data_name.clone()));
-    scenarios.truncate(64);
+    if scenarios.len() > ScenarioIdx::MAX_SCENARIOS {
+        return Err(Error::TooManyScenarios {
+            count: scenarios.len(),
+            max: ScenarioIdx::MAX_SCENARIOS,
+        });
+    }
     for (i, s) in scenarios.iter_mut().enumerate() {
         s.idx = ScenarioIdx(i as u8);
     }
 
     // Gate starting instances by (template, name), never an entire template type.
-    let starting: HashSet<(&str, &str)> =
-        scenarios.iter().flat_map(|s| s.instantiated.iter().flat_map(|(kind, names)| names.iter().map(move |name| (kind.as_str(), name.as_str())))).collect();
+    let starting: HashSet<(&str, &str)> = scenarios
+        .iter()
+        .flat_map(|s| {
+            s.instantiated
+                .iter()
+                .flat_map(|(kind, names)| names.iter().map(move |name| (kind.as_str(), name.as_str())))
+        })
+        .collect();
     // TIProjectTemplate.OrgGranted / TIFactionState.OnProjectCompleted can create
     // unique orgs too. Market CanSpawn only applies to randomized orgs; a
     // requiredTechName on a unique starting org does not make it spawnable.
@@ -218,7 +236,10 @@ pub(crate) fn build(ds: &mut Dataset) {
             .entities()
             .iter()
             .map(|e| {
-                let listed = s.instantiated.get(&*e.template).is_some_and(|names| names.binary_search_by(|n| n.as_str().cmp(&e.data_name)).is_ok());
+                let listed = s
+                    .instantiated
+                    .get(&*e.template)
+                    .is_some_and(|names| names.binary_search_by(|n| n.as_str().cmp(&e.data_name)).is_ok());
                 // Check the resolved variant: randomized flags can vary by scenario.
                 let forced = force_enabled.contains(&*e.data_name);
                 let Some(index) = resolve(&e.variants, &tags, forced) else {
@@ -249,6 +270,7 @@ pub(crate) fn build(ds: &mut Dataset) {
     }
     ds.scenarios = scenarios;
     ds.resolution = Resolution { selected, presence };
+    Ok(())
 }
 
 /// Index of the variant the game would use for `scenario_tags`, if any.
@@ -266,7 +288,10 @@ pub fn resolve(variants: &[Variant], scenario_tags: &[Arc<str>], force_enabled: 
     }
     let overlap = |i: usize| variants[i].tags.iter().filter(|t| scenario_tags.contains(t)).count();
     let first_tag = |i: usize| scenario_tags.iter().position(|st| variants[i].tags.contains(st)).unwrap_or(usize::MAX);
-    registered.iter().copied().min_by_key(|&i| (std::cmp::Reverse(overlap(i)), first_tag(i), variants[i].load_order))
+    registered
+        .iter()
+        .copied()
+        .min_by_key(|&i| (std::cmp::Reverse(overlap(i)), first_tag(i), variants[i].load_order))
 }
 
 impl Dataset {
@@ -358,5 +383,17 @@ mod tests {
         // tie on overlap -> earliest matching scenario tag wins, then load order
         let both = vec![v(0, &["B"]), v(1, &["A"])];
         assert_eq!(resolve(&both, &tags(&["A", "B"]), false), Some(1));
+    }
+
+    #[test]
+    fn too_many_scenarios_is_an_error() {
+        use crate::test_support::{scenario, try_dataset};
+        let metas = |n: usize| (0..n).map(|i| scenario(&format!("S{i}"), i as i64, &[], None)).collect::<Vec<_>>();
+        let max = ScenarioIdx::MAX_SCENARIOS;
+        let err = try_dataset(&[("base", &[(META, metas(max + 1))])], json!({})).unwrap_err();
+        assert!(matches!(err, Error::TooManyScenarios { count: 65, max: 64 }), "{err}");
+        let ds = try_dataset(&[("base", &[(META, metas(max))])], json!({})).unwrap();
+        assert_eq!(ds.scenarios().len(), max);
+        assert!(ds.scenarios().iter().all(|s| ds.presence(s.meta).contains(s.idx)));
     }
 }

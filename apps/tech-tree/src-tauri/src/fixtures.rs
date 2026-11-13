@@ -48,10 +48,18 @@ fn write_fixtures() {
         eprintln!("{:>9} {}", std::fs::metadata(&path).unwrap().len(), name);
     };
     let scope = en();
-    write("meta.json", &commands::get_meta(&b).unwrap());
-    let all = TreeFilter { techs: true, projects: true, categories: vec![], properties: vec![] };
+    write("meta.json", &commands::get_meta(&b, "en").unwrap());
+    let all = TreeFilter {
+        techs: true,
+        projects: true,
+        categories: vec![],
+        properties: vec![],
+    };
     write("tree.json", &commands::get_tree(&b, &scope, &all, FullLayout::Layered, true).unwrap());
-    let techs = TreeFilter { projects: false, ..all.clone() };
+    let techs = TreeFilter {
+        projects: false,
+        ..all.clone()
+    };
     write("tree-techs.json", &commands::get_tree(&b, &scope, &techs, FullLayout::Layered, true).unwrap());
     write("tree-bands.json", &commands::get_tree(&b, &scope, &all, FullLayout::Bands, true).unwrap());
     write("properties.json", &commands::get_properties(&b, &scope, &all).unwrap());
@@ -68,12 +76,12 @@ fn write_fixtures() {
         "TICodexEntryTemplate",
         "TIGlobalConfig",
     ] {
-        let entries = commands::get_wiki_entries(&b, &scope, template, None).unwrap();
+        let entries = commands::all_wiki_entries(&b, &scope, template, None).unwrap();
         wiki_keys.extend(entries.iter().take(3).map(|e| e.entity.key.clone()));
         write(&format!("wiki-entries-{template}.json"), &entries);
     }
     for template in ["TIProjectTemplate", "TIObjectiveTemplate"] {
-        let entries = commands::get_wiki_entries(&b, &scope, template, Some(true)).unwrap();
+        let entries = commands::all_wiki_entries(&b, &scope, template, Some(true)).unwrap();
         wiki_keys.extend(entries.iter().take(3).map(|e| e.entity.key.clone()));
         write(&format!("wiki-entries-spoiler-{template}.json"), &entries);
     }
@@ -83,13 +91,22 @@ fn write_fixtures() {
         ("down", Direction::Down, "TITechTemplate:AdAstra"),
         ("both", Direction::Both, "TITechTemplate:OrbitalShipbuilding"),
     ] {
-        let args = SubtreeArgs { root: root.into(), direction, alternatives: true, max_depth: None };
+        let args = SubtreeArgs {
+            root: root.into(),
+            direction,
+            alternatives: true,
+            max_depth: None,
+        };
         let tree = commands::get_subtree(&b, &scope, &args, true).unwrap();
         let name = format!("subtree-{dir}-{}.json", root.split_once(':').unwrap().1);
         write(&name, &tree);
         index.subtrees.push(name);
     }
-    for root in ["TITechTemplate:AdAstra", "TIProjectTemplate:Project_Pherocytes", "TITechTemplate:OrbitalShipbuilding"] {
+    for root in [
+        "TITechTemplate:AdAstra",
+        "TIProjectTemplate:Project_Pherocytes",
+        "TITechTemplate:OrbitalShipbuilding",
+    ] {
         let name = format!("focus-{}.json", root.split_once(':').unwrap().1);
         write(&name, &commands::get_focus(&b, &scope, root).unwrap());
         index.subtrees.push(name);
@@ -124,7 +141,9 @@ fn write_fixtures() {
         first(model::TECH, &|id| view.record(id).is_some_and(|r| r["endGameTech"] == true)),
         first(model::TECH, &|id| view.annotations(id).scenario_specific),
         // (not an alien one: Project_AlienMasterProject unlocks ~1900 ship parts)
-        first(model::PROJECT, &|id| !view.annotations(id).factions.is_empty() && !b.ds.entity(id).data_name.contains("Alien")),
+        first(model::PROJECT, &|id| {
+            !view.annotations(id).factions.is_empty() && !b.ds.entity(id).data_name.contains("Alien")
+        }),
         first(model::PROJECT, &|id| view.annotations(id).from_dlc),
         first(model::PROJECT, &|id| view.annotations(id).varies_by_scenario),
         first(model::PROJECT, &|id| view.record(id).is_some_and(|r| r["repeatable"] == true)),
@@ -147,7 +166,11 @@ fn write_fixtures() {
     keys.extend(picks.into_iter().flatten().map(|id| refs::key(&view, id)));
     // Everything reachable in one click from three roots, so detail navigation works.
     let mut related = BTreeSet::new();
-    for root in ["TITechTemplate:AdAstra", "TIProjectTemplate:Project_ProtiumConverterTorch", "TIProjectTemplate:Project_Pherocytes"] {
+    for root in [
+        "TITechTemplate:AdAstra",
+        "TIProjectTemplate:Project_ProtiumConverterTorch",
+        "TIProjectTemplate:Project_Pherocytes",
+    ] {
         let d = commands::get_entity(&b, &scope, root).unwrap();
         related.extend(d.requirements.iter().flat_map(|g| g.options.iter().map(|o| o.key.clone())));
         related.extend(d.unlocks.iter().map(|u| u.entity.key.clone()));

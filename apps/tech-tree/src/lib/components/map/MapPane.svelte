@@ -35,6 +35,7 @@
 		asteroidalMoon: 3,
 		comet: 4,
 		asteroid: 5,
+		unknown: 5,
 		lagrange: 6
 	};
 

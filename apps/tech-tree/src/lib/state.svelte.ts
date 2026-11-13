@@ -40,15 +40,49 @@ interface HistoryEntry {
 const sameView = (a: ViewSpec, b: ViewSpec) => JSON.stringify(a) === JSON.stringify(b);
 const HISTORY_LIMIT = 100;
 
+const STORAGE_KEY = 'ti-tech-tree:scope';
+
+function loadScope(): ScopeArgs {
+	const defaults: ScopeArgs = { scenario: null, faction: null, lang: 'en' };
+	try {
+		const raw = typeof localStorage === 'undefined' ? null : localStorage.getItem(STORAGE_KEY);
+		const parsed: unknown = raw ? JSON.parse(raw) : null;
+		if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return defaults;
+		const scope = parsed as Record<string, unknown>;
+		return {
+			scenario: typeof scope.scenario === 'string' ? scope.scenario : null,
+			faction: typeof scope.faction === 'string' ? scope.faction : null,
+			lang: typeof scope.lang === 'string' ? scope.lang : 'en'
+		};
+	} catch {
+		return defaults;
+	}
+}
+
 class AppState {
 	/** Loaded once on startup; null until then (or on error, see `error`). */
-	meta = $state<Meta | null>(null);
+	private metadata = $state<Meta | null>(null);
+
+	get meta() {
+		return this.metadata;
+	}
+
+	set meta(meta: Meta | null) {
+		if (meta) {
+			if (!meta.scenarios.some((scenario) => scenario.name === this.scope.scenario))
+				this.scope.scenario = null;
+			if (!meta.factions.some((faction) => faction.name === this.scope.faction))
+				this.scope.faction = null;
+			if (!meta.languages.includes(this.scope.lang)) this.scope.lang = 'en';
+		}
+		this.metadata = meta;
+	}
 	error = $state<string | null>(null);
 
 	page = $state<Page>('tree');
 
 	/** Data scope: overview by default (all scenarios, no faction). */
-	scope = $state<ScopeArgs>({ scenario: null, faction: null, lang: 'en' });
+	scope = $state<ScopeArgs>(loadScope());
 
 	/** Full tree filters. */
 	showTechs = $state(true);
@@ -226,3 +260,14 @@ class AppState {
 }
 
 export const app = new AppState();
+
+$effect.root(() => {
+	$effect(() => {
+		const json = JSON.stringify(app.scope);
+		try {
+			localStorage.setItem(STORAGE_KEY, json);
+		} catch {
+			// Storage unavailable (private mode, quota): scope lasts for the session.
+		}
+	});
+});

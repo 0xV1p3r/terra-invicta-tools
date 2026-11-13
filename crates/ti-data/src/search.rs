@@ -57,9 +57,10 @@ fn split_identifier(s: &str) -> String {
             out.push(' ');
         } else {
             if let Some(p) = prev
-                && ((c.is_uppercase() && p.is_lowercase()) || (c.is_ascii_digit() != p.is_ascii_digit() && p != '_')) {
-                    out.push(' ');
-                }
+                && ((c.is_uppercase() && p.is_lowercase()) || (c.is_ascii_digit() != p.is_ascii_digit() && p != '_'))
+            {
+                out.push(' ');
+            }
             out.push(c);
         }
         prev = Some(c);
@@ -89,8 +90,9 @@ impl SearchIndex {
     pub fn build(ds: &Dataset, texts: &Texts) -> Self {
         let mut docs = Vec::with_capacity(ds.entities().len());
         let overview = ds.overview();
-        let postfixes: Vec<Option<String>> =
-            std::iter::once(None).chain(ds.scenarios().iter().filter_map(|s| s.localization_postfix.clone()).map(Some)).collect();
+        let postfixes: Vec<Option<String>> = std::iter::once(None)
+            .chain(ds.scenarios().iter().filter_map(|s| s.localization_postfix.clone()).map(Some))
+            .collect();
         for e in ds.entities() {
             let mut names = vec![normalize(&overview.name(texts, e.id))];
             let mut text = String::new();
@@ -103,7 +105,10 @@ impl SearchIndex {
                     }
                 }
                 for f in [field::SUMMARY, field::DESCRIPTION, field::QUOTE] {
-                    if let Some(t) = texts.entity_field(&e.template, &e.data_name, Some(&v.record), f, None).filter(|t| !is_skipped(t)) {
+                    if let Some(t) = texts
+                        .entity_field(&e.template, &e.data_name, Some(&v.record), f, None)
+                        .filter(|t| !is_skipped(t))
+                    {
                         let t = normalize(&to_plain(t));
                         if !text.contains(&t) {
                             text.push_str(&t);
@@ -135,7 +140,10 @@ impl SearchIndex {
                 values: normalize(&values),
             });
         }
-        Self { lang: texts.lang().into(), docs }
+        Self {
+            lang: texts.lang().into(),
+            docs,
+        }
     }
 
     pub fn lang(&self) -> &str {
@@ -169,7 +177,11 @@ impl SearchIndex {
             } else if doc.data_name.split('\n').next() == Some(q.as_str()) {
                 score += 800; // exact dataName match
             }
-            hits.push(Hit { id: doc.id, score, field: best });
+            hits.push(Hit {
+                id: doc.id,
+                score,
+                field: best,
+            });
         }
         hits.sort_by(|a, b| b.score.cmp(&a.score).then(a.id.cmp(&b.id)));
         hits.truncate(limit);

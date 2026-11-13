@@ -180,12 +180,14 @@ impl SpaceBody {
 
     /// `TISpaceObjectTemplate.ArgumentPeriapsis_Rad` in degrees; `None` where the game picks a random angle.
     pub fn arg_periapsis(&self) -> Option<f64> {
-        self.arg_periapsis_deg.or_else(|| Some(self.long_periapsis_deg? - self.long_ascending_node_deg?))
+        self.arg_periapsis_deg
+            .or_else(|| Some(self.long_periapsis_deg? - self.long_ascending_node_deg?))
     }
 
     /// `TISpaceObjectTemplate.MeanAnomalyAtEpoch_Rad` in degrees; `None` where the game picks a random angle.
     pub fn mean_anomaly_at_epoch(&self) -> Option<f64> {
-        self.mean_anomaly_at_epoch_deg.or_else(|| Some(self.mean_longitude_deg? - self.long_periapsis_deg?))
+        self.mean_anomaly_at_epoch_deg
+            .or_else(|| Some(self.mean_longitude_deg? - self.long_periapsis_deg?))
     }
 
     /// `TISpaceObjectTemplate.Epoch_floatJYears`.
@@ -195,7 +197,9 @@ impl SpaceBody {
 
     /// `TISpaceBodyState.dimensionX_km`.
     pub fn dimension_x(&self) -> f64 {
-        self.dimension_x_km.or(self.equatorial_radius_km.map(|r| r * 2.0)).unwrap_or_else(|| self.mean_radius_km.unwrap_or(0.0) * 2.0)
+        self.dimension_x_km
+            .or(self.equatorial_radius_km.map(|r| r * 2.0))
+            .unwrap_or_else(|| self.mean_radius_km.unwrap_or(0.0) * 2.0)
     }
 
     /// `TISpaceBodyState.dimensionY_km`.
@@ -210,7 +214,8 @@ impl SpaceBody {
 
     /// `TISpaceBodyState.oblateness`.
     pub fn oblateness(&self) -> f64 {
-        self.oblateness.unwrap_or_else(|| (self.dimension_x() - self.dimension_z()) / self.dimension_x())
+        self.oblateness
+            .unwrap_or_else(|| (self.dimension_x() - self.dimension_z()) / self.dimension_x())
     }
 
     /// `TISpaceBodyState.GetPolarRadius_m` in km. (Like the game, the full `dimensionZ_km`.)
@@ -452,7 +457,12 @@ pub struct MiningConstants {
 
 impl Default for MiningConstants {
     fn default() -> Self {
-        MiningConstants { max_mass_for_malus: 5e16, metals_malus_density_cut: 1.25, metals_bonus_density_cut: 3.0, productivity: 1.0 }
+        MiningConstants {
+            max_mass_for_malus: 5e16,
+            metals_malus_density_cut: 1.25,
+            metals_bonus_density_cut: 3.0,
+            productivity: 1.0,
+        }
     }
 }
 
@@ -512,7 +522,11 @@ impl SiteMining<'_> {
     /// `TIHabSiteState.GetHabSiteExpectedProductivity_month` (nobles capped at half the metals).
     pub fn expected_month(&self, r: Resource) -> f64 {
         let value = self.modify(self.profile.get(r).mean, r.density_sensitive());
-        if r == Resource::Nobles { value.min(self.expected_month(Resource::Metals) / 2.0) } else { value }
+        if r == Resource::Nobles {
+            value.min(self.expected_month(Resource::Metals) / 2.0)
+        } else {
+            value
+        }
     }
 
     /// `GetHabSiteExpectedProductivity_month`, `…Min…`, `…Max…`: expected ± half the modified width,
@@ -521,7 +535,11 @@ impl SiteMining<'_> {
         let p = self.profile.get(r);
         let expected = self.expected_month(r);
         let half_width = self.modify(p.width, false) / 2.0;
-        SiteOutput { expected, min: p.min.max(expected - half_width), max: expected + half_width }
+        SiteOutput {
+            expected,
+            min: p.min.max(expected - half_width),
+            max: expected + half_width,
+        }
     }
 }
 
@@ -603,7 +621,10 @@ impl System {
                     .filter_map(|name| {
                         let site_id = view.find(HAB_SITE, name)?;
                         let site: HabSite = model::parse(view.record(site_id)?);
-                        let profile = view.find(MINING_PROFILE, &site.mining_profile).and_then(|p| view.record(p)).map(MiningProfile::from_record);
+                        let profile = view
+                            .find(MINING_PROFILE, &site.mining_profile)
+                            .and_then(|p| view.record(p))
+                            .map(MiningProfile::from_record);
                         Some((site_id, site, profile))
                     })
                     .collect();
@@ -612,7 +633,11 @@ impl System {
             .collect();
 
         // Depth-first from the roots, so moons follow their planet.
-        let names: HashMap<String, usize> = loaded.iter().enumerate().map(|(i, b)| (view.dataset().entity(b.id).data_name.to_string(), i)).collect();
+        let names: HashMap<String, usize> = loaded
+            .iter()
+            .enumerate()
+            .map(|(i, b)| (view.dataset().entity(b.id).data_name.to_string(), i))
+            .collect();
         let parent_of = |b: &Body| b.data.barycenter_name.as_deref().and_then(|n| names.get(n).copied());
         let mut children: Vec<Vec<usize>> = vec![Vec::new(); loaded.len()];
         let mut roots = Vec::new();
@@ -635,22 +660,42 @@ impl System {
         order.extend((0..loaded.len()).filter(|&i| !seen[i]));
 
         let position: HashMap<usize, usize> = order.iter().enumerate().map(|(pos, &i)| (i, pos)).collect();
-        let parents: Vec<Option<usize>> = order.iter().map(|&i| parent_of(&loaded[i]).filter(|p| position[p] < position[&i]).map(|p| position[&p])).collect();
+        let parents: Vec<Option<usize>> = order
+            .iter()
+            .map(|&i| parent_of(&loaded[i]).filter(|p| position[p] < position[&i]).map(|p| position[&p]))
+            .collect();
         let mut slots: Vec<Option<Body>> = loaded.drain(..).map(Some).collect();
         let bodies: Vec<Body> = order
             .iter()
             .zip(parents)
-            .map(|(&i, parent)| Body { parent, ..slots[i].take().expect("each body once") })
+            .map(|(&i, parent)| Body {
+                parent,
+                ..slots[i].take().expect("each body once")
+            })
             .collect();
-        let by_name = bodies.iter().enumerate().map(|(i, b)| (view.dataset().entity(b.id).data_name.to_string(), i)).collect();
+        let by_name = bodies
+            .iter()
+            .enumerate()
+            .map(|(i, b)| (view.dataset().entity(b.id).data_name.to_string(), i))
+            .collect();
 
         let lagrange_points = view.entities(NAVIGABLE).filter_map(|id| Some((id, model::parse(view.record(id)?)))).collect();
-        let mut system = System { bodies, lagrange_points, mining, by_name, global_cap: [0.0; 5] };
+        let mut system = System {
+            bodies,
+            lagrange_points,
+            mining,
+            by_name,
+            global_cap: [0.0; 5],
+        };
         for r in Resource::ALL {
             system.global_cap[r as usize] = system
                 .bodies
                 .iter()
-                .flat_map(|b| b.sites.iter().filter_map(|(_, _, p)| Some(system.site_mining(b, p.as_ref()?).expected_month(r) / DAYS_PER_MONTH)))
+                .flat_map(|b| {
+                    b.sites
+                        .iter()
+                        .filter_map(|(_, _, p)| Some(system.site_mining(b, p.as_ref()?).expected_month(r) / DAYS_PER_MONTH))
+                })
                 .fold(0.0, f64::max);
         }
         system
@@ -698,7 +743,12 @@ impl System {
     }
 
     pub fn site_mining<'p>(&self, body: &Body, profile: &'p MiningProfile) -> SiteMining<'p> {
-        SiteMining { profile, body_mass_kg: body.data.mass(), body_density: body.data.density(), constants: self.mining }
+        SiteMining {
+            profile,
+            body_mass_kg: body.data.mass(),
+            body_density: body.data.density(),
+            constants: self.mining,
+        }
     }
 
     /// `TIGlobalValuesState.maxGlobalExpectedHabSiteProduction_day` over the hab sites in scope.
@@ -710,8 +760,12 @@ impl System {
     /// sites' average expected and minimum daily output and average profile width.
     /// `None` without hab sites (the game's average would throw).
     pub fn body_rating(&self, body: &Body, r: Resource) -> Option<SiteRating> {
-        let sites: Vec<(SiteMining<'_>, f64)> =
-            body.sites.iter().filter_map(|(_, _, p)| p.as_ref()).map(|p| (self.site_mining(body, p), p.get(r).width)).collect();
+        let sites: Vec<(SiteMining<'_>, f64)> = body
+            .sites
+            .iter()
+            .filter_map(|(_, _, p)| p.as_ref())
+            .map(|p| (self.site_mining(body, p), p.get(r).width))
+            .collect();
         if sites.is_empty() {
             return None;
         }
@@ -773,7 +827,10 @@ mod tests {
         // J2000 = 2000-01-01 12:00 UTC
         assert_eq!(epoch_unix_seconds(2000.0), 946_728_000.0);
         // fractional years count Julian-year seconds from January 1st (truncated)
-        assert_eq!(epoch_unix_seconds(2019.5), days_from_civil(2019, 1, 1) as f64 * 86_400.0 + 15_778_800.0 + 43_200.0);
+        assert_eq!(
+            epoch_unix_seconds(2019.5),
+            days_from_civil(2019, 1, 1) as f64 * 86_400.0 + 15_778_800.0 + 43_200.0
+        );
         let period = 100.0;
         let t0 = epoch_unix_seconds(2000.0);
         assert!((mean_anomaly_at(0.5, 2000.0, period, t0 + 25.0) - (0.5 + PI / 2.0)).abs() < 1e-12);
@@ -791,7 +848,10 @@ mod tests {
         assert_eq!(planet.solar_multiplier(1.0, false, Some(88.0)), 0.375);
         let comet = body(json!({"objectType": "Comet", "atmosphere": "Massive"}));
         assert_eq!(comet.solar_multiplier(1.0, true, None), 0.3);
-        assert_eq!(body(json!({"objectType": "Asteroid", "atmosphere": "Massive"})).solar_multiplier(1.0, true, None), 0.6);
+        assert_eq!(
+            body(json!({"objectType": "Asteroid", "atmosphere": "Massive"})).solar_multiplier(1.0, true, None),
+            0.6
+        );
         assert_eq!(body(json!({"objectType": "Star"})).solar_multiplier(0.0, false, None), 1.0);
     }
 
@@ -803,17 +863,36 @@ mod tests {
             "metals_mean": 30.0, "metals_width": 10.0, "nobles_mean": 40.0, "nobles_width": 4.0
         }));
         let c = MiningConstants::default();
-        let small = SiteMining { profile: &profile, body_mass_kg: 1e16, body_density: 1.0, constants: c };
+        let small = SiteMining {
+            profile: &profile,
+            body_mass_kg: 1e16,
+            body_density: 1.0,
+            constants: c,
+        };
         // mass 0.2 of the cap → clamped to 0.75; metals also lose density (×0.8) → still 0.75
         let water = small.output_month(Resource::Water);
-        assert_eq!(water, SiteOutput { expected: 30.0, min: 35.0, max: 37.5 });
+        assert_eq!(
+            water,
+            SiteOutput {
+                expected: 30.0,
+                min: 35.0,
+                max: 37.5
+            }
+        );
         assert_eq!(small.expected_month(Resource::Metals), 22.5);
         // nobles: at most half the metals
         assert_eq!(small.expected_month(Resource::Nobles), 11.25);
-        let dense = SiteMining { body_mass_kg: 1e20, body_density: 4.5, ..small };
+        let dense = SiteMining {
+            body_mass_kg: 1e20,
+            body_density: 4.5,
+            ..small
+        };
         assert_eq!(dense.expected_month(Resource::Metals), 37.5);
         assert_eq!(dense.expected_month(Resource::Water), 40.0);
-        let fixed = MiningProfile { modify_by_size: false, ..profile.clone() };
+        let fixed = MiningProfile {
+            modify_by_size: false,
+            ..profile.clone()
+        };
         assert_eq!(SiteMining { profile: &fixed, ..small }.expected_month(Resource::Water), 40.0);
     }
 

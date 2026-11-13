@@ -7,12 +7,46 @@ from pathlib import Path
 from typing import Any
 
 
-def _load_templates(build: Path) -> dict[tuple[str, str], dict[str, Any]]:
-    out: dict[tuple[str, str], dict[str, Any]] = {}
+Record = dict[str, Any]
+
+
+def _tags(record: Record) -> tuple[str, ...]:
+    return tuple(sorted(record.get("scenarioTags") or []))
+
+
+def _load_templates(build: Path) -> dict[tuple[str, str], dict[str, list[Record]]]:
+    """Per template file: dataName -> every record with that name (scenario variants), in file order."""
+    out: dict[tuple[str, str], dict[str, list[Record]]] = {}
     for f in sorted((build / "templates").glob("*/*.json")):
         records = json.loads(f.read_text(encoding="utf-8"))
-        out[(f.parent.name, f.stem)] = {r.get("dataName", f"#{i}"): r for i, r in enumerate(records)}
+        by_name: dict[str, list[Record]] = {}
+        for i, record in enumerate(records):
+            by_name.setdefault(record.get("dataName", f"#{i}"), []).append(record)
+        out[(f.parent.name, f.stem)] = by_name
     return out
+
+
+def _match(old: list[Record], new: list[Record]) -> tuple[list[Record], list[Record], list[tuple[Record, Record]]]:
+    """Pair the variants of one dataName: `(added, removed, changed)`.
+
+    Identical records cancel out first (so reordering is not a change), then records with
+    the same tag set pair up; a single leftover on each side is one record whose tags changed.
+    """
+    old, new = list(old), list(new)
+    for record in list(old):
+        if record in new:
+            old.remove(record)
+            new.remove(record)
+    changed = []
+    for record in list(old):
+        other = next((r for r in new if _tags(r) == _tags(record)), None)
+        if other is not None:
+            old.remove(record)
+            new.remove(other)
+            changed.append((record, other))
+    if len(old) == 1 and len(new) == 1:
+        changed.append((old.pop(), new.pop()))
+    return new, old, changed
 
 
 def _load_locale(build: Path, lang: str) -> dict[str, str]:
@@ -32,26 +66,33 @@ def diff_builds(old: Path, new: Path, *, lang: str = "en") -> str:
     for key in sorted(a.keys() | b.keys()):
         layer, template = key
         ra, rb = a.get(key, {}), b.get(key, {})
-        added = sorted(rb.keys() - ra.keys())
-        removed = sorted(ra.keys() - rb.keys())
-        changed = []
-        for dn in sorted(ra.keys() & rb.keys()):
-            if ra[dn] != rb[dn]:
-                fields = sorted(f for f in ra[dn].keys() | rb[dn].keys() if ra[dn].get(f) != rb[dn].get(f))
-                changed.append((dn, fields))
+        added, removed, changed = [], [], []
+        for dn in sorted(ra.keys() | rb.keys()):
+            olds, news = ra.get(dn, []), rb.get(dn, [])
+            # Variants are named by their tags only where a dataName has several records.
+            several = max(len(olds), len(news)) > 1
+
+            def label(record: Record) -> str:
+                return f"`{dn}`" + (f" [tags: {', '.join(_tags(record)) or 'none'}]" if several else "")
+
+            more, fewer, pairs = _match(olds, news)
+            added += sorted(label(r) for r in more)
+            removed += sorted(label(r) for r in fewer)
+            for x, y in sorted(pairs, key=lambda pair: _tags(pair[0])):
+                changed.append((label(x), x, y, sorted(f for f in x.keys() | y.keys() if x.get(f) != y.get(f))))
         if not (added or removed or changed):
             continue
         lines.append(f"## {template} ({layer})")
-        lines += [f"- added `{dn}`" for dn in added]
-        lines += [f"- removed `{dn}`" for dn in removed]
-        for dn, fields in changed:
+        lines += [f"- added {name}" for name in added]
+        lines += [f"- removed {name}" for name in removed]
+        for name, x, y, fields in changed:
             details = ", ".join(
-                f"`{f}`: {json.dumps(ra[dn].get(f), ensure_ascii=False)} → {json.dumps(rb[dn].get(f), ensure_ascii=False)}"
-                if not isinstance(ra[dn].get(f), (dict, list)) and not isinstance(rb[dn].get(f), (dict, list))
+                f"`{f}`: {json.dumps(x.get(f), ensure_ascii=False)} → {json.dumps(y.get(f), ensure_ascii=False)}"
+                if not isinstance(x.get(f), (dict, list)) and not isinstance(y.get(f), (dict, list))
                 else f"`{f}`"
                 for f in fields
             )
-            lines.append(f"- changed `{dn}`: {details}")
+            lines.append(f"- changed {name}: {details}")
         lines.append("")
 
     la, lb = _load_locale(old, lang), _load_locale(new, lang)

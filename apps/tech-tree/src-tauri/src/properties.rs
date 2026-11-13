@@ -183,7 +183,10 @@ pub(crate) fn effect_label(context: &str) -> (Label, Cow<'static, str>) {
     }
     if let Some(rest) = context.strip_prefix("Mission_") {
         let (name, suffix) = rest.rsplit_once('_').unwrap_or((rest, "Att"));
-        let name = MISSION_NAMES.iter().find(|(n, _)| *n == name).map_or_else(|| humanize(name), |(_, d)| d.to_string());
+        let name = MISSION_NAMES
+            .iter()
+            .find(|(n, _)| *n == name)
+            .map_or_else(|| humanize(name), |(_, d)| d.to_string());
         return match suffix {
             "Def" => (Quantity(""), format!("defense against {name} missions").into()),
             _ => (Quantity(""), format!("{name} mission bonus").into()),
@@ -205,8 +208,7 @@ fn humanize(s: &str) -> String {
         }
         let prev = i.checked_sub(1).map(|p| chars[p]);
         let next = chars.get(i + 1);
-        let boundary = c.is_uppercase()
-            && prev.is_some_and(|p| p.is_lowercase() || (p.is_uppercase() && next.is_some_and(|n| n.is_lowercase())));
+        let boundary = c.is_uppercase() && prev.is_some_and(|p| p.is_lowercase() || (p.is_uppercase() && next.is_some_and(|n| n.is_lowercase())));
         if boundary && !out.ends_with(' ') {
             out.push(' ');
         }
@@ -286,12 +288,22 @@ fn find(view: &View<'_>, id: EntityId) -> Vec<Found> {
         let Some(effect) = view.effect(effect_id) else { continue };
         for context in &effect.contexts {
             let (id, label, up) = effect_property(context, &effect);
-            out.push(Found { id, label, effect: Some(effect_id), context: Some((context.clone(), up, changes(&effect))) });
+            out.push(Found {
+                id,
+                label,
+                effect: Some(effect_id),
+                context: Some((context.clone(), up, changes(&effect))),
+            });
         }
     }
     for unlock in view.unlocks(id) {
         if let Some((id, label)) = unlock_property(unlock.kind) {
-            out.push(Found { id, label, effect: None, context: None });
+            out.push(Found {
+                id,
+                label,
+                effect: None,
+                context: None,
+            });
         }
     }
     out
@@ -316,7 +328,10 @@ pub fn catalog(view: &View<'_>, texts: &Texts, nodes: impl IntoIterator<Item = E
                 } else {
                     "effect"
                 };
-                let style = f.context.as_ref().map(|(context, up, moves)| context_style(view, context, up.filter(|_| *moves), up.is_none()));
+                let style = f
+                    .context
+                    .as_ref()
+                    .map(|(context, up, moves)| context_style(view, context, up.filter(|_| *moves), up.is_none()));
                 let info = PropertyInfo {
                     id: f.id,
                     label: f.label,
@@ -340,7 +355,10 @@ pub fn catalog(view: &View<'_>, texts: &Texts, nodes: impl IntoIterator<Item = E
             info.count = nodes.len();
             if info.example.is_none() {
                 // Drop the game's list dash and gaps left by stripped inline sprites ("The total  cost").
-                info.example = f.effect.and_then(|e| effect_text(view, texts, e)).map(|t| t.trim_start_matches('-').split_whitespace().collect::<Vec<_>>().join(" "));
+                info.example = f
+                    .effect
+                    .and_then(|e| effect_text(view, texts, e))
+                    .map(|t| t.trim_start_matches('-').split_whitespace().collect::<Vec<_>>().join(" "));
             }
         }
     }
@@ -360,7 +378,10 @@ mod tests {
 
     #[test]
     fn humanizes_context_names() {
-        assert_eq!(humanize("Ship_MaxSurvivableCruiseAcceleration_Bonus"), "Ship Max Survivable Cruise Acceleration Bonus");
+        assert_eq!(
+            humanize("Ship_MaxSurvivableCruiseAcceleration_Bonus"),
+            "Ship Max Survivable Cruise Acceleration Bonus"
+        );
         assert_eq!(humanize("HabMCReduction"), "Hab MC Reduction");
         assert_eq!(humanize("EnthrallElites"), "Enthrall Elites");
     }

@@ -66,6 +66,8 @@
 			}
 		);
 	});
+	// A response arriving after the map is gone (data folder or build switch) is dropped.
+	onDestroy(() => void latest++);
 
 	const index = $derived(mapState.index);
 	const centerKey = $derived(
@@ -463,15 +465,22 @@
 	onDestroy(() => clearTimeout(unhover));
 
 	// Bodies move under a resting pointer (zoom, playback): hover what is there now.
+	let hoverFrame = 0;
+	function requestRehover() {
+		if (!hoverFrame) hoverFrame = requestAnimationFrame(rehover);
+	}
 	function rehover() {
+		hoverFrame = 0;
 		if (!lastPointer || dragging) return;
 		setHovered(hit(lastPointer)?.key ?? null);
 	}
-	$effect(() => camera.subscribe(() => requestAnimationFrame(rehover)));
+	$effect(() => camera.subscribe(requestRehover));
 	$effect(() => {
 		void mapState.time;
-		requestAnimationFrame(rehover);
+		requestRehover();
 	});
+
+	onDestroy(() => cancelAnimationFrame(hoverFrame));
 
 	function onpointerup(e: PointerEvent) {
 		if (!pointer || pointer.id !== e.pointerId) return;

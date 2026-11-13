@@ -12,7 +12,9 @@ pub fn resolve(ds: &Dataset, args: &ScopeArgs) -> CmdResult<Scope> {
         scope.scenario = Some(s.idx);
     }
     if let Some(name) = args.faction.as_deref() {
-        let f = ds.find(model::FACTION, name).ok_or_else(|| CmdError::msg(format!("Unknown faction {name:?}")))?;
+        let f = ds
+            .find(model::FACTION, name)
+            .ok_or_else(|| CmdError::msg(format!("Unknown faction {name:?}")))?;
         scope.faction = Some(f);
     }
     Ok(scope)

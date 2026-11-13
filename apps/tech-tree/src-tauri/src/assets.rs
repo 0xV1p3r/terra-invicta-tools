@@ -13,7 +13,9 @@ pub const SCHEME: &str = "tiasset";
 
 /// Asset path (relative to the assets dir) of a request URI path, or `None` if it is unsafe.
 pub fn relative_path(uri_path: &str) -> Option<PathBuf> {
-    let decoded = percent_encoding::percent_decode_str(uri_path.strip_prefix('/').unwrap_or(uri_path)).decode_utf8().ok()?;
+    let decoded = percent_encoding::percent_decode_str(uri_path.strip_prefix('/').unwrap_or(uri_path))
+        .decode_utf8()
+        .ok()?;
     let rel = Path::new(&*decoded);
     if decoded.is_empty() || decoded.contains('\\') {
         return None;
@@ -44,7 +46,9 @@ fn status(code: StatusCode, msg: &str) -> Response<Vec<u8>> {
 /// Answer an asset request from canonical `assets_dir` (`None`: unavailable → 404).
 /// Symlinks within the root are allowed; targets outside it return 403.
 pub fn respond(assets_dir: Option<&Path>, request: &Request<Vec<u8>>) -> Response<Vec<u8>> {
-    let Some(dir) = assets_dir else { return status(StatusCode::NOT_FOUND, "no data loaded") };
+    let Some(dir) = assets_dir else {
+        return status(StatusCode::NOT_FOUND, "no data loaded");
+    };
     let Some(rel) = relative_path(request.uri().path()) else {
         return status(StatusCode::BAD_REQUEST, "invalid asset path");
     };
@@ -77,7 +81,10 @@ mod tests {
 
     #[test]
     fn decodes_and_rejects() {
-        assert_eq!(relative_path("/icons_2d%2Ftech_energy_icon.png"), Some(PathBuf::from("icons_2d/tech_energy_icon.png")));
+        assert_eq!(
+            relative_path("/icons_2d%2Ftech_energy_icon.png"),
+            Some(PathBuf::from("icons_2d/tech_energy_icon.png"))
+        );
         assert_eq!(relative_path("/icons_2d/a%20b.png"), Some(PathBuf::from("icons_2d/a b.png")));
         assert_eq!(relative_path("/..%2Fmanifest.json"), None);
         assert_eq!(relative_path("/a/../../x"), None);

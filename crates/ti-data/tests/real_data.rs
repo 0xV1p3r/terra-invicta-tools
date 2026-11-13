@@ -33,7 +33,12 @@ macro_rules! data_or_skip {
 }
 
 fn tags(v: &Value) -> Vec<&str> {
-    v.get("scenarioTags").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).collect()
+    v.get("scenarioTags")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .collect()
 }
 
 #[test]
@@ -87,7 +92,11 @@ fn tagged_dlc_variants_win_in_their_scenario() {
             continue;
         }
         let in_2003 = ds.selected_variant(s2003, id).unwrap();
-        assert!(std::ptr::eq(in_2003, &e.variants[mil]), "{}: 2003 should use the Millennium record", e.data_name);
+        assert!(
+            std::ptr::eq(in_2003, &e.variants[mil]),
+            "{}: 2003 should use the Millennium record",
+            e.data_name
+        );
         let in_modern = ds.selected_variant(modern, id).unwrap();
         assert!(tags(&in_modern.record).is_empty(), "{}: modern should use the untagged record", e.data_name);
         assert!(ds.varies_by_scenario(id));
@@ -122,7 +131,12 @@ fn alt_prereqs_form_or_groups() {
     let ds = data_or_skip!();
     let view = ds.overview();
     let g = view.research_graph();
-    let with_alt = g.nodes().iter().copied().filter(|n| g.requirements(*n).iter().any(|grp| grp.options.len() == 2)).count();
+    let with_alt = g
+        .nodes()
+        .iter()
+        .copied()
+        .filter(|n| g.requirements(*n).iter().any(|grp| grp.options.len() == 2))
+        .count();
     assert!(with_alt > 50, "only {with_alt} nodes with alternatives");
     assert!(g.requirements(view.find(model::PROJECT, "Project_Pherocytes").unwrap())[0].options.len() == 2);
 }
@@ -154,7 +168,11 @@ fn unlocks_and_subtrees() {
     // every drive's required project lists it as an unlock
     let drive = view.entities("TIDriveTemplate").next().unwrap();
     let project = view.unlocked_by(drive)[0];
-    assert!(view.unlocks(project).iter().any(|u| u.entity == drive && matches!(u.kind, UnlockKind::ShipPart(_))));
+    assert!(
+        view.unlocks(project)
+            .iter()
+            .any(|u| u.entity == drive && matches!(u.kind, UnlockKind::ShipPart(_)))
+    );
 
     let g = view.research_graph();
     let project = g.nodes().iter().copied().find(|n| !g.requirements(*n).is_empty()).unwrap();
@@ -238,7 +256,10 @@ fn effect_descriptions_render() {
     let e = view.effects(ad_astra)[0];
     assert!(view.effect_description(&en, e, &ctx).unwrap().contains('%'));
     let segs = view.effect_segments(&en, e, &ctx).unwrap();
-    assert!(segs.iter().any(|s| matches!(s, ti_data::EffectSegment::Value(v) if v.ends_with('%'))), "{segs:?}");
+    assert!(
+        segs.iter().any(|s| matches!(s, ti_data::EffectSegment::Value(v) if v.ends_with('%'))),
+        "{segs:?}"
+    );
     let mining = view.find(model::EFFECT, "Effect_MiningMetalsBonus").unwrap();
     let segs = view.effect_segments(&en, mining, &ctx).unwrap();
     assert!(segs.contains(&ti_data::EffectSegment::Sprite("metal".into())), "{segs:?}");
@@ -307,7 +328,13 @@ fn edge_provenance_is_consistent() {
     let view = ds.view(Scope::scenario(be).with_faction(exploit));
     let g = view.research_graph();
     let neural = view.find(model::PROJECT, "Project_NeuralEngineering").unwrap();
-    let anc = g.ancestors(neural, Traversal { alternatives: true, max_depth: Some(1) });
+    let anc = g.ancestors(
+        neural,
+        Traversal {
+            alternatives: true,
+            max_depth: Some(1),
+        },
+    );
     let hidden: Vec<_> = g.requirements(neural).iter().flat_map(|grp| grp.hidden.iter()).collect();
     assert!(!hidden.is_empty());
     assert!(anc.edges.iter().any(|e| e.alternative));
@@ -381,11 +408,25 @@ fn wiki_icon_coverage() {
             .iter()
             .filter(|&&id| {
                 let r = view.record(id).unwrap();
-                let own = ["iconResource", "stationIconResource", "baseIconResource", "missionIconImagePath", "flagResource", "councilIcon64"]
-                    .iter()
-                    .find_map(|key| r.get(*key).and_then(Value::as_str).filter(|s| !s.is_empty()));
-                let category = || r.get("techCategory").and_then(Value::as_str).and_then(model::TechCategory::parse).unwrap_or_default().icon_resource();
-                own.or_else(|| view.kind(id).is_research().then(category).flatten()).is_some_and(|r| ds.asset(r).is_some())
+                let own = [
+                    "iconResource",
+                    "stationIconResource",
+                    "baseIconResource",
+                    "missionIconImagePath",
+                    "flagResource",
+                    "councilIcon64",
+                ]
+                .iter()
+                .find_map(|key| r.get(*key).and_then(Value::as_str).filter(|s| !s.is_empty()));
+                let category = || {
+                    r.get("techCategory")
+                        .and_then(Value::as_str)
+                        .and_then(model::TechCategory::parse)
+                        .unwrap_or_default()
+                        .icon_resource()
+                };
+                own.or_else(|| view.kind(id).is_research().then(category).flatten())
+                    .is_some_and(|r| ds.asset(r).is_some())
             })
             .count();
         let after = ids.iter().filter(|&&id| view.icon_resource(id).is_some()).count();
@@ -399,9 +440,12 @@ fn wiki_icon_coverage() {
             }
         }
     }
-    for (template, name) in
-        [("TISpaceBodyTemplate", "Sol"), ("TIOfficerTemplate", "Officer_Admiral"), ("TIRegionTemplate", "Afghanistan"), ("TIShipHullTemplate", "Gunship")]
-    {
+    for (template, name) in [
+        ("TISpaceBodyTemplate", "Sol"),
+        ("TIOfficerTemplate", "Officer_Admiral"),
+        ("TIRegionTemplate", "Afghanistan"),
+        ("TIShipHullTemplate", "Gunship"),
+    ] {
         let id = view.find(template, name).unwrap();
         assert!(view.icon_resource(id).is_some(), "{template}/{name}");
     }
@@ -418,7 +462,10 @@ fn scenario_meta_membership() {
         .flat_map(|r| r["templateNames"].as_array().into_iter().flatten().filter_map(Value::as_str))
         .collect();
     for scenario in ds.scenarios() {
-        let view = ds.view(Scope { scenario: Some(scenario.idx), ..Scope::default() });
+        let view = ds.view(Scope {
+            scenario: Some(scenario.idx),
+            ..Scope::default()
+        });
         for template in [
             "TINationTemplate",
             "TIRegionTemplate",
@@ -446,23 +493,37 @@ fn scenario_meta_membership() {
         .filter_map(|s| ds.overview().record(s.meta)?.get("scenarioPrefix")?.as_str().map(str::to_string))
         .filter(|p| !p.is_empty())
         .collect();
-    let listed: std::collections::HashSet<(&str, &str)> =
-        ds.scenarios().iter().flat_map(|s| s.instantiated.iter().flat_map(|(t, names)| names.iter().map(move |n| (t.as_str(), n.as_str())))).collect();
+    let listed: std::collections::HashSet<(&str, &str)> = ds
+        .scenarios()
+        .iter()
+        .flat_map(|s| s.instantiated.iter().flat_map(|(t, names)| names.iter().map(move |n| (t.as_str(), n.as_str()))))
+        .collect();
     for entity in ds.entities() {
-        let unused_copy = matches!(&*entity.template, "TINationTemplate" | "TIRegionTemplate" | "TIArmyTemplate" | "TIStartTimeTemplate")
-            && !listed.contains(&(&*entity.template, &*entity.data_name))
+        let unused_copy = matches!(
+            &*entity.template,
+            "TINationTemplate" | "TIRegionTemplate" | "TIArmyTemplate" | "TIStartTimeTemplate"
+        ) && !listed.contains(&(&*entity.template, &*entity.data_name))
             && prefixes.iter().any(|p| entity.data_name.starts_with(p.as_str()));
-        let expected = !unused_copy && ds.scenarios().iter().any(|scenario| {
-            let tags = scenario.tags.iter().map(|t| std::sync::Arc::from(t.as_str())).collect::<Vec<_>>();
-            ti_data::scenario::resolve(&entity.variants, &tags, forced.contains(&*entity.data_name)).is_some()
-        });
-        assert_eq!(ds.overview().find(&entity.template, &entity.data_name).is_some(), expected, "{}:{}", entity.template, entity.data_name);
+        let expected = !unused_copy
+            && ds.scenarios().iter().any(|scenario| {
+                let tags = scenario.tags.iter().map(|t| std::sync::Arc::from(t.as_str())).collect::<Vec<_>>();
+                ti_data::scenario::resolve(&entity.variants, &tags, forced.contains(&*entity.data_name)).is_some()
+            });
+        assert_eq!(
+            ds.overview().find(&entity.template, &entity.data_name).is_some(),
+            expected,
+            "{}:{}",
+            entity.template,
+            entity.data_name
+        );
     }
     for scenario in ds.scenarios() {
         let view = ds.view(Scope::scenario(scenario.idx));
-        for (kind, name) in
-            [("TICouncilorTemplate", "randomizedCouncilor1"), ("TISpaceFleetTemplate", "GenericFleetTemplate"), ("TITimeEventTemplate", "GenericTimeEvent")]
-        {
+        for (kind, name) in [
+            ("TICouncilorTemplate", "randomizedCouncilor1"),
+            ("TISpaceFleetTemplate", "GenericFleetTemplate"),
+            ("TITimeEventTemplate", "GenericTimeEvent"),
+        ] {
             // GenericFleetTemplate is synthesized by CreateAtRunTime when absent
             // from the shipped data. Do not invent a dataset record for it.
             if ds.find(kind, name).is_some() {
@@ -478,7 +539,10 @@ fn scenario_meta_membership() {
     let random_security = modern.find("TIOrgTemplate", "RandomSecurity12").unwrap();
     assert!(modern.unlocks(arrival).iter().any(|u| u.entity == random_security));
     for (scenario, included, excluded) in [("ModernScenario", "USAArmy4", "2026_USAArmy4"), ("2026Scenario", "2026_USAArmy4", "USAArmy4")] {
-        let view = ds.view(Scope { scenario: Some(ds.scenario_by_name(scenario).unwrap().idx), ..Scope::default() });
+        let view = ds.view(Scope {
+            scenario: Some(ds.scenario_by_name(scenario).unwrap().idx),
+            ..Scope::default()
+        });
         assert!(view.find("TIArmyTemplate", included).is_some());
         assert!(view.find("TIArmyTemplate", excluded).is_none());
         assert!(view.find("TIArmyTemplate", "2070_USAArmy2").is_none());
@@ -489,7 +553,9 @@ fn scenario_meta_membership() {
         let mut names = std::collections::HashSet::new();
         for id in view.entities("TIArmyTemplate") {
             let r = view.record(id).unwrap();
-            let nation = view.find("TIRegionTemplate", r["homeRegionStr"].as_str().unwrap()).and_then(|r| view.region_nation(r));
+            let nation = view
+                .find("TIRegionTemplate", r["homeRegionStr"].as_str().unwrap())
+                .and_then(|r| view.region_nation(r));
             assert!(names.insert((nation, view.name(&texts, id))), "duplicate army {}", view.name(&texts, id));
         }
     }
@@ -514,7 +580,11 @@ fn space_bodies_match_known_physics() {
     // The game uses only the parent's mass (G·M_Earth), so 27.45 d rather than the real 27.32 d.
     near(system.orbital_period_s(luna).unwrap() / 86_400.0, 27.45, 0.05);
     // tidally locked: rotation = orbit
-    near(system.rotation_period_hours(luna).unwrap(), system.orbital_period_s(luna).unwrap() / 3600.0, 1e-6);
+    near(
+        system.rotation_period_hours(luna).unwrap(),
+        system.orbital_period_s(luna).unwrap() / 3600.0,
+        1e-6,
+    );
     near(body("Ceres").data.surface_gravity_g(), 0.028, 0.002);
     near(system.solar_multiplier(earth, None), 0.25, 0.01);
     // moons use their planet's distance from the Sun
@@ -538,7 +608,11 @@ fn space_bodies_match_known_physics() {
     for r in Resource::ALL {
         assert!(system.global_cap_per_day(r) > 0.0);
     }
-    assert!(Resource::ALL.iter().any(|&r| system.body_rating(luna, r).is_some_and(|x| x > ti_data::space::SiteRating::Possible)));
+    assert!(
+        Resource::ALL
+            .iter()
+            .any(|&r| system.body_rating(luna, r).is_some_and(|x| x > ti_data::space::SiteRating::Possible))
+    );
     for (_, l) in &system.lagrange_points {
         assert!(system.body(&l.related_object).is_some(), "{}", l.data_name);
     }

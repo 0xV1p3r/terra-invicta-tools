@@ -107,11 +107,13 @@ def cmd_extract(args: argparse.Namespace) -> int:
             if idx.is_file():
                 previous.append((b / "assets", json.loads(idx.read_text(encoding="utf-8"))))
         result = assets.extract(resources, bundles, work / "assets",
-                                skip_bundles={s.lower() for s in args.skip_bundle}, previous=previous)
+                                skip_bundles={s.lower() for s in args.skip_bundle}, previous=previous,
+                                image_format=args.image_format)
         asset_index = {"resources": dict(sorted(result.resources.items())),
                        "bundles": result.bundles, "missing": result.missing}
         if assets.INLINE_SPRITE_BUNDLE not in {s.lower() for s in args.skip_bundle}:
-            sprites = assets.extract_inline_sprites(bundles, work / "assets", previous=previous)
+            sprites = assets.extract_inline_sprites(bundles, work / "assets", previous=previous,
+                                                     image_format=args.image_format)
             if sprites is not None:
                 asset_index["sprites"] = sprites
         write_json(work / "assets" / "index.json", asset_index)
@@ -177,6 +179,7 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--build-id", help="override the Steam build id used as output directory")
     e.add_argument("--force", action="store_true", help="re-extract even if this build exists")
     e.add_argument("--allow-parse-errors", action="store_true", help="exit successfully even if template files fail to parse")
+    e.add_argument("--image-format", choices=("png", "webp"), default="png", help="output image format (default: png)")
     e.add_argument("--no-assets", action="store_true", help="skip image extraction")
     e.add_argument("--skip-bundle", action="append", default=[], metavar="NAME",
                    help="do not export images from this bundle (repeatable), e.g. illustrations")

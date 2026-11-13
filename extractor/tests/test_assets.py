@@ -80,17 +80,19 @@ def test_plan_prefix_variants():
     ("Ship_Officer_Admiral_", ["Ship_Officer_Admiral_2", "Ship_Officer_Admiral_1"]),
     ("Single", ["Single_on"]),
 ])
-def test_extract_variant_index_and_hash_reuse(tmp_path, monkeypatch, key, stems):
+@pytest.mark.parametrize("image_format", ["png", "webp"])
+def test_extract_variant_index_and_hash_reuse(tmp_path, monkeypatch, key, stems, image_format):
     bundle_path = tmp_path / "bundle"
     bundle_path.write_bytes(b"synthetic bundle")
     bundle = Bundle("icons_2d", bundle_path, {s.lower(): s for s in stems})
     resource = f"icons_2d/{key}"
     exported = {
-        stem: {"file": f"icons_2d/{stem}.png", "width": i + 10, "height": i + 20}
+        stem: {"file": f"icons_2d/{stem}.{image_format}", "width": i + 10, "height": i + 20}
         for i, stem in enumerate(stems)
     }
 
-    def export_bundle(bundle, wanted, out_dir):
+    def export_bundle(bundle, wanted, out_dir, requested_format):
+        assert requested_format == image_format
         assert set(wanted) == set(stems)
         for meta in exported.values():
             dest = out_dir / meta["file"]
@@ -100,7 +102,7 @@ def test_extract_variant_index_and_hash_reuse(tmp_path, monkeypatch, key, stems)
 
     monkeypatch.setattr(assets, "_export_bundle", export_bundle)
     first_dir = tmp_path / "first"
-    first = assets.extract({resource}, {bundle.name: bundle}, first_dir)
+    first = assets.extract({resource}, {bundle.name: bundle}, first_dir, image_format=image_format)
     sorted_images = sorted(exported.values(), key=lambda image: image["file"])
     expected = dict(sorted_images[0])
     if len(stems) > 1:
@@ -115,7 +117,7 @@ def test_extract_variant_index_and_hash_reuse(tmp_path, monkeypatch, key, stems)
     second_dir = tmp_path / "second"
     second = assets.extract(
         {resource}, {bundle.name: bundle}, second_dir,
-        previous=[(first_dir, {"bundles": first.bundles})],
+        previous=[(first_dir, {"bundles": first.bundles})], image_format=image_format,
     )
     assert second == first
     assert all((second_dir / meta["file"]).read_bytes() == b"synthetic image"
@@ -165,3 +167,58 @@ def test_inline_sprites_reuse_by_hash(tmp_path, monkeypatch):
     assert result["exported"]["metal"]["file"] == "sprites/metal.png"
     assert (out / "sprites" / "metal.png").read_bytes() == b"png"
     assert assets.extract_inline_sprites({}, out) is None
+
+
+@pytest.mark.parametrize("image_format", ["png", "webp"])
+def test_export_formats_and_reuse(tmp_path, monkeypatch, image_format):
+    import io
+    import sys
+    from types import SimpleNamespace
+
+    from PIL import Image
+
+    image = Image.new("RGBA", (3, 2), (12, 34, 56, 255))
+    texture = SimpleNamespace(type=SimpleNamespace(name="Texture2D"), path_id=1,
+                              peek_name=lambda: "Icon_on",
+                              read=lambda: SimpleNamespace(image=image))
+    tree = {"spriteSheet": {"m_PathID": 1},
+            "m_GlyphTable": [{"m_Index": 0, "m_GlyphRect": {
+                "m_X": 0, "m_Y": 0, "m_Width": 2, "m_Height": 1}}],
+            "m_SpriteCharacterTable": [{"m_Name": "metal", "m_GlyphIndex": 0}]}
+    sprite = SimpleNamespace(type=SimpleNamespace(name="MonoBehaviour"), path_id=2,
+                             read_typetree=lambda: tree)
+    monkeypatch.setitem(sys.modules, "UnityPy", SimpleNamespace(
+        load=lambda path: SimpleNamespace(objects=[texture, sprite])))
+    bundle_file = tmp_path / "bundle"
+    bundle_file.write_bytes(b"bundle")
+    bundle = Bundle("ui", bundle_file, {"icon_on": "Icon_on"})
+    resource = "ui/Icon_"
+
+    # First export the opposite format; it must not be reused.
+    previous_dir = tmp_path / "previous"
+    other = "webp" if image_format == "png" else "png"
+    prev = assets.extract({resource}, {"ui": bundle}, previous_dir, image_format=other)
+    prev_sprites = assets.extract_inline_sprites({"ui": bundle}, previous_dir, image_format=other)
+    previous = [(previous_dir, {"bundles": prev.bundles, "sprites": prev_sprites})]
+    out = tmp_path / "out"
+    result = assets.extract({resource}, {"ui": bundle}, out, previous=previous, image_format=image_format)
+    sprites = assets.extract_inline_sprites({"ui": bundle}, out, previous=previous, image_format=image_format)
+    assert result.resources[resource]["file"] == f"ui/Icon_on.{image_format}"
+    for meta in [result.resources[resource], sprites["exported"]["metal"]]:
+        path = out / meta["file"]
+        assert path.suffix == f".{image_format}"
+        with Image.open(path) as saved:
+            assert saved.format == image_format.upper()
+            assert saved.convert("RGBA").tobytes() == image.crop((0, 0, saved.width, saved.height)).tobytes()
+        if image_format == "png":
+            expected = io.BytesIO()
+            image.crop((0, 0, meta["width"], meta["height"])).save(expected, format="PNG", optimize=False)
+            assert path.read_bytes() == expected.getvalue()
+    monkeypatch.setattr(assets, "_export_bundle", lambda *a: pytest.fail("should reuse"))
+    monkeypatch.setattr(assets, "_export_inline_sprites", lambda *a: pytest.fail("should reuse"))
+    previous = [(out, {"bundles": result.bundles, "sprites": sprites})]
+    reused = tmp_path / "reused"
+    assert assets.extract({resource}, {"ui": bundle}, reused, previous=previous,
+                          image_format=image_format) == result
+    assert assets.extract_inline_sprites({"ui": bundle}, reused, previous=previous,
+                                         image_format=image_format) == sprites

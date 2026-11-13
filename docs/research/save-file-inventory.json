@@ -1,0 +1,1248 @@
+{
+  "auditFormatVersion": 1,
+  "saves": [
+    {
+      "file": "Autosave.gz",
+      "compressedBytes": 2549956,
+      "decompressedBytes": 75786823,
+      "decompressedSha256": "e337141681805077e9102d22d8f635c10cff7b4595f84cfef102c817b678c49d",
+      "utf8Bom": true,
+      "rootKeys": [
+        "currentID",
+        "gamestates"
+      ],
+      "typeBuckets": 69,
+      "entityRows": 11935,
+      "emptyObjectBuckets": [
+        "PavonisInteractive.TerraInvicta.FactionGoal_BuildMiningBase",
+        "PavonisInteractive.TerraInvicta.FactionGoal_FoundMaxStation",
+        "PavonisInteractive.TerraInvicta.FactionGoal_RepairFleet",
+        "PavonisInteractive.TerraInvicta.FactionGoal_BuildRefuellingStation",
+        "PavonisInteractive.TerraInvicta.TISpaceCombatState",
+        "PavonisInteractive.TerraInvicta.TIAdHocOrbitState"
+      ],
+      "nonfiniteConstants": {
+        "-Infinity": 3,
+        "Infinity": 3
+      },
+      "serializerKeys": {
+        "$type": 26967,
+        "$ref": 1508,
+        "$id": 1078
+      },
+      "entityIdsUniqueAndMatchKeys": true,
+      "serializerReferencesResolve": true,
+      "campaignStartVersion": "1.0.53b",
+      "latestSaveVersion": "1.0.53b",
+      "realWorldCampaignStart": {
+        "year": 2026,
+        "month": 10,
+        "day": 9,
+        "hour": 18,
+        "minute": 25,
+        "second": 45,
+        "millisecond": 802
+      },
+      "scenarioMetaTemplateName": "2026Scenario",
+      "startTimeTemplateName": "2026Start",
+      "currentDateTime": {
+        "year": 2034,
+        "month": 1,
+        "day": 16,
+        "hour": 12,
+        "minute": 0,
+        "second": 0,
+        "millisecond": 0
+      },
+      "humanPlayers": 1,
+      "humanFactionId": 4962,
+      "humanFactionTemplateName": "ResistCouncil",
+      "finishedTechCount": 58,
+      "finishedProjectEntryCount": 74,
+      "finishedProjectUniqueCount": 74,
+      "availableProjectCount": 113,
+      "activeProjectTriggerCount": 0,
+      "missedProjectCount": 20,
+      "researchSpeedMultiplier": 1.0,
+      "globalSlots": [
+        {
+          "slot": 0,
+          "techTemplateName": "NuclearFusioninSpace",
+          "accumulatedResearch": 28349.14
+        },
+        {
+          "slot": 1,
+          "techTemplateName": "IndustrializationofSpace",
+          "accumulatedResearch": 10384.84
+        },
+        {
+          "slot": 2,
+          "techTemplateName": "QuantumEncryption",
+          "accumulatedResearch": 279.4355
+        }
+      ],
+      "projectProgress": [
+        {
+          "projectTemplateName": "Project_ManagementResearch",
+          "accumulatedResearch": 1293.893,
+          "slot": 6,
+          "completed": false,
+          "paused": true,
+          "weight": null
+        },
+        {
+          "projectTemplateName": "Project_NationalLabs",
+          "accumulatedResearch": 9573.105,
+          "slot": 4,
+          "completed": false,
+          "paused": false,
+          "weight": 2
+        },
+        {
+          "projectTemplateName": "Project_XenoscienceResearchCenter",
+          "accumulatedResearch": 1171.543,
+          "slot": 7,
+          "completed": false,
+          "paused": true,
+          "weight": null
+        },
+        {
+          "projectTemplateName": "Project_ExecutiveProtection",
+          "accumulatedResearch": 2793.132,
+          "slot": 5,
+          "completed": false,
+          "paused": false,
+          "weight": 3
+        },
+        {
+          "projectTemplateName": "Project_MaterialsResearchCenter",
+          "accumulatedResearch": 117.0575,
+          "slot": 3,
+          "completed": false,
+          "paused": false,
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "file": "Autosave2.gz",
+      "compressedBytes": 2525838,
+      "decompressedBytes": 75365521,
+      "decompressedSha256": "b507dcfe13c31bf6ade6b0c9031c37cf8cc3e0c99347e514d3f8713fad9598fe",
+      "utf8Bom": true,
+      "rootKeys": [
+        "currentID",
+        "gamestates"
+      ],
+      "typeBuckets": 69,
+      "entityRows": 11880,
+      "emptyObjectBuckets": [
+        "PavonisInteractive.TerraInvicta.FactionGoal_BuildMiningBase",
+        "PavonisInteractive.TerraInvicta.FactionGoal_FoundMaxStation",
+        "PavonisInteractive.TerraInvicta.FactionGoal_RepairFleet",
+        "PavonisInteractive.TerraInvicta.FactionGoal_BuildRefuellingStation",
+        "PavonisInteractive.TerraInvicta.TISpaceCombatState",
+        "PavonisInteractive.TerraInvicta.TIAdHocOrbitState"
+      ],
+      "nonfiniteConstants": {
+        "-Infinity": 2,
+        "Infinity": 3
+      },
+      "serializerKeys": {
+        "$type": 26677,
+        "$ref": 1465,
+        "$id": 1045
+      },
+      "entityIdsUniqueAndMatchKeys": true,
+      "serializerReferencesResolve": true,
+      "campaignStartVersion": "1.0.53b",
+      "latestSaveVersion": "1.0.53b",
+      "realWorldCampaignStart": {
+        "year": 2026,
+        "month": 10,
+        "day": 9,
+        "hour": 18,
+        "minute": 25,
+        "second": 45,
+        "millisecond": 802
+      },
+      "scenarioMetaTemplateName": "2026Scenario",
+      "startTimeTemplateName": "2026Start",
+      "currentDateTime": {
+        "year": 2034,
+        "month": 1,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 0,
+        "millisecond": 0
+      },
+      "humanPlayers": 1,
+      "humanFactionId": 4962,
+      "humanFactionTemplateName": "ResistCouncil",
+      "finishedTechCount": 57,
+      "finishedProjectEntryCount": 73,
+      "finishedProjectUniqueCount": 73,
+      "availableProjectCount": 114,
+      "activeProjectTriggerCount": 0,
+      "missedProjectCount": 19,
+      "researchSpeedMultiplier": 1.0,
+      "globalSlots": [
+        {
+          "slot": 0,
+          "techTemplateName": "NuclearFusioninSpace",
+          "accumulatedResearch": 27878.44
+        },
+        {
+          "slot": 1,
+          "techTemplateName": "IndustrializationofSpace",
+          "accumulatedResearch": 9060.457
+        },
+        {
+          "slot": 2,
+          "techTemplateName": "SelfRepairingSoftware",
+          "accumulatedResearch": 9826.301
+        }
+      ],
+      "projectProgress": [
+        {
+          "projectTemplateName": "Project_ManagementResearch",
+          "accumulatedResearch": 1293.893,
+          "slot": 6,
+          "completed": false,
+          "paused": true,
+          "weight": null
+        },
+        {
+          "projectTemplateName": "Project_NationalLabs",
+          "accumulatedResearch": 9091.53,
+          "slot": 4,
+          "completed": false,
+          "paused": false,
+          "weight": 2
+        },
+        {
+          "projectTemplateName": "Project_IonBatteries",
+          "accumulatedResearch": 2366.254,
+          "slot": 3,
+          "completed": false,
+          "paused": false,
+          "weight": 1
+        },
+        {
+          "projectTemplateName": "Project_XenoscienceResearchCenter",
+          "accumulatedResearch": 1171.543,
+          "slot": 7,
+          "completed": false,
+          "paused": true,
+          "weight": null
+        },
+        {
+          "projectTemplateName": "Project_ExecutiveProtection",
+          "accumulatedResearch": 1849.954,
+          "slot": 5,
+          "completed": false,
+          "paused": false,
+          "weight": 3
+        }
+      ]
+    },
+    {
+      "file": "Autosave3.gz",
+      "compressedBytes": 2518650,
+      "decompressedBytes": 75097888,
+      "decompressedSha256": "d7b67a4c13e40a76c315f5d317b6bd8490390276d047ad84c91e40cd4577674d",
+      "utf8Bom": true,
+      "rootKeys": [
+        "currentID",
+        "gamestates"
+      ],
+      "typeBuckets": 68,
+      "entityRows": 11854,
+      "emptyObjectBuckets": [
+        "PavonisInteractive.TerraInvicta.FactionGoal_BuildMiningBase",
+        "PavonisInteractive.TerraInvicta.FactionGoal_FoundMaxStation",
+        "PavonisInteractive.TerraInvicta.FactionGoal_RepairFleet",
+        "PavonisInteractive.TerraInvicta.FactionGoal_BuildRefuellingStation",
+        "PavonisInteractive.TerraInvicta.TIMegafaunaArmyState",
+        "PavonisInteractive.TerraInvicta.TISpaceCombatState",
+        "PavonisInteractive.TerraInvicta.TIAdHocOrbitState"
+      ],
+      "nonfiniteConstants": {
+        "-Infinity": 2,
+        "Infinity": 3
+      },
+      "serializerKeys": {
+        "$type": 26555,
+        "$ref": 1450,
+        "$id": 1034
+      },
+      "entityIdsUniqueAndMatchKeys": true,
+      "serializerReferencesResolve": true,
+      "campaignStartVersion": "1.0.53b",
+      "latestSaveVersion": "1.0.53b",
+      "realWorldCampaignStart": {
+        "year": 2026,
+        "month": 10,
+        "day": 9,
+        "hour": 18,
+        "minute": 25,
+        "second": 45,
+        "millisecond": 802
+      },
+      "scenarioMetaTemplateName": "2026Scenario",
+      "startTimeTemplateName": "2026Start",
+      "currentDateTime": {
+        "year": 2033,
+        "month": 12,
+        "day": 16,
+        "hour": 12,
+        "minute": 0,
+        "second": 0,
+        "millisecond": 0
+      },
+      "humanPlayers": 1,
+      "humanFactionId": 4962,
+      "humanFactionTemplateName": "ResistCouncil",
+      "finishedTechCount": 57,
+      "finishedProjectEntryCount": 73,
+      "finishedProjectUniqueCount": 73,
+      "availableProjectCount": 114,
+      "activeProjectTriggerCount": 0,
+      "missedProjectCount": 19,
+      "researchSpeedMultiplier": 1.0,
+      "globalSlots": [
+        {
+          "slot": 0,
+          "techTemplateName": "NuclearFusioninSpace",
+          "accumulatedResearch": 27435.07
+        },
+        {
+          "slot": 1,
+          "techTemplateName": "IndustrializationofSpace",
+          "accumulatedResearch": 7713.923
+        },
+        {
+          "slot": 2,
+          "techTemplateName": "SelfRepairingSoftware",
+          "accumulatedResearch": 9313.071
+        }
+      ],
+      "projectProgress": [
+        {
+          "projectTemplateName": "Project_ManagementResearch",
+          "accumulatedResearch": 1293.893,
+          "slot": 6,
+          "completed": false,
+          "paused": true,
+          "weight": null
+        },
+        {
+          "projectTemplateName": "Project_NationalLabs",
+          "accumulatedResearch": 8641.906,
+          "slot": 4,
+          "completed": false,
+          "paused": false,
+          "weight": 2
+        },
+        {
+          "projectTemplateName": "Project_IonBatteries",
+          "accumulatedResearch": 2118.767,
+          "slot": 3,
+          "completed": false,
+          "paused": false,
+          "weight": 1
+        },
+        {
+          "projectTemplateName": "Project_XenoscienceResearchCenter",
+          "accumulatedResearch": 1171.543,
+          "slot": 7,
+          "completed": false,
+          "paused": true,
+          "weight": null
+        },
+        {
+          "projectTemplateName": "Project_ExecutiveProtection",
+          "accumulatedResearch": 969.3578,
+          "slot": 5,
+          "completed": false,
+          "paused": false,
+          "weight": 3
+        }
+      ]
+    },
+    {
+      "file": "CombatAutosave.gz",
+      "compressedBytes": 2438107,
+      "decompressedBytes": 72892177,
+      "decompressedSha256": "971a430ca8638d53bf5405be832758560027dbc64543a9f82a1c8c9cac2f8372",
+      "utf8Bom": true,
+      "rootKeys": [
+        "currentID",
+        "gamestates"
+      ],
+      "typeBuckets": 67,
+      "entityRows": 11492,
+      "emptyObjectBuckets": [
+        "PavonisInteractive.TerraInvicta.FactionGoal_BuildMiningBase",
+        "PavonisInteractive.TerraInvicta.FactionGoal_FoundMaxStation",
+        "PavonisInteractive.TerraInvicta.FactionGoal_RepairFleet",
+        "PavonisInteractive.TerraInvicta.FactionGoal_BuildRefuellingStation"
+      ],
+      "nonfiniteConstants": {
+        "-Infinity": 3,
+        "Infinity": 4
+      },
+      "serializerKeys": {
+        "$type": 25507,
+        "$ref": 1346,
+        "$id": 983
+      },
+      "entityIdsUniqueAndMatchKeys": true,
+      "serializerReferencesResolve": true,
+      "campaignStartVersion": "1.0.53b",
+      "latestSaveVersion": "1.0.53b",
+      "realWorldCampaignStart": {
+        "year": 2026,
+        "month": 10,
+        "day": 9,
+        "hour": 18,
+        "minute": 25,
+        "second": 45,
+        "millisecond": 802
+      },
+      "scenarioMetaTemplateName": "2026Scenario",
+      "startTimeTemplateName": "2026Start",
+      "currentDateTime": {
+        "year": 2033,
+        "month": 1,
+        "day": 14,
+        "hour": 20,
+        "minute": 54,
+        "second": 51,
+        "millisecond": 542
+      },
+      "humanPlayers": 1,
+      "humanFactionId": 4962,
+      "humanFactionTemplateName": "ResistCouncil",
+      "finishedTechCount": 54,
+      "finishedProjectEntryCount": 65,
+      "finishedProjectUniqueCount": 65,
+      "availableProjectCount": 102,
+      "activeProjectTriggerCount": 1,
+      "missedProjectCount": 17,
+      "researchSpeedMultiplier": 1.0,
+      "globalSlots": [
+        {
+          "slot": 0,
+          "techTemplateName": "NuclearFusioninSpace",
+          "accumulatedResearch": 18232.43
+        },
+        {
+          "slot": 1,
+          "techTemplateName": "VisibleCombatLasers",
+          "accumulatedResearch": 12856.2
+        },
+        {
+          "slot": 2,
+          "techTemplateName": "QuantumComputing",
+          "accumulatedResearch": 12204.2
+        }
+      ],
+      "projectProgress": [
+        {
+          "projectTemplateName": "Project_ManagementResearch",
+          "accumulatedResearch": 1293.893,
+          "slot": 6,
+          "completed": false,
+          "paused": true,
+          "weight": null
+        },
+        {
+          "projectTemplateName": "Project_TheirOrigin",
+          "accumulatedResearch": 1570.955,
+          "slot": 5,
+          "completed": false,
+          "paused": false,
+          "weight": 1
+        },
+        {
+          "projectTemplateName": "Project_TeardropDrive",
+          "accumulatedResearch": 992.2853,
+          "slot": 3,
+          "completed": false,
+          "paused": false,
+          "weight": 1
+        },
+        {
+          "projectTemplateName": "Project_NationalLabs",
+          "accumulatedResearch": 771.9523,
+          "slot": 4,
+          "completed": false,
+          "paused": false,
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "file": "ExitSave.gz",
+      "compressedBytes": 2551544,
+      "decompressedBytes": 75830601,
+      "decompressedSha256": "762bccac66ef5d4accbb2474355025038f10b2585f3e6f4b9cc805c0b1c68e71",
+      "utf8Bom": true,
+      "rootKeys": [
+        "currentID",
+        "gamestates"
+      ],
+      "typeBuckets": 69,
+      "entityRows": 11975,
+      "emptyObjectBuckets": [
+        "PavonisInteractive.TerraInvicta.FactionGoal_BuildMiningBase",
+        "PavonisInteractive.TerraInvicta.FactionGoal_FoundMaxStation",
+        "PavonisInteractive.TerraInvicta.FactionGoal_RepairFleet",
+        "PavonisInteractive.TerraInvicta.FactionGoal_BuildRefuellingStation",
+        "PavonisInteractive.TerraInvicta.TISpaceCombatState",
+        "PavonisInteractive.TerraInvicta.TIAdHocOrbitState"
+      ],
+      "nonfiniteConstants": {
+        "-Infinity": 3,
+        "Infinity": 3
+      },
+      "serializerKeys": {
+        "$type": 27036,
+        "$ref": 1508,
+        "$id": 1078
+      },
+      "entityIdsUniqueAndMatchKeys": true,
+      "serializerReferencesResolve": true,
+      "campaignStartVersion": "1.0.53b",
+      "latestSaveVersion": "1.0.53b",
+      "realWorldCampaignStart": {
+        "year": 2026,
+        "month": 10,
+        "day": 9,
+        "hour": 18,
+        "minute": 25,
+        "second": 45,
+        "millisecond": 802
+      },
+      "scenarioMetaTemplateName": "2026Scenario",
+      "startTimeTemplateName": "2026Start",
+      "currentDateTime": {
+        "year": 2034,
+        "month": 1,
+        "day": 16,
+        "hour": 12,
+        "minute": 0,
+        "second": 0,
+        "millisecond": 0
+      },
+      "humanPlayers": 1,
+      "humanFactionId": 4962,
+      "humanFactionTemplateName": "ResistCouncil",
+      "finishedTechCount": 58,
+      "finishedProjectEntryCount": 74,
+      "finishedProjectUniqueCount": 74,
+      "availableProjectCount": 113,
+      "activeProjectTriggerCount": 0,
+      "missedProjectCount": 20,
+      "researchSpeedMultiplier": 1.0,
+      "globalSlots": [
+        {
+          "slot": 0,
+          "techTemplateName": "NuclearFusioninSpace",
+          "accumulatedResearch": 28349.14
+        },
+        {
+          "slot": 1,
+          "techTemplateName": "IndustrializationofSpace",
+          "accumulatedResearch": 10384.84
+        },
+        {
+          "slot": 2,
+          "techTemplateName": "QuantumEncryption",
+          "accumulatedResearch": 279.4355
+        }
+      ],
+      "projectProgress": [
+        {
+          "projectTemplateName": "Project_ManagementResearch",
+          "accumulatedResearch": 1293.893,
+          "slot": 6,
+          "completed": false,
+          "paused": true,
+          "weight": null
+        },
+        {
+          "projectTemplateName": "Project_NationalLabs",
+          "accumulatedResearch": 9573.105,
+          "slot": 4,
+          "completed": false,
+          "paused": false,
+          "weight": 2
+        },
+        {
+          "projectTemplateName": "Project_XenoscienceResearchCenter",
+          "accumulatedResearch": 1171.543,
+          "slot": 7,
+          "completed": false,
+          "paused": true,
+          "weight": null
+        },
+        {
+          "projectTemplateName": "Project_ExecutiveProtection",
+          "accumulatedResearch": 2793.132,
+          "slot": 5,
+          "completed": false,
+          "paused": false,
+          "weight": 3
+        },
+        {
+          "projectTemplateName": "Project_MaterialsResearchCenter",
+          "accumulatedResearch": 117.0575,
+          "slot": 3,
+          "completed": false,
+          "paused": false,
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "file": "HF_CHINA_1.gz",
+      "compressedBytes": 1033716,
+      "decompressedBytes": 24250585,
+      "decompressedSha256": "a5e16c42be01e8edc24c747859c8b2d5c4bc07c0bf329a437d3fb96f28b26e93",
+      "utf8Bom": false,
+      "rootKeys": [
+        "currentID",
+        "gamestates"
+      ],
+      "typeBuckets": 43,
+      "entityRows": 5833,
+      "emptyObjectBuckets": [],
+      "nonfiniteConstants": {},
+      "serializerKeys": {
+        "$type": 9654,
+        "$ref": 645,
+        "$id": 636
+      },
+      "entityIdsUniqueAndMatchKeys": true,
+      "serializerReferencesResolve": true,
+      "campaignStartVersion": "0.4.90",
+      "latestSaveVersion": "0.4.90",
+      "realWorldCampaignStart": {
+        "year": 2025,
+        "month": 8,
+        "day": 31,
+        "hour": 14,
+        "minute": 37,
+        "second": 37,
+        "millisecond": 919
+      },
+      "scenarioMetaTemplateName": null,
+      "startTimeTemplateName": "ModernDayStart",
+      "currentDateTime": {
+        "year": 2022,
+        "month": 10,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 0,
+        "millisecond": 0
+      },
+      "humanPlayers": 1,
+      "humanFactionId": 4090,
+      "humanFactionTemplateName": "DestroyCouncil",
+      "finishedTechCount": 0,
+      "finishedProjectEntryCount": 8,
+      "finishedProjectUniqueCount": 8,
+      "availableProjectCount": 4,
+      "activeProjectTriggerCount": 4,
+      "missedProjectCount": 0,
+      "researchSpeedMultiplier": 2.0,
+      "globalSlots": [
+        {
+          "slot": 0,
+          "techTemplateName": "WeAreNotAlone",
+          "accumulatedResearch": 0.0
+        },
+        {
+          "slot": 1,
+          "techTemplateName": "Skywatch",
+          "accumulatedResearch": 0.0
+        },
+        {
+          "slot": 2,
+          "techTemplateName": "MissionToSpace",
+          "accumulatedResearch": 0.0
+        }
+      ],
+      "projectProgress": [
+        {
+          "projectTemplateName": "Project_AudienceResearch",
+          "accumulatedResearch": 0.0,
+          "slot": 3,
+          "completed": false,
+          "paused": false,
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "file": "RE_ASIA_EU_1-1.gz",
+      "compressedBytes": 1924060,
+      "decompressedBytes": 55772166,
+      "decompressedSha256": "c8ab10a1dcb929579b7ab4d0048867918c560c7ecee566db8aa3ff98d15e3a7b",
+      "utf8Bom": true,
+      "rootKeys": [
+        "currentID",
+        "gamestates"
+      ],
+      "typeBuckets": 63,
+      "entityRows": 8799,
+      "emptyObjectBuckets": [
+        "PavonisInteractive.TerraInvicta.FactionGoal_AssembleFleet",
+        "PavonisInteractive.TerraInvicta.FactionGoal_FoundMaxStation",
+        "PavonisInteractive.TerraInvicta.FactionGoal_RepairFleet",
+        "PavonisInteractive.TerraInvicta.FactionGoal_BuildRefuellingStation",
+        "PavonisInteractive.TerraInvicta.FactionGoal_ResupplyFleet",
+        "PavonisInteractive.TerraInvicta.FactionGoal_JoinFleet"
+      ],
+      "nonfiniteConstants": {},
+      "serializerKeys": {
+        "$type": 15929,
+        "$ref": 659,
+        "$id": 635
+      },
+      "entityIdsUniqueAndMatchKeys": true,
+      "serializerReferencesResolve": true,
+      "campaignStartVersion": "1.0.53b",
+      "latestSaveVersion": "1.0.53b",
+      "realWorldCampaignStart": {
+        "year": 2026,
+        "month": 10,
+        "day": 9,
+        "hour": 18,
+        "minute": 25,
+        "second": 45,
+        "millisecond": 802
+      },
+      "scenarioMetaTemplateName": "2026Scenario",
+      "startTimeTemplateName": "2026Start",
+      "currentDateTime": {
+        "year": 2028,
+        "month": 11,
+        "day": 8,
+        "hour": 20,
+        "minute": 4,
+        "second": 21,
+        "millisecond": 556
+      },
+      "humanPlayers": 1,
+      "humanFactionId": 4962,
+      "humanFactionTemplateName": "ResistCouncil",
+      "finishedTechCount": 27,
+      "finishedProjectEntryCount": 29,
+      "finishedProjectUniqueCount": 29,
+      "availableProjectCount": 39,
+      "activeProjectTriggerCount": 1,
+      "missedProjectCount": 2,
+      "researchSpeedMultiplier": 1.0,
+      "globalSlots": [
+        {
+          "slot": 0,
+          "techTemplateName": "MoltenCoreFissionSystems",
+          "accumulatedResearch": 6010.525
+        },
+        {
+          "slot": 1,
+          "techTemplateName": "AdvancedNeuralNetworks",
+          "accumulatedResearch": 1976.506
+        },
+        {
+          "slot": 2,
+          "techTemplateName": "ArrivalInternationalRelations",
+          "accumulatedResearch": 1191.716
+        }
+      ],
+      "projectProgress": [
+        {
+          "projectTemplateName": "Project_AudienceResearch",
+          "accumulatedResearch": 0.0,
+          "slot": 6,
+          "completed": false,
+          "paused": true,
+          "weight": null
+        },
+        {
+          "projectTemplateName": "Project_InstitutionalOutreach",
+          "accumulatedResearch": 183.4956,
+          "slot": 7,
+          "completed": false,
+          "paused": true,
+          "weight": null
+        },
+        {
+          "projectTemplateName": "Project_ResistVictory",
+          "accumulatedResearch": 1381.08,
+          "slot": 3,
+          "completed": false,
+          "paused": false,
+          "weight": 2
+        },
+        {
+          "projectTemplateName": "Project_SolarMirror",
+          "accumulatedResearch": 91.37809,
+          "slot": 4,
+          "completed": false,
+          "paused": false,
+          "weight": 3
+        }
+      ]
+    },
+    {
+      "file": "RE_ASIA_EU_1-2.gz",
+      "compressedBytes": 2018389,
+      "decompressedBytes": 59248690,
+      "decompressedSha256": "8438a3352ff0acb8f1db87260dede57b57ae05a155b81aa99f99f39945744f1e",
+      "utf8Bom": true,
+      "rootKeys": [
+        "currentID",
+        "gamestates"
+      ],
+      "typeBuckets": 63,
+      "entityRows": 9284,
+      "emptyObjectBuckets": [
+        "PavonisInteractive.TerraInvicta.FactionGoal_BuildMiningBase",
+        "PavonisInteractive.TerraInvicta.FactionGoal_FoundMaxStation",
+        "PavonisInteractive.TerraInvicta.FactionGoal_RepairFleet",
+        "PavonisInteractive.TerraInvicta.FactionGoal_BuildRefuellingStation",
+        "PavonisInteractive.TerraInvicta.FactionGoal_ResupplyFleet",
+        "PavonisInteractive.TerraInvicta.FactionGoal_JoinFleet"
+      ],
+      "nonfiniteConstants": {
+        "Infinity": 2
+      },
+      "serializerKeys": {
+        "$type": 17062,
+        "$ref": 646,
+        "$id": 599
+      },
+      "entityIdsUniqueAndMatchKeys": true,
+      "serializerReferencesResolve": true,
+      "campaignStartVersion": "1.0.53b",
+      "latestSaveVersion": "1.0.53b",
+      "realWorldCampaignStart": {
+        "year": 2026,
+        "month": 10,
+        "day": 9,
+        "hour": 18,
+        "minute": 25,
+        "second": 45,
+        "millisecond": 802
+      },
+      "scenarioMetaTemplateName": "2026Scenario",
+      "startTimeTemplateName": "2026Start",
+      "currentDateTime": {
+        "year": 2029,
+        "month": 9,
+        "day": 1,
+        "hour": 0,
+        "minute": 0,
+        "second": 0,
+        "millisecond": 0
+      },
+      "humanPlayers": 1,
+      "humanFactionId": 4962,
+      "humanFactionTemplateName": "ResistCouncil",
+      "finishedTechCount": 33,
+      "finishedProjectEntryCount": 33,
+      "finishedProjectUniqueCount": 33,
+      "availableProjectCount": 49,
+      "activeProjectTriggerCount": 4,
+      "missedProjectCount": 2,
+      "researchSpeedMultiplier": 1.0,
+      "globalSlots": [
+        {
+          "slot": 0,
+          "techTemplateName": "GasCoreFissionSystems",
+          "accumulatedResearch": 7756.216
+        },
+        {
+          "slot": 1,
+          "techTemplateName": "DirectedEnergyWarfareDoctrine",
+          "accumulatedResearch": 1443.866
+        },
+        {
+          "slot": 2,
+          "techTemplateName": "ArrivalSociology",
+          "accumulatedResearch": 2390.106
+        }
+      ],
+      "projectProgress": [
+        {
+          "projectTemplateName": "Project_AudienceResearch",
+          "accumulatedResearch": 0.0,
+          "slot": 6,
+          "completed": false,
+          "paused": true,
+          "weight": null
+        },
+        {
+          "projectTemplateName": "Project_HydraBiology",
+          "accumulatedResearch": 1148.683,
+          "slot": 7,
+          "completed": false,
+          "paused": true,
+          "weight": null
+        },
+        {
+          "projectTemplateName": "Project_40mmAutocannon",
+          "accumulatedResearch": 131.7307,
+          "slot": 4,
+          "completed": false,
+          "paused": false,
+          "weight": 2
+        },
+        {
+          "projectTemplateName": "Project_NuclearFreighters",
+          "accumulatedResearch": 33.30171,
+          "slot": 3,
+          "completed": false,
+          "paused": false,
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "file": "RE_ASIA_EU_1-3.gz",
+      "compressedBytes": 2551544,
+      "decompressedBytes": 75830601,
+      "decompressedSha256": "762bccac66ef5d4accbb2474355025038f10b2585f3e6f4b9cc805c0b1c68e71",
+      "utf8Bom": true,
+      "rootKeys": [
+        "currentID",
+        "gamestates"
+      ],
+      "typeBuckets": 69,
+      "entityRows": 11975,
+      "emptyObjectBuckets": [
+        "PavonisInteractive.TerraInvicta.FactionGoal_BuildMiningBase",
+        "PavonisInteractive.TerraInvicta.FactionGoal_FoundMaxStation",
+        "PavonisInteractive.TerraInvicta.FactionGoal_RepairFleet",
+        "PavonisInteractive.TerraInvicta.FactionGoal_BuildRefuellingStation",
+        "PavonisInteractive.TerraInvicta.TISpaceCombatState",
+        "PavonisInteractive.TerraInvicta.TIAdHocOrbitState"
+      ],
+      "nonfiniteConstants": {
+        "-Infinity": 3,
+        "Infinity": 3
+      },
+      "serializerKeys": {
+        "$type": 27036,
+        "$ref": 1508,
+        "$id": 1078
+      },
+      "entityIdsUniqueAndMatchKeys": true,
+      "serializerReferencesResolve": true,
+      "campaignStartVersion": "1.0.53b",
+      "latestSaveVersion": "1.0.53b",
+      "realWorldCampaignStart": {
+        "year": 2026,
+        "month": 10,
+        "day": 9,
+        "hour": 18,
+        "minute": 25,
+        "second": 45,
+        "millisecond": 802
+      },
+      "scenarioMetaTemplateName": "2026Scenario",
+      "startTimeTemplateName": "2026Start",
+      "currentDateTime": {
+        "year": 2034,
+        "month": 1,
+        "day": 16,
+        "hour": 12,
+        "minute": 0,
+        "second": 0,
+        "millisecond": 0
+      },
+      "humanPlayers": 1,
+      "humanFactionId": 4962,
+      "humanFactionTemplateName": "ResistCouncil",
+      "finishedTechCount": 58,
+      "finishedProjectEntryCount": 74,
+      "finishedProjectUniqueCount": 74,
+      "availableProjectCount": 113,
+      "activeProjectTriggerCount": 0,
+      "missedProjectCount": 20,
+      "researchSpeedMultiplier": 1.0,
+      "globalSlots": [
+        {
+          "slot": 0,
+          "techTemplateName": "NuclearFusioninSpace",
+          "accumulatedResearch": 28349.14
+        },
+        {
+          "slot": 1,
+          "techTemplateName": "IndustrializationofSpace",
+          "accumulatedResearch": 10384.84
+        },
+        {
+          "slot": 2,
+          "techTemplateName": "QuantumEncryption",
+          "accumulatedResearch": 279.4355
+        }
+      ],
+      "projectProgress": [
+        {
+          "projectTemplateName": "Project_ManagementResearch",
+          "accumulatedResearch": 1293.893,
+          "slot": 6,
+          "completed": false,
+          "paused": true,
+          "weight": null
+        },
+        {
+          "projectTemplateName": "Project_NationalLabs",
+          "accumulatedResearch": 9573.105,
+          "slot": 4,
+          "completed": false,
+          "paused": false,
+          "weight": 2
+        },
+        {
+          "projectTemplateName": "Project_XenoscienceResearchCenter",
+          "accumulatedResearch": 1171.543,
+          "slot": 7,
+          "completed": false,
+          "paused": true,
+          "weight": null
+        },
+        {
+          "projectTemplateName": "Project_ExecutiveProtection",
+          "accumulatedResearch": 2793.132,
+          "slot": 5,
+          "completed": false,
+          "paused": false,
+          "weight": 3
+        },
+        {
+          "projectTemplateName": "Project_MaterialsResearchCenter",
+          "accumulatedResearch": 117.0575,
+          "slot": 3,
+          "completed": false,
+          "paused": false,
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "file": "RE_ASIA_EU_1.gz",
+      "compressedBytes": 1512561,
+      "decompressedBytes": 36494486,
+      "decompressedSha256": "fe72ae9396934e4080ad040a4561f0626e74ff4c37488f529781ff75dd0d394c",
+      "utf8Bom": true,
+      "rootKeys": [
+        "currentID",
+        "gamestates"
+      ],
+      "typeBuckets": 53,
+      "entityRows": 7307,
+      "emptyObjectBuckets": [],
+      "nonfiniteConstants": {
+        "Infinity": 4
+      },
+      "serializerKeys": {
+        "$type": 12395,
+        "$ref": 728,
+        "$id": 716
+      },
+      "entityIdsUniqueAndMatchKeys": true,
+      "serializerReferencesResolve": true,
+      "campaignStartVersion": "1.0.53b",
+      "latestSaveVersion": "1.0.53b",
+      "realWorldCampaignStart": {
+        "year": 2026,
+        "month": 10,
+        "day": 9,
+        "hour": 18,
+        "minute": 25,
+        "second": 45,
+        "millisecond": 802
+      },
+      "scenarioMetaTemplateName": "2026Scenario",
+      "startTimeTemplateName": "2026Start",
+      "currentDateTime": {
+        "year": 2026,
+        "month": 6,
+        "day": 16,
+        "hour": 12,
+        "minute": 0,
+        "second": 0,
+        "millisecond": 0
+      },
+      "humanPlayers": 1,
+      "humanFactionId": 4962,
+      "humanFactionTemplateName": "ResistCouncil",
+      "finishedTechCount": 5,
+      "finishedProjectEntryCount": 11,
+      "finishedProjectUniqueCount": 11,
+      "availableProjectCount": 10,
+      "activeProjectTriggerCount": 3,
+      "missedProjectCount": 0,
+      "researchSpeedMultiplier": 1.0,
+      "globalSlots": [
+        {
+          "slot": 0,
+          "techTemplateName": "AdvancedChemicalRocketry",
+          "accumulatedResearch": 949.1269
+        },
+        {
+          "slot": 1,
+          "techTemplateName": "NuclearFissioninSpace",
+          "accumulatedResearch": 225.161
+        },
+        {
+          "slot": 2,
+          "techTemplateName": "OrbitalShipbuilding",
+          "accumulatedResearch": 198.7314
+        }
+      ],
+      "projectProgress": [
+        {
+          "projectTemplateName": "Project_AudienceResearch",
+          "accumulatedResearch": 0.0,
+          "slot": 6,
+          "completed": false,
+          "paused": true,
+          "weight": null
+        },
+        {
+          "projectTemplateName": "Project_ClandestineCells",
+          "accumulatedResearch": 349.0004,
+          "slot": 3,
+          "completed": false,
+          "paused": false,
+          "weight": 3
+        },
+        {
+          "projectTemplateName": "Project_ResistanceTalentDevelopment",
+          "accumulatedResearch": 61.90623,
+          "slot": 4,
+          "completed": false,
+          "paused": false,
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "file": "RE_US_1-1.gz",
+      "compressedBytes": 2607187,
+      "decompressedBytes": 78020738,
+      "decompressedSha256": "d3aa22ab3245bbaacca12c0747852c8c9b59cf853e1b2c683c6a9f9ca7e79197",
+      "utf8Bom": true,
+      "rootKeys": [
+        "currentID",
+        "gamestates"
+      ],
+      "typeBuckets": 71,
+      "entityRows": 12423,
+      "emptyObjectBuckets": [
+        "PavonisInteractive.TerraInvicta.FactionGoal_BuildMiningBase",
+        "PavonisInteractive.TerraInvicta.FactionGoal_FoundMaxStation",
+        "PavonisInteractive.TerraInvicta.FactionGoal_RepairFleet",
+        "PavonisInteractive.TerraInvicta.FactionGoal_BuildRefuellingStation",
+        "PavonisInteractive.TerraInvicta.TISpaceCombatState",
+        "PavonisInteractive.TerraInvicta.TISpaceCombatProjectileState",
+        "PavonisInteractive.TerraInvicta.FactionGoal_FoundSurveillanceStation"
+      ],
+      "nonfiniteConstants": {
+        "-Infinity": 5,
+        "Infinity": 4
+      },
+      "serializerKeys": {
+        "$type": 27172,
+        "$ref": 1355,
+        "$id": 1018
+      },
+      "entityIdsUniqueAndMatchKeys": true,
+      "serializerReferencesResolve": true,
+      "campaignStartVersion": "1.0.51",
+      "latestSaveVersion": "1.0.53a",
+      "realWorldCampaignStart": {
+        "year": 2026,
+        "month": 8,
+        "day": 2,
+        "hour": 17,
+        "minute": 25,
+        "second": 5,
+        "millisecond": 309
+      },
+      "scenarioMetaTemplateName": "2026Scenario",
+      "startTimeTemplateName": "2026Start",
+      "currentDateTime": {
+        "year": 2031,
+        "month": 4,
+        "day": 16,
+        "hour": 12,
+        "minute": 0,
+        "second": 0,
+        "millisecond": 0
+      },
+      "humanPlayers": 1,
+      "humanFactionId": 4863,
+      "humanFactionTemplateName": "ResistCouncil",
+      "finishedTechCount": 77,
+      "finishedProjectEntryCount": 103,
+      "finishedProjectUniqueCount": 98,
+      "availableProjectCount": 131,
+      "activeProjectTriggerCount": 7,
+      "missedProjectCount": 17,
+      "researchSpeedMultiplier": 2.0,
+      "globalSlots": [
+        {
+          "slot": 0,
+          "techTemplateName": "Supercapacitors",
+          "accumulatedResearch": 585.9431
+        },
+        {
+          "slot": 1,
+          "techTemplateName": "AdvancedHydrogenContainment",
+          "accumulatedResearch": 449.3425
+        },
+        {
+          "slot": 2,
+          "techTemplateName": "SpaceNavies",
+          "accumulatedResearch": 1821.304
+        }
+      ],
+      "projectProgress": [
+        {
+          "projectTemplateName": "Project_UnitedNorthAmerica",
+          "accumulatedResearch": 5084.628,
+          "slot": 3,
+          "completed": false,
+          "paused": false,
+          "weight": 1
+        },
+        {
+          "projectTemplateName": "Project_PatrolVessels",
+          "accumulatedResearch": 652.0983,
+          "slot": 5,
+          "completed": false,
+          "paused": false,
+          "weight": 1
+        },
+        {
+          "projectTemplateName": "Project_TargetingComputer1",
+          "accumulatedResearch": 215.7164,
+          "slot": 4,
+          "completed": false,
+          "paused": false,
+          "weight": 1
+        }
+      ]
+    }
+  ]
+}

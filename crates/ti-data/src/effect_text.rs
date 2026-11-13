@@ -43,10 +43,7 @@ pub struct EffectContext {
 /// context's population multiplier and clamp to ±2·abs(value).
 pub fn effect_args(effect: &Value, ctx: &EffectContext, env: &dyn EffectEnv) -> Vec<String> {
     let value = effect.get("value").and_then(Value::as_f64).unwrap_or(0.0);
-    let duration = effect
-        .get("duration_months")
-        .and_then(Value::as_f64)
-        .unwrap_or(0.0);
+    let duration = effect.get("duration_months").and_then(Value::as_f64).unwrap_or(0.0);
     let str_value = match effect.get("strValue") {
         Some(Value::String(s)) => s.clone(),
         Some(Value::Number(n)) => n.to_string(),
@@ -54,16 +51,8 @@ pub fn effect_args(effect: &Value, ctx: &EffectContext, env: &dyn EffectEnv) -> 
     };
     let state1 = ctx.state1_name.as_deref();
     let state2 = ctx.state2_name.as_deref();
-    let faction1 = ctx
-        .state1_faction
-        .as_deref()
-        .or(state1)
-        .unwrap_or("[faction]");
-    let faction2 = ctx
-        .state2_faction
-        .as_deref()
-        .or(state2)
-        .unwrap_or("[faction]");
+    let faction1 = ctx.state1_faction.as_deref().or(state1).unwrap_or("[faction]");
+    let faction2 = ctx.state2_faction.as_deref().or(state2).unwrap_or("[faction]");
     let limit = 2.0 * value.abs();
     let scaled = (value * ctx.pop_scaling.unwrap_or(1.0)).clamp(-limit, limit);
     vec![
@@ -72,33 +61,22 @@ pub fn effect_args(effect: &Value, ctx: &EffectContext, env: &dyn EffectEnv) -> 
         state2.unwrap_or("[state]").to_owned(),
         format_p0(value),
         format_p0(1.0 - value),
-        ctx.state1_nation_with_article
-            .as_deref()
-            .unwrap_or("[nation]")
-            .to_owned(),
-        ctx.state2_nation_with_article
-            .as_deref()
-            .unwrap_or("[nation]")
-            .to_owned(),
+        ctx.state1_nation_with_article.as_deref().unwrap_or("[nation]").to_owned(),
+        ctx.state2_nation_with_article.as_deref().unwrap_or("[nation]").to_owned(),
         format_big_or_small_number(duration, env),
         format_p0(value - 1.0),
         state1.unwrap_or("[nation]").to_owned(),
         state1.unwrap_or("[region]").to_owned(),
         state2.unwrap_or("[nation]").to_owned(),
         state2.unwrap_or("[region]").to_owned(),
-        env.template_display_name(&str_value)
-            .unwrap_or_else(|| str_value.clone()),
+        env.template_display_name(&str_value).unwrap_or_else(|| str_value.clone()),
         faction1.to_owned(),
         faction2.to_owned(),
         env.trait_names_in_grouping(value as i64).join(", "),
-        ctx.state1_councilor_trait
-            .as_deref()
-            .unwrap_or("[trait]")
-            .to_owned(),
+        ctx.state1_councilor_trait.as_deref().unwrap_or("[trait]").to_owned(),
         format_p0(1.0 / value - 1.0),
         format_big_or_small_number(-value, env),
-        env.councilor_attribute_label(&str_value)
-            .unwrap_or(str_value),
+        env.councilor_attribute_label(&str_value).unwrap_or(str_value),
         capitalize_visible(faction1),
         capitalize_visible(faction2),
         format_small_number(scaled),
@@ -224,10 +202,7 @@ fn parse_decimal(bytes: &[u8], pos: &mut usize) -> Result<usize, ()> {
         if n >= 1_000_000 {
             return Err(());
         }
-        n = n
-            .checked_mul(10)
-            .and_then(|n| n.checked_add(usize::from(c - b'0')))
-            .ok_or(())?;
+        n = n.checked_mul(10).and_then(|n| n.checked_add(usize::from(c - b'0'))).ok_or(())?;
         *pos += 1;
     }
     if *pos == start { Err(()) } else { Ok(n) }
@@ -238,12 +213,7 @@ fn parse_decimal(bytes: &[u8], pos: &mut usize) -> Result<usize, ()> {
 /// # Errors
 /// Returns `Err(())` under the same conditions as [`format_dotnet`].
 #[allow(clippy::result_unit_err)] // Required public signature.
-pub fn describe_effect(
-    template: &str,
-    effect: &Value,
-    ctx: &EffectContext,
-    env: &dyn EffectEnv,
-) -> Result<String, ()> {
+pub fn describe_effect(template: &str, effect: &Value, ctx: &EffectContext, env: &dyn EffectEnv) -> Result<String, ()> {
     format_dotnet(template, &effect_args(effect, ctx, env))
 }
 
@@ -269,12 +239,7 @@ pub enum EffectSegment {
 /// # Errors
 /// Returns `Err(())` under the same conditions as [`format_dotnet`].
 #[allow(clippy::result_unit_err)] // Same contract as describe_effect.
-pub fn describe_effect_segments(
-    template: &str,
-    effect: &Value,
-    ctx: &EffectContext,
-    env: &dyn EffectEnv,
-) -> Result<Vec<EffectSegment>, ()> {
+pub fn describe_effect_segments(template: &str, effect: &Value, ctx: &EffectContext, env: &dyn EffectEnv) -> Result<Vec<EffectSegment>, ()> {
     let mut args = effect_args(effect, ctx, env);
     for &slot in &NUMERIC_SLOTS {
         args[slot] = format!("{VALUE_START}{}{VALUE_END}", args[slot]);
@@ -330,11 +295,7 @@ pub fn format_small_number(v: f64) -> String {
         return special_number(v).to_owned();
     }
     let multiplied = v * 10_000_000.0;
-    let v = if multiplied.is_finite() {
-        multiplied.trunc() / 10_000_000.0
-    } else {
-        v
-    };
+    let v = if multiplied.is_finite() { multiplied.trunc() / 10_000_000.0 } else { v };
     let abs = v.abs();
     let digits = if v.fract() == 0.0 {
         0
@@ -461,10 +422,7 @@ fn rounded_fixed(v: f64, places: usize, decimal_shift: usize) -> String {
     if v.is_sign_negative() && nonzero {
         out.push('-');
     }
-    let mut first_nonzero = digits[..point]
-        .iter()
-        .position(|&c| c != b'0')
-        .unwrap_or(point - 1);
+    let mut first_nonzero = digits[..point].iter().position(|&c| c != b'0').unwrap_or(point - 1);
     while first_nonzero < digits.len() {
         if places != 0 && first_nonzero == point {
             out.push('.');
@@ -659,25 +617,11 @@ mod tests {
             assert_eq!(format_big_or_small_number(v, &env), expected, "value {v}");
         }
         let mut translated = TestEnv::english();
-        translated.strings.insert(
-            "UI.Global.Thousands".to_owned(),
-            "[{0}] thousand".to_owned(),
-        );
-        assert_eq!(
-            format_big_or_small_number(1_000.0, &translated),
-            "[1.0] thousand"
-        );
-        translated
-            .strings
-            .insert("UI.Global.Thousands".to_owned(), "{word}".to_owned());
-        assert_eq!(
-            format_big_or_small_number(1_000.0, &translated),
-            "UI.Global.Thousands"
-        );
-        assert_eq!(
-            format_big_or_small_number(1_000.0, &TestEnv::default()),
-            "UI.Global.Thousands"
-        );
+        translated.strings.insert("UI.Global.Thousands".to_owned(), "[{0}] thousand".to_owned());
+        assert_eq!(format_big_or_small_number(1_000.0, &translated), "[1.0] thousand");
+        translated.strings.insert("UI.Global.Thousands".to_owned(), "{word}".to_owned());
+        assert_eq!(format_big_or_small_number(1_000.0, &translated), "UI.Global.Thousands");
+        assert_eq!(format_big_or_small_number(1_000.0, &TestEnv::default()), "UI.Global.Thousands");
     }
 
     #[test]
@@ -741,11 +685,7 @@ mod tests {
     #[test]
     fn nonfinite_numbers_do_not_panic_or_acquire_suffixes() {
         let env = TestEnv::english();
-        for (v, expected) in [
-            (f64::NAN, "NaN"),
-            (f64::INFINITY, "Infinity"),
-            (f64::NEG_INFINITY, "-Infinity"),
-        ] {
+        for (v, expected) in [(f64::NAN, "NaN"), (f64::INFINITY, "Infinity"), (f64::NEG_INFINITY, "-Infinity")] {
             assert_eq!(format_small_number(v), expected);
             assert_eq!(format_big_or_small_number(v, &env), expected);
             assert_eq!(format_p0(v), expected);
@@ -776,11 +716,7 @@ mod tests {
             ("[{0,2}]", "[first]"),
             ("{00}", "first"),
         ] {
-            assert_eq!(
-                format_dotnet(template, &args),
-                Ok(expected.to_owned()),
-                "{template}"
-            );
+            assert_eq!(format_dotnet(template, &args), Ok(expected.to_owned()), "{template}");
         }
         let thirty: Vec<String> = (0..30).map(|n| n.to_string()).collect();
         assert_eq!(format_dotnet("{10} {29}", &thirty), Ok("10 29".to_owned()));
@@ -915,11 +851,7 @@ mod tests {
             state1_name: Some("the state".to_owned()),
             ..ctx
         };
-        let args = effect_args(
-            &json!({"value": -2, "duration_months": 6, "strValue": 3.5}),
-            &fallback,
-            &env,
-        );
+        let args = effect_args(&json!({"value": -2, "duration_months": 6, "strValue": 3.5}), &fallback, &env);
         assert_eq!(args[7], "6");
         assert_eq!(args[13], "3.5");
         assert_eq!(args[14], "the state");
@@ -927,22 +859,13 @@ mod tests {
         assert_eq!(args[21], "The state");
         assert_eq!(args[23], "-2");
         assert_eq!(args[24], "-2");
-        assert_eq!(
-            effect_args(&Value::Null, &EffectContext::default(), &env).len(),
-            30
-        );
+        assert_eq!(effect_args(&Value::Null, &EffectContext::default(), &env).len(), 30);
     }
 
     #[test]
     fn population_scaling_clamps_both_signs_and_zero_without_panicking() {
         let env = TestEnv::english();
-        for (value, scale, expected) in [
-            (2.0, 10.0, "4"),
-            (-2.0, 10.0, "-4"),
-            (2.0, -10.0, "-4"),
-            (0.0, 10.0, "0"),
-            (2.0, 0.25, "0.5"),
-        ] {
+        for (value, scale, expected) in [(2.0, 10.0, "4"), (-2.0, 10.0, "-4"), (2.0, -10.0, "-4"), (0.0, 10.0, "0"), (2.0, 0.25, "0.5")] {
             let ctx = EffectContext {
                 pop_scaling: Some(scale),
                 ..EffectContext::default()
@@ -985,25 +908,14 @@ mod tests {
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../data")));
         if !root.join("index.json").is_file() {
-            eprintln!(
-                "SKIP effect integration: data/index.json missing at {}",
-                root.display()
-            );
+            eprintln!("SKIP effect integration: data/index.json missing at {}", root.display());
             return;
         }
         let index = read_json(&root.join("index.json"));
-        let latest = index["latest"]
-            .as_str()
-            .expect("data/index.json latest build directory");
+        let latest = index["latest"].as_str().expect("data/index.json latest build directory");
         let build = root.join(latest);
-        if !build.join("manifest.json").is_file()
-            || !build.join("templates").is_dir()
-            || !build.join("locale/en").is_dir()
-        {
-            eprintln!(
-                "SKIP effect integration: build data missing at {}",
-                build.display()
-            );
+        if !build.join("manifest.json").is_file() || !build.join("templates").is_dir() || !build.join("locale/en").is_dir() {
+            eprintln!("SKIP effect integration: build data missing at {}", build.display());
             return;
         }
         let mut env = TestEnv::default();
@@ -1021,10 +933,7 @@ mod tests {
             return;
         }
         for file in locale_files {
-            for (key, value) in read_json(&file)
-                .as_object()
-                .expect("flat locale dictionary")
-            {
+            for (key, value) in read_json(&file).as_object().expect("flat locale dictionary") {
                 if let Some(value) = value.as_str() {
                     env.strings.insert(key.clone(), value.to_owned());
                 }
@@ -1034,10 +943,7 @@ mod tests {
         let mut files = json_files(&build.join("templates"));
         files.sort_by_key(|p| (!p.components().any(|c| c.as_os_str() == "base"), p.clone()));
         for file in files {
-            let template_type = file
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .expect("template filename");
+            let template_type = file.file_stem().and_then(|s| s.to_str()).expect("template filename");
             let data = read_json(&file);
             let Some(records) = data.as_array() else {
                 continue;
@@ -1049,9 +955,7 @@ mod tests {
                 let alias = record["localizationAlias"].as_str().unwrap_or(name);
                 let key = format!("{template_type}.displayName.{alias}");
                 if let Some(display) = env.strings.get(&key) {
-                    env.names
-                        .entry(name.to_owned())
-                        .or_insert_with(|| display.clone());
+                    env.names.entry(name.to_owned()).or_insert_with(|| display.clone());
                     if template_type == "TITraitTemplate" {
                         let grouping = record["grouping"].as_i64().unwrap_or(0);
                         let names = env.traits.entry(grouping).or_default();
@@ -1090,24 +994,17 @@ mod tests {
                     formatted += 1;
                     samples.insert(name.to_owned(), text);
                 }
-                Err(()) => failures.push(format!(
-                    "{name}: malformed format or out-of-range index: {template:?}"
-                )),
+                Err(()) => failures.push(format!("{name}: malformed format or out-of-range index: {template:?}")),
             }
         }
         // Also validate localized descriptions with no corresponding effect in
         // this extracted build, without pretending a real value exists for them.
         let mut unmatched_descriptions = 0;
         for (key, template) in &env.strings {
-            if key.starts_with("TIEffectTemplate.description.")
-                && !template.is_empty()
-                && !matched.contains(key)
-            {
+            if key.starts_with("TIEffectTemplate.description.") && !template.is_empty() && !matched.contains(key) {
                 unmatched_descriptions += 1;
                 if describe_effect(template, &Value::Null, &ctx, &env).is_err() {
-                    failures.push(format!(
-                        "unmatched {key}: malformed format or out-of-range index: {template:?}"
-                    ));
+                    failures.push(format!("unmatched {key}: malformed format or out-of-range index: {template:?}"));
                 }
             }
         }
@@ -1129,14 +1026,7 @@ mod tests {
                 eprintln!("  SAMPLE {name}: {text}");
             }
         }
-        assert!(
-            formatted > 0,
-            "no nonempty English effect descriptions were checked"
-        );
-        assert!(
-            failures.len() <= 5,
-            "too many effect formatting failures: {}",
-            failures.len()
-        );
+        assert!(formatted > 0, "no nonempty English effect descriptions were checked");
+        assert!(failures.len() <= 5, "too many effect formatting failures: {}", failures.len());
     }
 }

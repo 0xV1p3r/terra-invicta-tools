@@ -13,9 +13,10 @@ pub fn key(view: &View<'_>, id: EntityId) -> String {
 
 /// Entity of a key, if it exists in the dataset (any scope).
 pub fn parse_key(view: &View<'_>, key: &str) -> CmdResult<EntityId> {
-    let (template, data_name) =
-        key.split_once(':').ok_or_else(|| CmdError::msg(format!("Malformed entity key {key:?}")))?;
-    view.dataset().find(template, data_name).ok_or_else(|| CmdError::msg(format!("Unknown entity {key:?}")))
+    let (template, data_name) = key.split_once(':').ok_or_else(|| CmdError::msg(format!("Malformed entity key {key:?}")))?;
+    view.dataset()
+        .find(template, data_name)
+        .ok_or_else(|| CmdError::msg(format!("Unknown entity {key:?}")))
 }
 
 pub fn kind_name(kind: Kind) -> &'static str {

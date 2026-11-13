@@ -23,7 +23,13 @@ struct Args {
 }
 
 fn parse_args() -> Args {
-    let mut a = Args { data: "data".into(), lang: "en".into(), scenario: None, faction: None, rest: vec![] };
+    let mut a = Args {
+        data: "data".into(),
+        lang: "en".into(),
+        scenario: None,
+        faction: None,
+        rest: vec![],
+    };
     let mut it = std::env::args().skip(1);
     while let Some(arg) = it.next() {
         match arg.as_str() {
@@ -49,7 +55,12 @@ fn main() -> ExitCode {
 
 fn label(view: &View<'_>, texts: &Texts, id: EntityId) -> String {
     let e = view.dataset().entity(id);
-    format!("{} [{}:{}]", view.name(texts, id), e.template.trim_start_matches("TI").trim_end_matches("Template"), e.data_name)
+    format!(
+        "{} [{}:{}]",
+        view.name(texts, id),
+        e.template.trim_start_matches("TI").trim_end_matches("Template"),
+        e.data_name
+    )
 }
 
 fn resolve(view: &View<'_>, name: &str) -> Result<EntityId, String> {
@@ -151,7 +162,13 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             let g = view.research_graph();
             let sub = match args.rest.get(2).map(String::as_str) {
                 Some("down") => g.descendants(id, Traversal::default()),
-                _ => g.ancestors(id, Traversal { alternatives: false, max_depth: None }),
+                _ => g.ancestors(
+                    id,
+                    Traversal {
+                        alternatives: false,
+                        max_depth: None,
+                    },
+                ),
             };
             println!(
                 "{} nodes, {} edges, total research cost {}, obtainable: {}",

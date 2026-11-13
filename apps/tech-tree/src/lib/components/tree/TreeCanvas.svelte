@@ -202,6 +202,8 @@
 
 	const unsubscribe = camera.subscribe(requestRender);
 	onDestroy(() => {
+		// A response arriving after the tree is gone (data folder or build switch) is dropped.
+		latest++;
 		unsubscribe();
 		camera.stop();
 		cancelAnimationFrame(frame);

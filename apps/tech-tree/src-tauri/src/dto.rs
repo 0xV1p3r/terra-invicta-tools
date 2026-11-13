@@ -1,5 +1,6 @@
-//! Data transfer types of the frontend API. Mirrored 1:1 in `src/lib/api.ts`;
-//! change both together. All JSON is camelCase.
+//! Source of truth for frontend DTOs. Regenerate checked-in TypeScript with
+//! `cargo test -p ti-tech-tree export_bindings` from the workspace root.
+//! `src/lib/api.ts` re-exports these bindings. All JSON is camelCase.
 //!
 //! Entities are addressed by a stable string key `"<Template>:<dataName>"`
 //! (e.g. `"TITechTemplate:AdAstra"`); `ti_data::EntityId`s never leave the backend.
@@ -9,6 +10,8 @@ use serde::{Deserialize, Serialize};
 /// Which slice of the data to show. `scenario`/`faction` are `TIMetaTemplate` /
 /// `TIFactionTemplate` dataNames; `None` = overview over all scenarios / no faction filter.
 #[derive(Debug, Clone, Default, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
 #[serde(rename_all = "camelCase")]
 pub struct ScopeArgs {
     pub scenario: Option<String>,
@@ -18,18 +21,61 @@ pub struct ScopeArgs {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
 #[serde(rename_all = "camelCase")]
 pub struct Meta {
     pub build_id: String,
     pub game_version: Option<String>,
+    /// The loaded build is the data root's latest one.
+    pub latest: bool,
+    /// Build id pinned in the settings; `None` = always the latest.
+    pub pinned_build: Option<String>,
     pub data_dir: String,
+    pub data_dir_source: DataDirSource,
     pub languages: Vec<String>,
     /// Game menu order (listed ones first, by `listPriority`).
     pub scenarios: Vec<ScenarioInfo>,
     pub factions: Vec<FactionInfo>,
 }
 
+/// Where the data directory came from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
+#[serde(rename_all = "camelCase")]
+pub enum DataDirSource {
+    /// The `TI_DATA_DIR` environment variable.
+    Env,
+    /// Chosen in the app (persisted settings).
+    Settings,
+    /// A `data/` directory above the working directory or the executable.
+    Found,
+}
+
+/// A build listed in the data root's `index.json` (`list_builds`).
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
+#[serde(rename_all = "camelCase")]
+pub struct BuildInfo {
+    /// Directory name inside the data root.
+    pub dir: String,
+    pub build_id: String,
+    /// Steam update time, Unix seconds.
+    #[cfg_attr(test, ts(type = "number | null"))]
+    pub last_updated: Option<i64>,
+    /// Version shown by the game, from the build's manifest.
+    pub game_version: Option<String>,
+    /// The build currently loaded.
+    pub loaded: bool,
+    /// The data root's latest build.
+    pub latest: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
 #[serde(rename_all = "camelCase")]
 pub struct ScenarioInfo {
     /// dataName, e.g. `ModernScenario`; pass back in `ScopeArgs::scenario`.
@@ -42,6 +88,8 @@ pub struct ScenarioInfo {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
 #[serde(rename_all = "camelCase")]
 pub struct FactionInfo {
     pub name: String,
@@ -51,6 +99,8 @@ pub struct FactionInfo {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
 #[serde(rename_all = "camelCase")]
 pub enum NodeKind {
     Tech,
@@ -59,12 +109,15 @@ pub enum NodeKind {
 
 /// Options for the full tree.
 #[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
 #[serde(rename_all = "camelCase")]
 pub struct TreeFilter {
     pub techs: bool,
     pub projects: bool,
     /// `TechCategory` names (`Energy`, `InformationScience`, …); empty = all.
     #[serde(default)]
+    #[cfg_attr(test, ts(as = "Vec<TechCategory>"))]
     pub categories: Vec<String>,
     /// Property ids (see `properties.rs`); a node matches if it has any of them. Empty = all.
     #[serde(default)]
@@ -73,28 +126,36 @@ pub struct TreeFilter {
 
 /// A filterable property of techs/projects (see `properties.rs` for the id scheme).
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
 #[serde(rename_all = "camelCase")]
 pub struct PropertyInfo {
     pub id: String,
     /// English label, e.g. "Increases control point capacity".
     pub label: String,
     /// `effect` (changes a quantity), `ability` or `unlock`.
+    #[cfg_attr(test, ts(as = "PropertyGroup"))]
     pub group: String,
     /// Techs/projects in scope that have it.
     pub count: usize,
     /// Rendered description of one effect giving it (effects only).
     pub example: Option<String>,
     /// `good`/`bad`/`neutral` for the acting faction (see `EffectLine::sentiment`).
+    #[cfg_attr(test, ts(as = "EffectSentiment"))]
     pub sentiment: String,
     /// Icon group (see `EffectLine::domain`); None for unlocks.
+    #[cfg_attr(test, ts(as = "Option<EffectDomain>"))]
     pub domain: Option<String>,
     /// Research category for effects on one science.
+    #[cfg_attr(test, ts(as = "Option<TechCategory>"))]
     pub category: Option<String>,
     /// Game icon (asset path), if one matches.
     pub icon: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
 #[serde(rename_all = "camelCase")]
 pub enum Direction {
     /// Requirements of the root.
@@ -105,8 +166,11 @@ pub enum Direction {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
 #[serde(rename_all = "camelCase")]
 pub struct SubtreeArgs {
+    #[cfg_attr(test, ts(as = "EntityKey"))]
     pub root: String,
     pub direction: Direction,
     /// Follow `altPrereqN` alternatives too.
@@ -116,6 +180,8 @@ pub struct SubtreeArgs {
 
 /// Layout of the full tree.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
 #[serde(rename_all = "camelCase")]
 pub enum FullLayout {
     /// One layered drawing.
@@ -127,8 +193,11 @@ pub enum FullLayout {
 
 /// Vertical extent of a category band (cards and edge routes), in px.
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
 #[serde(rename_all = "camelCase")]
 pub struct Band {
+    #[cfg_attr(test, ts(as = "TechCategory"))]
     pub category: String,
     pub top: f64,
     pub bottom: f64,
@@ -137,6 +206,8 @@ pub struct Band {
 /// A laid-out graph, ready to render. Positions are top-left corners in pixels for
 /// nodes of `nodeWidth` × `nodeHeight`; columns run left → right (prereqs first, cheaper first).
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
 #[serde(rename_all = "camelCase")]
 pub struct TreeGraph {
     pub nodes: Vec<TreeNode>,
@@ -144,6 +215,7 @@ pub struct TreeGraph {
     pub node_width: f64,
     pub node_height: f64,
     /// Subtree root, if any.
+    #[cfg_attr(test, ts(as = "Option<EntityKey>"))]
     pub root: Option<String>,
     /// Sum of research cost over all nodes (subtrees: everything needed).
     pub total_cost: f64,
@@ -155,6 +227,8 @@ pub struct TreeGraph {
 
 /// Vertical extent of a group of cards in the column at `x`, in px.
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
 #[serde(rename_all = "camelCase")]
 pub struct Span {
     pub x: f64,
@@ -165,13 +239,17 @@ pub struct Span {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
 #[serde(rename_all = "camelCase")]
 pub struct TreeNode {
+    #[cfg_attr(test, ts(as = "EntityKey"))]
     pub key: String,
     pub data_name: String,
     pub kind: NodeKind,
     pub name: String,
     /// `TechCategory` name.
+    #[cfg_attr(test, ts(as = "TechCategory"))]
     pub category: String,
     pub cost: f64,
     /// Layout column (0 = leftmost).
@@ -184,6 +262,8 @@ pub struct TreeNode {
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
 #[serde(rename_all = "camelCase")]
 pub struct NodeFlags {
     /// Exists only in some scenarios.
@@ -201,11 +281,15 @@ pub struct NodeFlags {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
 #[serde(rename_all = "camelCase")]
 pub struct TreeEdge {
     /// Prerequisite.
+    #[cfg_attr(test, ts(as = "EntityKey"))]
     pub from: String,
     /// Node requiring it.
+    #[cfg_attr(test, ts(as = "EntityKey"))]
     pub to: String,
     /// Via `altPrereqN` (render dashed).
     pub alternative: bool,
@@ -216,32 +300,42 @@ pub struct TreeEdge {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
 #[serde(rename_all = "camelCase")]
 pub struct EntityRef {
     pub spoiler: bool,
+    #[cfg_attr(test, ts(as = "EntityKey"))]
     pub key: String,
     pub template: String,
     pub data_name: String,
     pub name: String,
     /// Coarse kind for grouping/icons: `tech`, `project`, `effect`, `habModule`, `shipPart`,
     /// `org`, `trait`, `faction`, `objective`, `mission`, `codex`, `other`.
+    #[cfg_attr(test, ts(as = "EntityKind"))]
     pub kind: String,
     /// Ship part subtype (`drive`, `laser`, …) when `kind == "shipPart"`.
     pub subtype: Option<String>,
+    #[cfg_attr(test, ts(as = "Option<TechCategory>"))]
     pub category: Option<String>,
     pub icon: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
 #[serde(rename_all = "camelCase")]
 pub struct SearchHit {
     pub entity: EntityRef,
     pub score: u32,
     /// `name`, `dataName`, `text` or `value`.
+    #[cfg_attr(test, ts(type = "'name' | 'dataName' | 'text' | 'value'"))]
     pub matched: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
 #[serde(rename_all = "camelCase")]
 pub struct EntityDetail {
     pub image: Option<String>,
@@ -268,10 +362,13 @@ pub struct EntityDetail {
     /// Research cost of everything needed, including this (listed prereqs only).
     pub total_cost: Option<f64>,
     /// The raw record in use (for a "data" tab).
+    #[cfg_attr(test, ts(type = "Record<string, unknown>"))]
     pub record: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
 #[serde(rename_all = "camelCase")]
 pub struct AnnotationsDto {
     /// Scenario dataNames the entity exists in.
@@ -285,6 +382,8 @@ pub struct AnnotationsDto {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
 #[serde(rename_all = "camelCase")]
 pub struct RequirementGroup {
     /// Any one option satisfies the group.
@@ -298,6 +397,8 @@ pub struct RequirementGroup {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
 #[serde(rename_all = "camelCase")]
 pub struct EffectLine {
     pub entity: EntityRef,
@@ -311,12 +412,15 @@ pub struct EffectLine {
     /// None for abilities and when the label can't express it.
     pub modifier: Option<String>,
     /// For the acting faction: `good`, `bad` or `neutral`.
+    #[cfg_attr(test, ts(as = "EffectSentiment"))]
     pub sentiment: String,
     /// Icon group: `research`, `priority`, `mission`, `control`, `councilor`, `army`, `ship`,
     /// `mining`, `missionControl`, `exploration`, `transfer`, `hab`, `alien`, `environment`,
     /// `economy`, `politics`, `ability`, `other`.
+    #[cfg_attr(test, ts(as = "EffectDomain"))]
     pub domain: String,
     /// Research category for `research` effects on one science (`Materials`, …).
+    #[cfg_attr(test, ts(as = "Option<TechCategory>"))]
     pub category: Option<String>,
     /// Who it applies to, if not just the acting faction ("All human factions").
     pub target: Option<String>,
@@ -325,9 +429,12 @@ pub struct EffectLine {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
 #[serde(rename_all = "camelCase")]
 pub struct EffectSegment {
     /// `text`, `value` (substituted number) or `sprite` (inline icon name such as `metal`).
+    #[cfg_attr(test, ts(type = "'text' | 'value' | 'sprite'"))]
     pub kind: String,
     pub text: String,
     /// Image of a `sprite` (asset path, like `EntityRef::icon`).
@@ -335,10 +442,13 @@ pub struct EffectSegment {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
 #[serde(rename_all = "camelCase")]
 pub struct UnlockItem {
     /// `research`, `researchAlternative`, `shipPart`, `habModule`, `org`, `grantedOrg`,
     /// `claim`, `trait`, `codex`, `mission`, `objective`.
+    #[cfg_attr(test, ts(as = "UnlockKind"))]
     pub kind: String,
     pub entity: EntityRef,
     /// Stats of unlocked hab modules, ship parts and orgs.
@@ -347,6 +457,8 @@ pub struct UnlockItem {
 
 /// Every stat of a hab module, ship part or org, grouped for display (see `stats.rs`).
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
 #[serde(rename_all = "camelCase")]
 pub struct EntityStats {
     /// Short classifications ("Tier 2", "Station", "Fusion Thermal", "Criminal").
@@ -359,6 +471,8 @@ pub struct EntityStats {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
 #[serde(rename_all = "camelCase")]
 pub struct StatGroup {
     /// "Combat", "Income / month", "Build materials", …
@@ -367,6 +481,8 @@ pub struct StatGroup {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
 #[serde(rename_all = "camelCase")]
 pub struct Stat {
     pub label: String,
@@ -375,6 +491,7 @@ pub struct Stat {
     /// Randomized orgs: roll range and chance, e.g. "+0–4 · 50% chance".
     pub detail: Option<String>,
     /// For the owning faction: `good`, `bad` or `neutral`.
+    #[cfg_attr(test, ts(as = "EffectSentiment"))]
     pub sentiment: String,
     /// Game icon (asset path, like `EntityRef::icon`).
     pub icon: Option<String>,
@@ -383,6 +500,8 @@ pub struct Stat {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
 #[serde(rename_all = "camelCase")]
 pub struct StatLinks {
     pub label: String,
@@ -391,6 +510,8 @@ pub struct StatLinks {
 
 /// A nonempty template in the current wiki scope.
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
 #[serde(rename_all = "camelCase")]
 pub struct WikiSection {
     pub spoiler: bool,
@@ -402,6 +523,8 @@ pub struct WikiSection {
 
 /// References sharing an opposite-side template and referencing field.
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
 #[serde(rename_all = "camelCase")]
 pub struct RefGroup {
     /// Template of the entities on the other side.
@@ -413,6 +536,8 @@ pub struct RefGroup {
 
 /// One wiki row, with cheap context and an optional effect presentation.
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
 #[serde(rename_all = "camelCase")]
 pub struct WikiEntry {
     pub entity: EntityRef,
@@ -420,11 +545,24 @@ pub struct WikiEntry {
     pub effect: Option<EffectLine>,
 }
 
+/// A page of a wiki section's entries (`get_wiki_entries`).
+#[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
+#[serde(rename_all = "camelCase")]
+pub struct WikiPage {
+    /// Entries matching the filter, in all pages.
+    pub total: usize,
+    pub entries: Vec<WikiEntry>,
+}
+
 // --- Solar system map (`get_solar_system`) ------------------------------------
 
 /// Everything the solar system map draws, in one payload. Positions are not included:
 /// the frontend propagates `OrbitElements` to any date (see `src/lib/components/map/kepler.ts`).
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
 #[serde(rename_all = "camelCase")]
 pub struct SolarSystem {
     /// Start date of the scenario (overview: the base campaign's), `YYYY-MM-DD`.
@@ -435,12 +573,16 @@ pub struct SolarSystem {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
 #[serde(rename_all = "camelCase")]
 pub struct SpaceBodyInfo {
     pub entity: EntityRef,
     /// `star`, `planet`, `dwarfPlanet`, `planetaryMoon`, `asteroidalMoon`, `asteroid`, `comet`.
+    #[cfg_attr(test, ts(as = "BodyType"))]
     pub body_type: String,
     /// Key of the body it orbits (`barycenterName`); None for the Sun.
+    #[cfg_attr(test, ts(as = "Option<EntityKey>"))]
     pub parent: Option<String>,
     /// None for the Sun (and bodies without usable elements).
     pub orbit: Option<OrbitElements>,
@@ -451,6 +593,10 @@ pub struct SpaceBodyInfo {
     pub hab_site_count: u32,
     /// The game's rating of the unprospected body, per resource (keys `water`, `volatiles`,
     /// `metals`, `nobles`, `fissiles`): averaged over its hab sites; empty without hab sites.
+    #[cfg_attr(
+        test,
+        ts(type = "Partial<Record<('water' | 'volatiles' | 'metals' | 'nobles' | 'fissiles'), ('empty' | 'possible' | 'low' | 'medium' | 'high' | 'max')>>")
+    )]
     pub resources: std::collections::BTreeMap<String, ResourceRating>,
 }
 
@@ -459,6 +605,8 @@ pub type ResourceRating = String;
 
 /// Keplerian elements as the game uses them (angles in degrees).
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
 #[serde(rename_all = "camelCase")]
 pub struct OrbitElements {
     pub semi_major_axis_km: f64,
@@ -477,12 +625,128 @@ pub struct OrbitElements {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
 #[serde(rename_all = "camelCase")]
 pub struct LagrangePointInfo {
     pub entity: EntityRef,
     /// `L1` … `L5`.
+    #[cfg_attr(test, ts(type = "'L1' | 'L2' | 'L3' | 'L4' | 'L5'"))]
     pub point: String,
     /// Body the point belongs to (`relatedObject`, e.g. Mercury); its parent is the primary.
+    #[cfg_attr(test, ts(as = "EntityKey"))]
     pub body: String,
     pub max_hab_size: u32,
 }
+
+/// Frontend contract for game-data strings.
+#[cfg(test)]
+#[allow(dead_code)]
+#[derive(ts_rs::TS)]
+#[ts(export, export_to = "../../src/lib/generated/", rename = "EntityKey", type = "string")]
+struct EntityKey(String);
+
+/// The game's research categories. The values are raw `techCategory` strings of the
+/// records: a build adding a category would send a name outside this union (the UI falls
+/// back to neutral styling). `commands::tests::full_tree` fails on such a build.
+#[cfg(test)]
+#[allow(dead_code)]
+#[derive(ts_rs::TS)]
+#[ts(
+    export,
+    export_to = "../../src/lib/generated/",
+    rename = "TechCategory",
+    type = "| 'Energy' | 'InformationScience' | 'LifeScience' | 'Materials' | 'MilitaryScience' | 'SocialScience' | 'SpaceScience' | 'Xenology'"
+)]
+struct TechCategory(String);
+
+/// Frontend contract for game-data strings.
+#[cfg(test)]
+#[allow(dead_code)]
+#[derive(ts_rs::TS)]
+#[ts(
+    export,
+    export_to = "../../src/lib/generated/",
+    rename = "PropertyGroup",
+    type = "'effect' | 'ability' | 'unlock'"
+)]
+struct PropertyGroup(String);
+
+/// Frontend contract for game-data strings.
+#[cfg(test)]
+#[allow(dead_code)]
+#[derive(ts_rs::TS)]
+#[ts(
+    export,
+    export_to = "../../src/lib/generated/",
+    rename = "EntityKind",
+    type = "| 'tech' | 'project' | 'effect' | 'habModule' | 'shipPart' | 'org' | 'trait' | 'faction' | 'objective' | 'mission' | 'codex' | 'other'"
+)]
+struct EntityKind(String);
+
+/// Frontend contract for game-data strings.
+#[cfg(test)]
+#[allow(dead_code)]
+#[derive(ts_rs::TS)]
+#[ts(export, export_to = "../../src/lib/generated/", rename = "EffectSentiment", type = "'good' | 'bad' | 'neutral'")]
+struct EffectSentiment(String);
+
+/// Frontend contract for game-data strings.
+#[cfg(test)]
+#[allow(dead_code)]
+#[derive(ts_rs::TS)]
+#[ts(
+    export,
+    export_to = "../../src/lib/generated/",
+    rename = "EffectDomain",
+    type = "| 'research' | 'priority' | 'mission' | 'control' | 'councilor' | 'army' | 'ship' | 'mining' | 'missionControl' | 'exploration' | 'transfer' | 'hab' | 'alien' | 'environment' | 'economy' | 'politics' | 'ability' | 'other'"
+)]
+struct EffectDomain(String);
+
+/// Frontend contract for game-data strings.
+#[cfg(test)]
+#[allow(dead_code)]
+#[derive(ts_rs::TS)]
+#[ts(
+    export,
+    export_to = "../../src/lib/generated/",
+    rename = "UnlockKind",
+    type = "| 'research' | 'researchAlternative' | 'shipPart' | 'habModule' | 'org' | 'grantedOrg' | 'claim' | 'trait' | 'codex' | 'mission' | 'objective'"
+)]
+struct UnlockKind(String);
+
+/// Frontend contract for game-data strings.
+#[cfg(test)]
+#[allow(dead_code)]
+#[derive(ts_rs::TS)]
+#[ts(
+    export,
+    export_to = "../../src/lib/generated/",
+    rename = "BodyType",
+    type = "'star' | 'planet' | 'dwarfPlanet' | 'planetaryMoon' | 'asteroidalMoon' | 'asteroid' | 'comet' | 'unknown'"
+)]
+struct BodyType(String);
+
+/// Frontend contract for game-data strings.
+#[cfg(test)]
+#[allow(dead_code)]
+#[derive(ts_rs::TS)]
+#[ts(
+    export,
+    export_to = "../../src/lib/generated/",
+    rename = "SpaceResource",
+    type = "'water' | 'volatiles' | 'metals' | 'nobles' | 'fissiles'"
+)]
+struct SpaceResource(String);
+
+/// Frontend contract for game-data strings.
+#[cfg(test)]
+#[allow(dead_code)]
+#[derive(ts_rs::TS)]
+#[ts(
+    export,
+    export_to = "../../src/lib/generated/",
+    rename = "ResourceRating",
+    type = "'empty' | 'possible' | 'low' | 'medium' | 'high' | 'max'"
+)]
+struct ResourceRatingBinding(String);

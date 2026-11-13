@@ -6,21 +6,19 @@
 	import * as Command from '$lib/components/ui/command';
 	import { Button } from '$lib/components/ui/button';
 	import Tip from '$lib/components/toolbar/Tip.svelte';
-	import {
-		Search,
-		FlaskConical,
-		Wrench,
-		Sparkles,
-		Building,
-		Rocket,
-		Briefcase,
-		User,
-		Flag,
-		Target,
-		Crosshair,
-		BookOpen,
-		File
-	} from '@lucide/svelte';
+	import Search from '@lucide/svelte/icons/search';
+	import FlaskConical from '@lucide/svelte/icons/flask-conical';
+	import Wrench from '@lucide/svelte/icons/wrench';
+	import Sparkles from '@lucide/svelte/icons/sparkles';
+	import Building from '@lucide/svelte/icons/building';
+	import Rocket from '@lucide/svelte/icons/rocket';
+	import Briefcase from '@lucide/svelte/icons/briefcase';
+	import User from '@lucide/svelte/icons/user';
+	import Flag from '@lucide/svelte/icons/flag';
+	import Target from '@lucide/svelte/icons/target';
+	import Crosshair from '@lucide/svelte/icons/crosshair';
+	import BookOpen from '@lucide/svelte/icons/book-open';
+	import File from '@lucide/svelte/icons/file';
 	let open = $state(false);
 	let query = $state('');
 	let hits = $state<SearchHit[]>([]);

@@ -2,7 +2,14 @@
 
 /// Ordered groups and their hand-written template labels.
 const GROUPS: &[(&str, &[(&str, &str)])] = &[
-    ("Research", &[("TITechTemplate", "Technologies"), ("TIProjectTemplate", "Projects"), ("TIEffectTemplate", "Effects")]),
+    (
+        "Research",
+        &[
+            ("TITechTemplate", "Technologies"),
+            ("TIProjectTemplate", "Projects"),
+            ("TIEffectTemplate", "Effects"),
+        ],
+    ),
     (
         "Space",
         &[
@@ -40,7 +47,12 @@ const GROUPS: &[(&str, &[(&str, &str)])] = &[
     ),
     (
         "Earth",
-        &[("TINationTemplate", "Nations"), ("TIRegionTemplate", "Regions"), ("TIBilateralTemplate", "Bilateral Relations"), ("TIArmyTemplate", "Armies")],
+        &[
+            ("TINationTemplate", "Nations"),
+            ("TIRegionTemplate", "Regions"),
+            ("TIBilateralTemplate", "Bilateral Relations"),
+            ("TIArmyTemplate", "Armies"),
+        ],
     ),
     (
         "Factions & People",
@@ -154,18 +166,29 @@ pub fn subtitle(view: &ti_data::View<'_>, texts: &ti_data::Texts, id: ti_data::E
         "TIHabTemplate" | "TIHabModuleTemplate" => join(text("habType"), tier()),
         "TIOrgTemplate" => join(text("orgType"), tier()),
         "TITraitTemplate" => text("traitClass").or_else(|| text("specialTraitRule")),
-        "TICouncilorTypeTemplate" => r.get("keyStat").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(" · ")),
+        "TICouncilorTypeTemplate" => r
+            .get("keyStat")
+            .and_then(Value::as_array)
+            .map(|a| a.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(" · ")),
         "TIObjectiveTemplate" => text("objectiveType"),
-        "TICodexEntryTemplate" => Some(if r.get("mainTopic").and_then(Value::as_bool) == Some(true) { "Main topic" } else { "Subtopic" }.into()),
+        "TICodexEntryTemplate" => Some(
+            if r.get("mainTopic").and_then(Value::as_bool) == Some(true) {
+                "Main topic"
+            } else {
+                "Subtopic"
+            }
+            .into(),
+        ),
         "TICouncilorAppearanceTemplate" => text("string"),
         "TIMissionTemplate" => r
             .pointer("/resolutionMethod/attackingModifiers")
             .and_then(Value::as_array)
             .and_then(|modifiers| modifiers.iter().find_map(|m| m.get("attackerAttribute").and_then(Value::as_str)))
             .map(ti_data::text::humanize),
-        _ if matches!(view.kind(id), ti_data::model::Kind::ShipPart(_)) || template == "TIShipHullTemplate" => {
-            join(text("partClass").or_else(|| text("driveClassification").or_else(|| text("powerPlantClass"))), tier())
-        }
+        _ if matches!(view.kind(id), ti_data::model::Kind::ShipPart(_)) || template == "TIShipHullTemplate" => join(
+            text("partClass").or_else(|| text("driveClassification").or_else(|| text("powerPlantClass"))),
+            tier(),
+        ),
         _ => None,
     };
     let ds = view.dataset();
@@ -177,7 +200,11 @@ pub fn subtitle(view: &ti_data::View<'_>, texts: &ti_data::Texts, id: ti_data::E
             .map(|idx| {
                 let s = ds.scenario(idx);
                 let label = overview.name(texts, s.meta);
-                if label == s.data_name && !s.friendly_name.is_empty() { s.friendly_name.clone() } else { label }
+                if label == s.data_name && !s.friendly_name.is_empty() {
+                    s.friendly_name.clone()
+                } else {
+                    label
+                }
             })
             .collect::<Vec<_>>()
             .join(", ");

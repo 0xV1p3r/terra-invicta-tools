@@ -5,7 +5,17 @@ use super::*;
 pub(super) fn stats(view: &View<'_>, texts: &Texts, id: EntityId, spoilers: &HashSet<EntityId>) -> Option<EntityStats> {
     let record = view.record(id)?.as_object()?;
     let template = view.dataset().entity(id).template.as_ref();
-    let mut b = Builder { view, texts, spoilers, stats: EntityStats { tags: vec![], groups: vec![], notes: vec![], links: vec![] } };
+    let mut b = Builder {
+        view,
+        texts,
+        spoilers,
+        stats: EntityStats {
+            tags: vec![],
+            groups: vec![],
+            notes: vec![],
+            links: vec![],
+        },
+    };
     let mut linked = HashSet::new();
     for reference in view.references_from(id) {
         let path = reference.path.as_ref();
@@ -59,7 +69,10 @@ pub(super) fn stats(view: &View<'_>, texts: &Texts, id: EntityId, spoilers: &Has
                 && claim.get("initialOwner").and_then(Value::as_bool) == Some(true)
                 && let Some(nation) = claim.get("nation1").and_then(Value::as_str).and_then(|n| view.find("TINationTemplate", n))
             {
-                b.stats.links.push(StatLinks { label: "Nation".into(), entities: vec![entity_ref(view, texts, nation, spoilers)] });
+                b.stats.links.push(StatLinks {
+                    label: "Nation".into(),
+                    entities: vec![entity_ref(view, texts, nation, spoilers)],
+                });
             }
         }
     }
@@ -85,17 +98,35 @@ pub(super) fn stats(view: &View<'_>, texts: &Texts, id: EntityId, spoilers: &Has
                 continue;
             };
             if regions.insert(region) {
-                population += view.record(region).and_then(|r| r.get("population_Millions")).and_then(Value::as_f64).unwrap_or(0.0);
+                population += view
+                    .record(region)
+                    .and_then(|r| r.get("population_Millions"))
+                    .and_then(Value::as_f64)
+                    .unwrap_or(0.0);
                 if claim.get("capitalClaim").and_then(Value::as_bool) == Some(true) {
-                    b.stats.links.push(StatLinks { label: "Capital".into(), entities: vec![entity_ref(view, texts, region, spoilers)] });
+                    b.stats.links.push(StatLinks {
+                        label: "Capital".into(),
+                        entities: vec![entity_ref(view, texts, region, spoilers)],
+                    });
                 }
             }
         }
         if !regions.is_empty() {
-            tile(&mut b, "Economy & population", "population_Millions", "Population", format!("{} million", num(population)), Tone::Neutral, population);
+            tile(
+                &mut b,
+                "Economy & population",
+                "population_Millions",
+                "Population",
+                format!("{} million", num(population)),
+                Tone::Neutral,
+                population,
+            );
             let mut ids: Vec<_> = regions.into_iter().collect();
             ids.sort_by_key(|id| view.dataset().entity(*id).data_name.clone());
-            b.stats.links.push(StatLinks { label: "Regions".into(), entities: ids.into_iter().map(|id| entity_ref(view, texts, id, spoilers)).collect() });
+            b.stats.links.push(StatLinks {
+                label: "Regions".into(),
+                entities: ids.into_iter().map(|id| entity_ref(view, texts, id, spoilers)).collect(),
+            });
             if population > 0.0
                 && let Some(gdp) = record.get("initialGDP").and_then(Value::as_f64)
             {
@@ -112,15 +143,31 @@ pub(super) fn stats(view: &View<'_>, texts: &Texts, id: EntityId, spoilers: &Has
         }
     }
     if template == "TISpaceBodyTemplate"
-        && let (Some(mass), Some(radius)) =
-            (record.get("mass_kg").and_then(Value::as_f64), record.get("equatorialRadius_km").or_else(|| record.get("meanRadius_km")).and_then(Value::as_f64))
+        && let (Some(mass), Some(radius)) = (
+            record.get("mass_kg").and_then(Value::as_f64),
+            record
+                .get("equatorialRadius_km")
+                .or_else(|| record.get("meanRadius_km"))
+                .and_then(Value::as_f64),
+        )
         && radius > 0.0
     {
         let gravity = 6.67430e-11 * mass / (radius * 1000.0).powi(2);
-        tile(&mut b, "Physical properties", "surfaceGravity", "Surface gravity", format!("{} m/s²", amount(gravity)), Tone::Neutral, gravity);
+        tile(
+            &mut b,
+            "Physical properties",
+            "surfaceGravity",
+            "Surface gravity",
+            format!("{} m/s²", amount(gravity)),
+            Tone::Neutral,
+            gravity,
+        );
     }
     if b.stats.groups.is_empty() && b.stats.notes.is_empty() && b.stats.links.is_empty() {
-        b.stats.notes.push(format!("{} definition", humanize(template.trim_start_matches("TI").trim_end_matches("Template"))));
+        b.stats.notes.push(format!(
+            "{} definition",
+            humanize(template.trim_start_matches("TI").trim_end_matches("Template"))
+        ));
     }
     Some(b.stats)
 }
@@ -140,8 +187,24 @@ fn hidden(field: &str) -> bool {
             | "referenceAlias"
             | "color"
             | "color32"
-    ) || ["path", "texture", "icon", "portrait", "video", "sound", "skin", "illustration", "resource", "model"].iter().any(|s| lower.contains(s))
-        && !matches!(field, "resourcesGranted" | "startingResources" | "resource" | "resourceType" | "resourceAmount" | "modelValue" | "oilResource")
+    ) || [
+        "path",
+        "texture",
+        "icon",
+        "portrait",
+        "video",
+        "sound",
+        "skin",
+        "illustration",
+        "resource",
+        "model",
+    ]
+    .iter()
+    .any(|s| lower.contains(s))
+        && !matches!(
+            field,
+            "resourcesGranted" | "startingResources" | "resource" | "resourceType" | "resourceAmount" | "modelValue" | "oilResource"
+        )
 }
 
 fn path_label(path: &str) -> String {
@@ -224,7 +287,11 @@ fn present(b: &mut Builder<'_, '_>, path: &str, value: &Value, group: &str, link
         Value::Number(n) => {
             if let Some(v) = n.as_f64() {
                 let (fmt, tone) = numeric(field);
-                let formatted = if field == "mass_kg" && v.abs() >= 1e15 { format!("{v:.4e} kg") } else { format_value(fmt, v) };
+                let formatted = if field == "mass_kg" && v.abs() >= 1e15 {
+                    format!("{v:.4e} kg")
+                } else {
+                    format_value(fmt, v)
+                };
                 tile(b, group, path, &label, formatted, tone, v);
             }
         }
@@ -320,8 +387,21 @@ fn numeric(field: &str) -> (Fmt, Tone) {
 
 fn tile(b: &mut Builder<'_, '_>, group: &str, path: &str, label: &str, value: String, tone: Tone, number: f64) {
     let lower = path.to_ascii_lowercase();
-    let icon = MATERIALS.iter().find(|(key, _, _)| lower.contains(&key.to_ascii_lowercase())).and_then(|(_, _, sprite)| b.icon(&format!("sprite:{sprite}")));
-    b.push(group, Stat { label: label.into(), value, detail: None, sentiment: sentiment(tone, number).into(), icon, field: path.into() });
+    let icon = MATERIALS
+        .iter()
+        .find(|(key, _, _)| lower.contains(&key.to_ascii_lowercase()))
+        .and_then(|(_, _, sprite)| b.icon(&format!("sprite:{sprite}")));
+    b.push(
+        group,
+        Stat {
+            label: label.into(),
+            value,
+            detail: None,
+            sentiment: sentiment(tone, number).into(),
+            icon,
+            field: path.into(),
+        },
+    );
 }
 
 #[cfg(test)]
@@ -341,7 +421,13 @@ mod tests {
         let Some(b) = backend() else { return };
         let texts = b.texts("en").unwrap();
         let view = b.ds.overview();
-        for template in ["TITraitTemplate", "TIMissionTemplate", "TINarrativeEventTemplate", "TISpaceShipTemplate", "TIVictoryTemplate"] {
+        for template in [
+            "TITraitTemplate",
+            "TIMissionTemplate",
+            "TINarrativeEventTemplate",
+            "TISpaceShipTemplate",
+            "TIVictoryTemplate",
+        ] {
             for id in view.entities(template) {
                 let Some(stats) = crate::stats::entity_stats(&view, &texts, id, &b.spoilers(&view).unwrap()) else {
                     continue;
@@ -349,7 +435,13 @@ mod tests {
                 for group in &stats.groups {
                     let mut seen = HashSet::new();
                     for stat in &group.stats {
-                        assert!(seen.insert(&stat.field), "{template}:{} repeats {} in {}", view.dataset().entity(id).data_name, stat.field, group.label);
+                        assert!(
+                            seen.insert(&stat.field),
+                            "{template}:{} repeats {} in {}",
+                            view.dataset().entity(id).data_name,
+                            stat.field,
+                            group.label
+                        );
                     }
                 }
             }
@@ -385,12 +477,27 @@ mod tests {
         assert!(nation.groups.iter().flat_map(|g| &g.stats).any(|s| s.field == "population_Millions"));
         assert!(nation.links.iter().any(|l| l.label == "Capital"));
         let body = get("TISpaceBodyTemplate", "Sol");
-        assert!(body.groups.iter().flat_map(|g| &g.stats).any(|s| s.field == "mass_kg" && s.value.ends_with(" kg")));
+        assert!(
+            body.groups
+                .iter()
+                .flat_map(|g| &g.stats)
+                .any(|s| s.field == "mass_kg" && s.value.ends_with(" kg"))
+        );
         let trait_stats = get("TITraitTemplate", "Wealthy");
         assert!(trait_stats.groups.iter().flat_map(|g| &g.stats).any(|s| s.field == "XPCost"));
-        let bilateral =
-            view.entities("TIBilateralTemplate").find(|&id| view.record(id).is_some_and(|r| r.get("nation1").is_some() && r.get("nation2").is_some())).unwrap();
+        let bilateral = view
+            .entities("TIBilateralTemplate")
+            .find(|&id| view.record(id).is_some_and(|r| r.get("nation1").is_some() && r.get("nation2").is_some()))
+            .unwrap();
         let stats = entity_stats(&view, &texts, bilateral, &b.spoilers(&view).unwrap()).unwrap();
-        assert_eq!(stats.links.iter().flat_map(|l| &l.entities).filter(|e| e.template == "TINationTemplate").count(), 2);
+        assert_eq!(
+            stats
+                .links
+                .iter()
+                .flat_map(|l| &l.entities)
+                .filter(|e| e.template == "TINationTemplate")
+                .count(),
+            2
+        );
     }
 }

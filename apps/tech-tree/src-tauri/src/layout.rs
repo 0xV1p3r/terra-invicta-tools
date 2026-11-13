@@ -135,11 +135,19 @@ pub fn route_grouped(n: usize, edges: &[LayoutEdge], costs: &[f64], groups: &[us
     for col in &mut cols {
         col.sort_by_key(|&v| block[v]);
     }
-    let lane = if merge { buses(&mut cols, &segments, &block, n) } else { (0..total).collect() };
+    let lane = if merge {
+        buses(&mut cols, &segments, &block, n)
+    } else {
+        (0..total).collect()
+    };
     let mut seen = std::collections::HashSet::new();
     let segments: Vec<LayoutEdge> = segments
         .iter()
-        .map(|e| LayoutEdge { from: lane[e.from], to: lane[e.to], alternative: e.alternative })
+        .map(|e| LayoutEdge {
+            from: lane[e.from],
+            to: lane[e.to],
+            alternative: e.alternative,
+        })
         .filter(|e| seen.insert(*e))
         .collect();
     for d in chains.iter_mut().flatten() {
@@ -173,19 +181,19 @@ pub fn route_grouped(n: usize, edges: &[LayoutEdge], costs: &[f64], groups: &[us
         .collect();
     let mut nodes = all;
     nodes.truncate(n);
-    Layout { nodes, waypoints, crossings, groups }
+    Layout {
+        nodes,
+        waypoints,
+        crossings,
+        groups,
+    }
 }
 
 /// Split edges spanning several columns into unit segments through dummy nodes
 /// (indices `n..`), shared per trunk if `merge` (see the module docs). Returns the column of every
 /// node, the distinct segments (plus edges that are not split: same column or right to
 /// left), each edge's dummies in order and the group of every node (all 0 without `groups`).
-fn expand(
-    column: &[usize],
-    edges: &[LayoutEdge],
-    groups: &[usize],
-    merge: bool,
-) -> (Vec<usize>, Vec<LayoutEdge>, Vec<Vec<usize>>, Vec<usize>) {
+fn expand(column: &[usize], edges: &[LayoutEdge], groups: &[usize], merge: bool) -> (Vec<usize>, Vec<LayoutEdge>, Vec<Vec<usize>>, Vec<usize>) {
     let n = column.len();
     let mut group = if groups.is_empty() { vec![0; n] } else { groups.to_vec() };
     let long = |e: &&LayoutEdge| column[e.to] > column[e.from] + 1;
@@ -223,15 +231,27 @@ fn expand(
                     group.push(group[end]);
                     column.len() - 1
                 };
-                let d = if merge { *trunk.entry((end, c >= split, c, e.alternative)).or_insert_with(add) } else { add() };
+                let d = if merge {
+                    *trunk.entry((end, c >= split, c, e.alternative)).or_insert_with(add)
+                } else {
+                    add()
+                };
                 if seen.insert((prev, d, e.alternative)) {
-                    segments.push(LayoutEdge { from: prev, to: d, alternative: e.alternative });
+                    segments.push(LayoutEdge {
+                        from: prev,
+                        to: d,
+                        alternative: e.alternative,
+                    });
                 }
                 chain.push(d);
                 prev = d;
             }
             if seen.insert((prev, e.to, e.alternative)) {
-                segments.push(LayoutEdge { from: prev, to: e.to, alternative: e.alternative });
+                segments.push(LayoutEdge {
+                    from: prev,
+                    to: e.to,
+                    alternative: e.alternative,
+                });
             }
         } else {
             segments.push(*e);
@@ -304,7 +324,9 @@ fn cost_floor(costs: &[f64], n: usize) -> Vec<usize> {
     if hi <= lo {
         return vec![0; n];
     }
-    logs.iter().map(|l| (((l - lo) / (hi - lo)).clamp(0.0, 1.0) * (COST_COLUMNS - 1) as f64) as usize).collect()
+    logs.iter()
+        .map(|l| (((l - lo) / (hi - lo)).clamp(0.0, 1.0) * (COST_COLUMNS - 1) as f64) as usize)
+        .collect()
 }
 
 /// Renumber columns so that none is empty (keeps their order).
@@ -392,7 +414,11 @@ fn order(cols: &mut [Vec<usize>], column: &[usize], edges: &[LayoutEdge], n: usi
     let ncols = cols.len();
     for sweep in 0..SWEEPS {
         let forward = sweep % 2 == 0;
-        let order: Vec<usize> = if forward { (1..ncols).collect() } else { (0..ncols.saturating_sub(1)).rev().collect() };
+        let order: Vec<usize> = if forward {
+            (1..ncols).collect()
+        } else {
+            (0..ncols.saturating_sub(1)).rev().collect()
+        };
         for c in order {
             let mut keyed: Vec<(f64, f64, usize)> = cols[c]
                 .iter()
@@ -458,20 +484,12 @@ enum Side {
 
 /// Continuous vertical centers in rows (`NODE_HEIGHT + GAP_Y`), keeping each column's order.
 /// `size` is each node's height in rows; nodes from `real` on are edge dummies.
-fn coordinates(
-    cols: &[Vec<usize>],
-    column: &[usize],
-    edges: &[LayoutEdge],
-    comp: &[usize],
-    size: &[f64],
-    real: usize,
-) -> Vec<f64> {
+fn coordinates(cols: &[Vec<usize>], column: &[usize], edges: &[LayoutEdge], comp: &[usize], size: &[f64], real: usize) -> Vec<f64> {
     let n = column.len();
     let mut neighbors: Vec<Vec<(usize, f64)>> = vec![Vec::new(); n];
     for e in edges.iter().filter(|e| column[e.from] != column[e.to]) {
         let dummies = (e.from >= real) as usize + (e.to >= real) as usize;
-        let w = if e.alternative { ALT_WEIGHT } else { 1.0 }
-            * [1.0, DUMMY_WEIGHT, DUMMY_DUMMY_WEIGHT][dummies];
+        let w = if e.alternative { ALT_WEIGHT } else { 1.0 } * [1.0, DUMMY_WEIGHT, DUMMY_DUMMY_WEIGHT][dummies];
         neighbors[e.from].push((e.to, w));
         neighbors[e.to].push((e.from, w));
     }
@@ -539,7 +557,11 @@ fn pack(targets: &[(f64, f64)], sizes: &[f64]) -> impl Iterator<Item = f64> + us
         }
         blocks.push(b);
     }
-    blocks.into_iter().flat_map(|(s, w, len)| std::iter::repeat_n(s / w, len)).zip(offsets).map(|(y, o)| y + o)
+    blocks
+        .into_iter()
+        .flat_map(|(s, w, len)| std::iter::repeat_n(s / w, len))
+        .zip(offsets)
+        .map(|(y, o)| y + o)
 }
 
 /// Grid positions from row centers (`y` = top of a card centered there); blocks
@@ -584,7 +606,15 @@ fn place(
         band.1 = top + (hi - lo) * row - GAP_Y;
         top += (hi - lo) * row;
     }
-    let mut out = vec![Placement { column: 0, row: 0, x: 0.0, y: 0.0 }; total];
+    let mut out = vec![
+        Placement {
+            column: 0,
+            row: 0,
+            x: 0.0,
+            y: 0.0
+        };
+        total
+    ];
     for (c, col) in cols.iter().enumerate() {
         for (r, &v) in col.iter().filter(|&&v| v < real).chain(col.iter().filter(|&&v| v >= real)).enumerate() {
             out[v] = Placement {
@@ -679,7 +709,11 @@ mod tests {
         while edges.len() < m {
             let to = 1 + rnd() % (n - 1);
             let from = to.saturating_sub(1 + rnd() % 60.min(to));
-            edges.push(LayoutEdge { from, to, alternative: rnd() % 10 == 0 });
+            edges.push(LayoutEdge {
+                from,
+                to,
+                alternative: rnd() % 10 == 0,
+            });
         }
         edges
     }

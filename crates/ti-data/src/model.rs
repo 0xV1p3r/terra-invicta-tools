@@ -93,12 +93,7 @@ impl PartKind {
     pub fn is_weapon(self) -> bool {
         matches!(
             self,
-            PartKind::Laser
-                | PartKind::MagneticGun
-                | PartKind::Gun
-                | PartKind::Missile
-                | PartKind::ParticleWeapon
-                | PartKind::PlasmaWeapon
+            PartKind::Laser | PartKind::MagneticGun | PartKind::Gun | PartKind::Missile | PartKind::ParticleWeapon | PartKind::PlasmaWeapon
         )
     }
 }
@@ -116,11 +111,7 @@ impl Kind {
             OBJECTIVE => Kind::Objective,
             MISSION => Kind::Mission,
             CODEX => Kind::Codex,
-            t => PartKind::ALL
-                .into_iter()
-                .find(|p| p.template() == t)
-                .map(Kind::ShipPart)
-                .unwrap_or(Kind::Other),
+            t => PartKind::ALL.into_iter().find(|p| p.template() == t).map(Kind::ShipPart).unwrap_or(Kind::Other),
         }
     }
 
@@ -129,8 +120,7 @@ impl Kind {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Deserialize, Default)]
 pub enum TechCategory {
     Energy,
     InformationScience,
@@ -334,7 +324,6 @@ pub struct HabModule {
     pub station_icon_resource: Option<String>,
     pub disable: bool,
 }
-
 
 fn hundred() -> f64 {
     100.0

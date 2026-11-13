@@ -51,7 +51,8 @@ class MapState {
 
 	/** Whether a body or Lagrange point (`info` null) passes the filters. */
 	matches(type: ItemType, info: SpaceBodyInfo | null): boolean {
-		if (!this.types.includes(type)) return false;
+		// Bodies of an unknown type have no filter chip: they follow the asteroids.
+		if (!this.types.includes(type === 'unknown' ? 'asteroid' : type)) return false;
 		const ratings = Object.entries(this.minRatings) as [SpaceResource, ResourceRating][];
 		if (!info) return !this.habSitesOnly && ratings.length === 0;
 		if (this.habSitesOnly && info.habSiteCount === 0) return false;

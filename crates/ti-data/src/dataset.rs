@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use serde_json::Value;
 
 use crate::error::{Error, Result};
-use crate::manifest::{AssetEntry, AssetIndex, DataIndex, FORMAT_VERSION, Manifest, Schema};
+use crate::manifest::{AssetEntry, AssetIndex, BuildEntry, DataIndex, FORMAT_VERSION, Manifest, Schema};
 use crate::scenario::{Resolution, Scenario};
 use crate::source::{DataSource, DirSource, read_json};
 use crate::text::Locale;
@@ -33,6 +33,8 @@ pub struct LayerIdx(pub(crate) u8);
 
 impl LayerIdx {
     pub const BASE: LayerIdx = LayerIdx(0);
+    /// Most layers a dataset can have.
+    pub const MAX_LAYERS: usize = u8::MAX as usize + 1;
 
     pub fn index(self) -> usize {
         self.0 as usize
@@ -72,6 +74,11 @@ pub struct Entity {
     pub data_name: Arc<str>,
     /// All records defining this entity, in load order.
     pub variants: Vec<Variant>,
+}
+
+impl Variant {
+    /// Most records one entity can have (`u16::MAX` marks an absent entity in scenario resolution).
+    pub const MAX_PER_ENTITY: usize = u16::MAX as usize;
 }
 
 impl Entity {
@@ -142,6 +149,11 @@ impl DataRoot {
         Dataset::open(self.path.join(dir))
     }
 
+    /// `manifest.json` of a listed build, without loading it.
+    pub fn manifest(&self, entry: &BuildEntry) -> Result<Manifest> {
+        read_json(&DirSource::new(self.path.join(&entry.dir)), "manifest.json")
+    }
+
     /// Open a specific Steam build id (or build directory name).
     pub fn build(&self, build_id: &str) -> Result<Dataset> {
         let entry = self
@@ -175,14 +187,29 @@ impl Dataset {
     pub fn from_source(source: Box<dyn DataSource>) -> Result<Self> {
         let manifest: Manifest = read_json(source.as_ref(), "manifest.json")?;
         if manifest.format_version != FORMAT_VERSION {
-            return Err(Error::FormatVersion { found: manifest.format_version, supported: FORMAT_VERSION });
+            return Err(Error::FormatVersion {
+                found: manifest.format_version,
+                supported: FORMAT_VERSION,
+            });
         }
 
+        if manifest.layers.len() > LayerIdx::MAX_LAYERS {
+            return Err(Error::TooManyLayers {
+                count: manifest.layers.len(),
+                max: LayerIdx::MAX_LAYERS,
+            });
+        }
         let layers: Vec<Layer> = manifest
             .layers
             .iter()
             .enumerate()
-            .map(|(i, l)| Layer { idx: LayerIdx(i as u8), id: l.id.clone(), is_dlc: l.kind != "base", dlc: l.dlc.clone(), folder: l.folder.clone() })
+            .map(|(i, l)| Layer {
+                idx: LayerIdx(i as u8),
+                id: l.id.clone(),
+                is_dlc: l.kind != "base",
+                dlc: l.dlc.clone(),
+                folder: l.folder.clone(),
+            })
             .collect();
 
         let mut ds = Dataset {
@@ -222,9 +249,19 @@ impl Dataset {
             }
         }
 
+        // Variant indexes are stored as `u16` (`Reference::variant`, scenario resolution).
+        if let Some(e) = ds.entities.iter().find(|e| e.variants.len() > Variant::MAX_PER_ENTITY) {
+            return Err(Error::TooManyVariants {
+                template: e.template.to_string(),
+                data_name: e.data_name.to_string(),
+                count: e.variants.len(),
+                max: Variant::MAX_PER_ENTITY,
+            });
+        }
+
         let schema: Schema = read_json(ds.source.as_ref(), "schema.json")?;
         crate::refs::build(&mut ds, &schema);
-        crate::scenario::build(&mut ds);
+        crate::scenario::build(&mut ds)?;
 
         if ds.manifest.has_assets {
             ds.assets = read_json(ds.source.as_ref(), "assets/index.json")?;
@@ -243,7 +280,12 @@ impl Dataset {
             Some(id) => *id,
             None => {
                 let id = EntityId(self.entities.len() as u32);
-                self.entities.push(Entity { id, template: template.clone(), data_name: data_name.clone(), variants: Vec::new() });
+                self.entities.push(Entity {
+                    id,
+                    template: template.clone(),
+                    data_name: data_name.clone(),
+                    variants: Vec::new(),
+                });
                 self.by_key.entry(template.clone()).or_default().insert(data_name.clone(), id);
                 self.by_template.entry(template).or_default().push(id);
                 self.by_data_name.entry(data_name).or_default().push(id);
@@ -256,7 +298,14 @@ impl Dataset {
         // `TemplateManager.Add`: among registered (non-disabled) records, a later one with
         // the same tag set as an earlier one is ignored.
         let shadowed = !disabled && entity.variants.iter().any(|v| !v.disabled && !v.shadowed && same_tag_set(&v.tags, &tags));
-        entity.variants.push(Variant { layer, load_order, tags, disabled, shadowed, record });
+        entity.variants.push(Variant {
+            layer,
+            load_order,
+            tags,
+            disabled,
+            shadowed,
+            record,
+        });
     }
 
     pub fn manifest(&self) -> &Manifest {
@@ -370,5 +419,35 @@ impl Dataset {
 
     pub(crate) fn intern_template(&self, template: &str) -> Option<Arc<str>> {
         self.by_template.get_key_value(template).map(|(k, _)| k.clone())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use crate::error::Error;
+    use crate::test_support::{TestLayer, try_dataset};
+
+    #[test]
+    fn too_many_layers_is_an_error() {
+        let names: Vec<String> = (0..=super::LayerIdx::MAX_LAYERS).map(|i| format!("layer{i}")).collect();
+        let layers: Vec<TestLayer<'_>> = names.iter().map(|n| (n.as_str(), &[][..])).collect();
+        let err = try_dataset(&layers, json!({})).unwrap_err();
+        assert!(matches!(err, Error::TooManyLayers { count: 257, max: 256 }), "{err}");
+        assert!(try_dataset(&layers[..256], json!({})).is_ok());
+    }
+
+    #[test]
+    fn too_many_variants_is_an_error() {
+        let records = |n: usize| vec![json!({"dataName": "Same"}); n];
+        let max = super::Variant::MAX_PER_ENTITY;
+        let err = try_dataset(&[("base", &[("TITechTemplate", records(max + 1))])], json!({})).unwrap_err();
+        assert!(
+            matches!(&err, Error::TooManyVariants { template, data_name, count, .. } if template == "TITechTemplate" && data_name == "Same" && *count == max + 1),
+            "{err}"
+        );
+        let ds = try_dataset(&[("base", &[("TITechTemplate", records(max))])], json!({})).unwrap();
+        assert_eq!(ds.entities()[0].variants.len(), max);
     }
 }
