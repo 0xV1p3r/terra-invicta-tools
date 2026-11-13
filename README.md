@@ -17,19 +17,27 @@ The app shows the research tree, a wiki and a solar system map. More tools will 
 
 | Path | Contents |
 | --- | --- |
-| `extractor/` | Python CLI that reads templates, localization and images from the game and writes one dataset per game build to `data/<buildId>/` |
+| `crates/ti-extract/` | Rust library and CLI that extract one dataset per game build to `data/<buildId>/` |
+| `crates/ti-unity/` | Reads images from the game's Unity asset bundles |
 | `crates/ti-data/` | Rust crate that loads and queries those datasets |
 | `apps/tech-tree/` | The desktop app, built with Tauri 2 and SvelteKit |
 | `docs/research/` | Notes on game rules and save files |
 
-`data/` is gitignored, so extracted game data never leaves your machine.
+No game data is in the repo or the installers. It is built locally from your own game files. `data/` is gitignored.
+
+## First run
+
+Open the installed app. It finds Terra Invicta in your Steam libraries, lets you choose extraction options, then extracts the data and opens the tree. If it cannot find the game, choose its install folder.
+
+Data is stored in `<app data dir>/data`. Large artwork (illustrations, portraits and hab modules, about 1.5 GB) is optional. Lossless WebP is the default: same quality as PNG, faster to extract and smaller.
+
+The app shows a notice when the game updates so you can extract the new build. In Settings → Game data, you can extract again, choose a data folder or delete builds you no longer need.
 
 ## Requirements
 
 - An installed copy of Terra Invicta
 - Rust with rustfmt and clippy
 - Node.js LTS and pnpm, at the version set in `apps/tech-tree/package.json`
-- uv, which installs Python 3.12 or newer if you don't have it
 - On Linux, the Tauri 2 build packages. On Ubuntu:
 
 ```sh
@@ -38,33 +46,43 @@ sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file lib
 
 ## Quick start
 
+For developers, from the repository root:
+
 ```sh
-cd extractor
-uv run ti-extract extract --data-dir ../data
-cd ../apps/tech-tree
+cd apps/tech-tree
 pnpm install --frozen-lockfile
 pnpm app:dev
 ```
 
-## Extract game data
-
-Run these from `extractor/`. The extractor finds Steam installs by itself. To use another install, set `TI_GAME_DIR` or put `--game-dir PATH` before the subcommand.
+On first launch, the app extracts the game data. Alternatively, run this from the repository root to create a local `data/` folder that dev builds find by searching upward:
 
 ```sh
-uv run ti-extract info                         # show the detected install
-uv run ti-extract extract --data-dir ../data   # write data/<buildId>/ and update data/index.json
-uv run ti-extract diff ../data/OLD ../data/NEW --lang en -o changes.md
+cargo run --release -p ti-extract -- extract --data-dir data
 ```
+
+## Extract game data
+
+Run these from the repository root. The Rust CLI finds Steam installs by itself. To use another install, set `TI_GAME_DIR` or put `--game-dir PATH` before the subcommand.
+
+```sh
+cargo run --release -p ti-extract -- info
+cargo run --release -p ti-extract -- extract --data-dir data
+cargo run --release -p ti-extract -- diff data/OLD data/NEW --lang en -o changes.md
+```
+
+`extract` writes `data/<buildId>/` and updates `data/index.json`.
 
 Options for `extract`:
 
 | Option | Effect |
 | --- | --- |
+| `--data-dir PATH` | Data root. Defaults to `data`. |
 | `--force` | Replace an existing extraction of the same build |
 | `--build-id ID` | Use `ID` as the output directory name |
 | `--no-assets` | Skip images |
 | `--skip-bundle NAME` | Skip one image bundle. You can repeat it. |
-| `--image-format png\|webp` | Set the image format. PNG is the default. |
+| `--image-format webp\|png` | Set the image format. Lossless WebP is the default. |
+| `--allow-parse-errors` | Exit successfully even if template files fail to parse |
 
 ## Run the app
 
@@ -74,7 +92,8 @@ The app takes the first data folder it finds in this order:
 
 1. `TI_DATA_DIR`, if it is set and not empty
 2. The folder you chose in the app's settings, if it still contains `index.json`
-3. A `data/` folder with an `index.json`, searching upward from the working directory and then from the executable
+3. `<app data dir>/data`, if it contains `index.json`
+4. A `data/` folder with an `index.json`, searching upward from the working directory and then from the executable
 
 Give it the data root, not a single build folder. It opens the latest build unless you pick another one in settings.
 
@@ -117,7 +136,7 @@ git diff --exit-code -- apps/tech-tree/src/lib/generated
 
 If you change a DTO, commit the regenerated TypeScript bindings with it. Rust tests that need game data skip when `data/` is empty.
 
-From `apps/tech-tree/`, run `pnpm check`, `pnpm lint` and `pnpm test`. From `extractor/`, run `uv run pytest -q`.
+From `apps/tech-tree/`, run `pnpm check`, `pnpm lint` and `pnpm test`.
 
 ## Legal
 
