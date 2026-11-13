@@ -10,6 +10,7 @@
 //! * `effects`  – effect descriptions
 //! * `properties` – filterable tech/project properties (effects, unlocks)
 //! * `assets`   – `tiasset://` protocol for images
+//! * `extraction` – in-app extraction with `ti-extract`, game detection, deleting builds
 //! * `fixtures` – (test only) writes mock JSON for browser-based UI work
 
 mod assets;
@@ -17,6 +18,7 @@ mod commands;
 mod dto;
 mod effects;
 mod error;
+mod extraction;
 #[cfg(test)]
 mod fixtures;
 mod layout;
@@ -30,7 +32,9 @@ mod wiki;
 
 use dto::*;
 use error::{CmdError, CmdResult};
+use extraction::Extractor;
 use state::{AppState, Backend, Locator};
+use tauri::ipc::Channel;
 use tauri::{Manager, State};
 
 /// Run `f` on the blocking pool so the UI thread stays responsive.
@@ -84,6 +88,50 @@ async fn set_build(state: State<'_, AppState>, build_id: Option<String>) -> CmdR
 async fn set_data_dir(state: State<'_, AppState>, path: String) -> CmdResult<()> {
     let state = AppState::clone(&state);
     spawn(move || state.set_data_dir(path.into())).await
+}
+
+/// Disk usage of the data root's builds (walks the build folders; call when needed).
+#[tauri::command]
+async fn get_build_sizes(state: State<'_, AppState>) -> CmdResult<Vec<BuildSize>> {
+    let state = AppState::clone(&state);
+    spawn(move || extraction::build_sizes(&state)).await
+}
+
+/// Delete a build (by directory) of the loaded data root; not the loaded one.
+#[tauri::command]
+async fn delete_build(app: tauri::AppHandle, dir: String) -> CmdResult<()> {
+    spawn(move || extraction::delete_build(&app.state::<AppState>(), &app.state::<Extractor>(), &dir)).await
+}
+
+/// The game install at `saved` (chosen earlier), else the detected one; `None` if there is none.
+#[tauri::command]
+async fn detect_game(saved: Option<String>) -> CmdResult<Option<GameInfo>> {
+    spawn(move || Ok(extraction::detect_game(saved.as_deref().map(std::path::Path::new)))).await
+}
+
+/// The game install at `path`, or an error saying why it is not one.
+#[tauri::command]
+async fn inspect_game(path: String) -> CmdResult<GameInfo> {
+    spawn(move || extraction::inspect_game(path.as_ref())).await
+}
+
+/// Extract the game data, streaming progress to `on_progress`, then load the new build.
+#[tauri::command]
+async fn extract_game_data(app: tauri::AppHandle, args: ExtractArgs, on_progress: Channel<ExtractEvent>) -> CmdResult<ExtractResult> {
+    spawn(move || {
+        let mut send = |event: ExtractEvent| {
+            // The window may be gone (reloaded); the extraction finishes anyway.
+            let _ = on_progress.send(event);
+        };
+        app.state::<Extractor>().run(&app.state::<AppState>(), &args, &mut send)
+    })
+    .await
+}
+
+/// Stop the running extraction (it then fails with "Extraction cancelled.").
+#[tauri::command]
+fn cancel_extraction(extractor: State<'_, Extractor>) {
+    extractor.cancel();
 }
 
 #[tauri::command]
@@ -170,7 +218,9 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let config_path = app.path().app_config_dir().ok().map(|dir| dir.join(state::CONFIG_FILE));
-            app.manage(AppState::load_in_background(Locator::from_env(config_path)));
+            let default_dir = app.path().app_data_dir().ok().map(|dir| dir.join(state::DATA_SUBDIR));
+            app.manage(AppState::load_in_background(Locator::from_env(config_path, default_dir)));
+            app.manage(Extractor::default());
             Ok(())
         })
         .register_asynchronous_uri_scheme_protocol(assets::SCHEME, |ctx, request, responder| {
@@ -188,6 +238,12 @@ pub fn run() {
             list_builds,
             set_build,
             set_data_dir,
+            get_build_sizes,
+            delete_build,
+            detect_game,
+            inspect_game,
+            extract_game_data,
+            cancel_extraction,
             get_tree,
             get_subtree,
             get_focus,

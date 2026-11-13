@@ -3,4 +3,4 @@
 /**
  * Where the data directory came from.
  */
-export type DataDirSource = "env" | "settings" | "found";
+export type DataDirSource = "env" | "settings" | "default" | "found";

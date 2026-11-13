@@ -49,6 +49,8 @@ pub enum DataDirSource {
     Env,
     /// Chosen in the app (persisted settings).
     Settings,
+    /// The app's own data root (`<app data dir>/data`), where in-app extraction writes.
+    Default,
     /// A `data/` directory above the working directory or the executable.
     Found,
 }
@@ -71,6 +73,106 @@ pub struct BuildInfo {
     pub loaded: bool,
     /// The data root's latest build.
     pub latest: bool,
+}
+
+/// Disk usage of a build directory (`get_build_sizes`).
+#[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
+#[serde(rename_all = "camelCase")]
+pub struct BuildSize {
+    pub dir: String,
+    #[cfg_attr(test, ts(type = "number"))]
+    pub bytes: u64,
+}
+
+/// A Terra Invicta install (`detect_game`, `inspect_game`).
+#[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
+#[serde(rename_all = "camelCase")]
+pub struct GameInfo {
+    pub root: String,
+    /// Version shown by the game, e.g. `1.0.53b`.
+    pub version: Option<String>,
+    /// Steam build id; `None` outside Steam.
+    pub build_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
+#[serde(rename_all = "camelCase")]
+pub enum ImageFormat {
+    #[default]
+    Png,
+    /// Lossless WebP: smaller files, same pixels.
+    Webp,
+}
+
+/// What `extract_game_data` extracts. Icons, logos and flags are always included.
+#[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
+#[serde(rename_all = "camelCase")]
+pub struct ExtractArgs {
+    /// Root of the install (from `detect_game` / `inspect_game`).
+    pub game_dir: String,
+    /// Also the large artwork: illustrations, councilor portraits, hab modules (about 1.5 GB).
+    pub large_art: bool,
+    pub image_format: ImageFormat,
+    /// Replace an existing extraction of the same build.
+    pub force: bool,
+}
+
+/// Extraction phases, in order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
+#[serde(rename_all = "camelCase")]
+pub enum ExtractStage {
+    Templates,
+    Locale,
+    Schema,
+    Images,
+    Finish,
+}
+
+/// Progress of `extract_game_data`, streamed over its channel.
+#[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum ExtractEvent {
+    /// A phase started.
+    Stage { stage: ExtractStage },
+    /// `done` of `total` units of the current phase, with an optional label (e.g. the bundle).
+    Step {
+        #[cfg_attr(test, ts(type = "number"))]
+        done: u64,
+        #[cfg_attr(test, ts(type = "number"))]
+        total: u64,
+        label: Option<String>,
+    },
+    /// A log line.
+    Log { message: String },
+}
+
+/// Outcome of `extract_game_data`; the new build is loaded by then.
+#[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
+#[serde(rename_all = "camelCase")]
+pub struct ExtractResult {
+    pub build_id: String,
+    /// `false` when the build was already extracted (nothing written).
+    pub extracted: bool,
+    /// Data issues found (see the build's `reports/issues.json`).
+    #[cfg_attr(test, ts(type = "number"))]
+    pub issues: usize,
+    #[cfg_attr(test, ts(type = "number"))]
+    pub parse_errors: usize,
+    pub seconds: f64,
 }
 
 #[derive(Debug, Clone, Serialize)]

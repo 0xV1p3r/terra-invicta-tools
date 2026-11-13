@@ -14,6 +14,9 @@ use crate::error::{CmdError, CmdResult};
 /// Environment variable overriding the data directory (the one containing `index.json`).
 pub const DATA_DIR_ENV: &str = "TI_DATA_DIR";
 
+/// Default data root inside the app data directory.
+pub const DATA_SUBDIR: &str = "data";
+
 /// Name of the settings file in the app config directory.
 pub const CONFIG_FILE: &str = "settings.json";
 
@@ -77,16 +80,19 @@ pub struct Locator {
     pub env: Option<PathBuf>,
     /// Settings file; `None` = settings are neither read nor saved.
     pub config_path: Option<PathBuf>,
+    /// Default data root, `<app data dir>/data`: where extraction writes when no data is loaded.
+    pub default_dir: Option<PathBuf>,
     /// Fallback search for a data root.
     pub search: fn() -> Option<PathBuf>,
 }
 
 impl Locator {
-    pub fn from_env(config_path: Option<PathBuf>) -> Self {
+    pub fn from_env(config_path: Option<PathBuf>, default_dir: Option<PathBuf>) -> Self {
         let env = std::env::var_os(DATA_DIR_ENV).filter(|d| !d.is_empty()).map(PathBuf::from);
         Self {
             env,
             config_path,
+            default_dir,
             search: find_ancestor_data_dir,
         }
     }
@@ -103,13 +109,22 @@ impl Locator {
     }
 }
 
-/// `TI_DATA_DIR`, else the persisted data folder (if it still has an `index.json`), else `search`.
-pub fn resolve_data_dir(env: Option<&Path>, config: &DataConfig, search: impl FnOnce() -> Option<PathBuf>) -> Option<(PathBuf, DataDirSource)> {
+/// `TI_DATA_DIR`, else the persisted data folder, else the app's default data root (both only
+/// if they have an `index.json`), else `search`.
+pub fn resolve_data_dir(
+    env: Option<&Path>,
+    config: &DataConfig,
+    default_dir: Option<&Path>,
+    search: impl FnOnce() -> Option<PathBuf>,
+) -> Option<(PathBuf, DataDirSource)> {
     if let Some(dir) = env {
         return Some((dir.to_path_buf(), DataDirSource::Env));
     }
     if let Some(dir) = config.data_dir.as_ref().filter(|d| d.join("index.json").is_file()) {
         return Some((dir.clone(), DataDirSource::Settings));
+    }
+    if let Some(dir) = default_dir.filter(|d| d.join("index.json").is_file()) {
+        return Some((dir.to_path_buf(), DataDirSource::Default));
     }
     search().map(|dir| (dir, DataDirSource::Found))
 }
@@ -385,6 +400,39 @@ impl AppState {
         Ok(())
     }
 
+    /// Data root an extraction writes to: `TI_DATA_DIR`, else the loaded data root, else the
+    /// app's default data root.
+    pub fn extract_target(&self) -> CmdResult<PathBuf> {
+        let locator = &self.0.locator;
+        if let Some(dir) = &locator.env {
+            return Ok(dir.clone());
+        }
+        if let Ok(b) = self.backend() {
+            return Ok(b.data_dir.clone());
+        }
+        locator
+            .default_dir
+            .clone()
+            .ok_or_else(|| CmdError::msg("Could not determine the app data folder to extract into."))
+    }
+
+    /// Load the latest build of a data root an extraction just wrote to. `TI_DATA_DIR` overrides
+    /// the settings anyway, so only a pin of it is dropped; any other folder is remembered.
+    pub fn load_extracted(&self, dir: PathBuf) -> CmdResult<()> {
+        if self.0.locator.env.as_deref() != Some(dir.as_path()) {
+            return self.set_data_dir(dir);
+        }
+        let _reload = self.0.reloading.lock().unwrap_or_else(|e| e.into_inner());
+        let next = Backend::load(dir, None, DataDirSource::Env)?;
+        self.0.locator.save(&DataConfig {
+            build: None,
+            build_root: None,
+            ..self.0.locator.config()
+        })?;
+        self.swap(next);
+        Ok(())
+    }
+
     fn swap(&self, next: Backend) {
         let next = Arc::new(next);
         eprintln!("ti-tech-tree: switched to build {} from {}", next.ds.build_id(), next.data_dir.display());
@@ -396,13 +444,13 @@ impl AppState {
 fn initial_load(locator: &Locator) -> Loaded {
     let started = std::time::Instant::now();
     let config = locator.config();
-    let result = match resolve_data_dir(locator.env.as_deref(), &config, locator.search) {
+    let result = match resolve_data_dir(locator.env.as_deref(), &config, locator.default_dir.as_deref(), locator.search) {
         Some((dir, source)) => load_pinned(locator, &config, &dir, source)
             .map(Arc::new)
             .map_err(|e| format!("Could not load game data from {}: {e}", dir.display())),
         None => Err(format!(
-            "No extracted game data found (looked for data/index.json above the current and the \
-             executable's directory). Choose the data folder, run ti-extract, or set {DATA_DIR_ENV}."
+            "No extracted game data found. Extract it from your Terra Invicta install, choose a data \
+             folder, or set {DATA_DIR_ENV}."
         )),
     };
     match &result {
@@ -508,6 +556,7 @@ mod tests {
         Locator {
             env,
             config_path: Some(config_path),
+            default_dir: None,
             search: no_search,
         }
     }
@@ -519,28 +568,115 @@ mod tests {
     #[test]
     fn data_dir_resolution_order() {
         let tmp = TempDir::new("resolve");
-        let saved = tmp.0.join("saved");
+        let (saved, default) = (tmp.0.join("saved"), tmp.0.join("default"));
         data_root(&saved);
+        data_root(&default);
         let found = || Some(PathBuf::from("/found"));
         let config = DataConfig {
             data_dir: Some(saved.clone()),
             ..Default::default()
         };
         let env = PathBuf::from("/env");
+        let resolve = |env: Option<&Path>, config: &DataConfig, default: Option<&Path>| resolve_data_dir(env, config, default, found);
 
-        assert_eq!(resolve_data_dir(Some(&env), &config, found), Some((env.clone(), DataDirSource::Env)));
-        assert_eq!(resolve_data_dir(None, &config, found), Some((saved, DataDirSource::Settings)));
+        // TI_DATA_DIR, then the settings folder, then the app's default root, then the search.
+        assert_eq!(resolve(Some(&env), &config, Some(&default)), Some((env.clone(), DataDirSource::Env)));
+        assert_eq!(resolve(None, &config, Some(&default)), Some((saved.clone(), DataDirSource::Settings)));
         assert_eq!(
-            resolve_data_dir(None, &DataConfig::default(), found),
+            resolve(None, &DataConfig::default(), Some(&default)),
+            Some((default.clone(), DataDirSource::Default))
+        );
+        assert_eq!(
+            resolve(None, &DataConfig::default(), None),
             Some((PathBuf::from("/found"), DataDirSource::Found))
         );
-        // A saved folder that lost its index.json falls through to the search.
+        // A saved folder that lost its index.json falls through to the default root, then the search.
         let gone = DataConfig {
             data_dir: Some(tmp.0.join("gone")),
             ..Default::default()
         };
-        assert_eq!(resolve_data_dir(None, &gone, found), Some((PathBuf::from("/found"), DataDirSource::Found)));
-        assert_eq!(resolve_data_dir(None, &gone, no_search), None);
+        assert_eq!(resolve(None, &gone, Some(&default)), Some((default.clone(), DataDirSource::Default)));
+        // So does a default root without index.json (nothing extracted yet).
+        let empty = tmp.0.join("empty");
+        std::fs::create_dir_all(&empty).unwrap();
+        assert_eq!(resolve(None, &gone, Some(&empty)), Some((PathBuf::from("/found"), DataDirSource::Found)));
+        assert_eq!(resolve_data_dir(None, &gone, Some(&empty), no_search), None);
+    }
+
+    #[test]
+    fn startup_falls_back_to_the_default_root() {
+        let tmp = TempDir::new("default");
+        let default = tmp.0.join("default");
+        data_root(&default);
+        let locator = Locator {
+            default_dir: Some(default.clone()),
+            ..locator(None, tmp.0.join("settings.json"))
+        };
+        let state = AppState::load_in_background(locator);
+        let b = state.backend().unwrap();
+        assert_eq!((b.data_dir.as_path(), b.data_dir_source), (default.as_path(), DataDirSource::Default));
+        assert_eq!(state.extract_target().unwrap(), default);
+    }
+
+    #[test]
+    fn extraction_target_and_reload() {
+        let tmp = TempDir::new("target");
+        let (env, default) = (tmp.0.join("env"), tmp.0.join("default"));
+        let config = tmp.0.join("settings.json");
+        let with_default = |env: Option<PathBuf>| Locator {
+            default_dir: Some(default.clone()),
+            ..locator(env, config.clone())
+        };
+
+        // Nothing loaded: extract into the default root, then load and remember it.
+        let state = AppState::load_in_background(with_default(None));
+        assert!(state.backend().is_err());
+        assert_eq!(state.extract_target().unwrap(), default);
+        data_root(&default);
+        state.load_extracted(default.clone()).unwrap();
+        assert_eq!(state.backend().unwrap().data_dir, default);
+        assert_eq!(DataConfig::load(&config).data_dir, Some(default.clone()));
+
+        // TI_DATA_DIR is the target even when it fails to load; reloading keeps it unsaved.
+        let state = AppState::load_in_background(with_default(Some(env.clone())));
+        assert!(state.backend().is_err());
+        assert_eq!(state.extract_target().unwrap(), env);
+        data_root(&env);
+        state.load_extracted(env.clone()).unwrap();
+        let b = state.backend().unwrap();
+        assert_eq!((b.data_dir.as_path(), b.data_dir_source), (env.as_path(), DataDirSource::Env));
+        assert_eq!(DataConfig::load(&config).data_dir, Some(default));
+    }
+
+    #[test]
+    fn only_other_builds_inside_the_root_can_be_deleted() {
+        use crate::extraction::deletable_build_dir;
+        let tmp = TempDir::new("delete");
+        let root_dir = tmp.0.join("root");
+        data_root(&root_dir);
+        let root = DataRoot::open(&root_dir).unwrap();
+        let err = |loaded: &str, dir: &str| deletable_build_dir(&root, loaded, dir).unwrap_err().to_string();
+
+        assert_eq!(deletable_build_dir(&root, "2", "b1").unwrap(), root_dir.join("b1"));
+        assert!(err("1", "b1").contains("loaded build"));
+        assert!(err("2", "b9").contains("not a build"));
+        assert!(err("2", "..").contains("not a build"));
+
+        // Listed in index.json, but pointing outside the data root.
+        let outside = tmp.0.join("outside");
+        std::fs::create_dir_all(&outside).unwrap();
+        let entry = |dir: &str| json!({"dir": dir, "buildId": dir, "lastUpdated": 1, "formatVersion": ti_data::manifest::FORMAT_VERSION});
+        write(
+            &root_dir.join("index.json"),
+            json!({"latest": "b2", "builds": [entry("b2"), entry("../outside"), entry(".hidden"), entry("link"), entry("gone")]}),
+        );
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&outside, root_dir.join("link")).unwrap();
+        let root = DataRoot::open(&root_dir).unwrap();
+        for dir in ["../outside", ".hidden", "link", "gone"] {
+            assert!(deletable_build_dir(&root, "b2", dir).is_err(), "{dir} must not be deletable");
+        }
+        assert!(outside.is_dir());
     }
 
     #[test]
