@@ -29,7 +29,7 @@ No game data is in the repo or the installers. It is built locally from your own
 
 Open the installed app. It finds Terra Invicta in your Steam libraries, lets you choose extraction options, then extracts the data and opens the tree. If it cannot find the game, choose its install folder.
 
-Data is stored in `<app data dir>/data`. Large artwork (illustrations, portraits and hab modules, about 1.5 GB) is optional. Lossless WebP is the default: same quality as PNG, faster to extract and smaller.
+Data is stored in the app's data folder: `~/.local/share/dev.terra-invicta-tools.tech-tree/data` on Linux, `%APPDATA%\dev.terra-invicta-tools.tech-tree\data` on Windows. Large artwork (illustrations, portraits and hab modules, about 1.5 GB) is optional. Lossless WebP is the default: same quality as PNG, faster to extract and smaller.
 
 The app shows a notice when the game updates so you can extract the new build. In Settings → Game data, you can extract again, choose a data folder or delete builds you no longer need.
 
