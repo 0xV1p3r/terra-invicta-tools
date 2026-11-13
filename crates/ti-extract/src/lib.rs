@@ -88,8 +88,10 @@ pub struct ExtractOptions {
     pub build_id: Option<String>,
     /// Replace an existing extraction of the same build.
     pub force: bool,
-    /// Finish even if template files fail to parse (otherwise `extract` returns an error after
-    /// writing the build).
+    /// Treat template files that fail to parse as success. [`extract`] itself always writes
+    /// the build and returns `Ok`, counting the failures in [`ExtractReport::parse_errors`]
+    /// (details in `reports/issues.json`); callers decide what to do with them. The CLI exits
+    /// with status 1 when this is off and `parse_errors > 0`, like the Python one.
     pub allow_parse_errors: bool,
     pub images: Images,
     pub image_format: ImageFormat,
@@ -143,7 +145,8 @@ pub struct ExtractReport {
     pub extracted: bool,
     /// Entries in `reports/issues.json`.
     pub issues: usize,
-    /// Template files that failed to parse.
+    /// Template files that failed to parse. A build with parse errors is re-extracted on the
+    /// next run even without `force`.
     pub parse_errors: usize,
     pub seconds: f64,
 }
@@ -160,4 +163,30 @@ pub fn extract(install: &GameInstall, opts: &ExtractOptions, progress: &mut dyn 
 /// Rewrite `<data_dir>/index.json` from the complete builds (those with a `manifest.json`).
 pub fn write_index(data_dir: &Path) -> Result<()> {
     extract::write_index(data_dir)
+}
+
+#[cfg(test)]
+pub(crate) mod tests {
+    use std::path::{Path, PathBuf};
+
+    /// A temporary directory removed on drop.
+    pub struct TempDir(tempfile::TempDir);
+
+    impl TempDir {
+        pub fn new() -> Self {
+            Self(tempfile::tempdir().expect("temp dir"))
+        }
+
+        pub fn path(&self) -> &Path {
+            self.0.path()
+        }
+    }
+
+    /// Write `text` to `root/relative`, creating parent directories.
+    pub fn write(root: &Path, relative: &str, text: &str) -> PathBuf {
+        let path = root.join(relative);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, text).unwrap();
+        path
+    }
 }

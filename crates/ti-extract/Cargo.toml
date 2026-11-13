@@ -17,3 +17,10 @@ thiserror.workspace = true
 sha2 = "0.10"
 image = { version = "0.25", default-features = false, features = ["png", "webp"] }
 ti-unity = { path = "../ti-unity" }
+clap = { version = "4", features = ["derive"] }
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.55"
+
+[dev-dependencies]
+tempfile = "3"
