@@ -1,4 +1,5 @@
 // User preferences, persisted in localStorage (Svelte 5 runes).
+import type { ImageFormat } from '$lib/api';
 
 export type FilterMode = 'hide' | 'highlight';
 
@@ -26,6 +27,13 @@ export interface Settings {
 	mapScale: MapScale;
 	/** Map filters hide non-matching bodies, or only dim them. */
 	mapFilterMode: FilterMode;
+	/** Extraction: also the large artwork (illustrations, portraits, hab modules). */
+	extractLargeArt: boolean;
+	extractImageFormat: ImageFormat;
+	/** Game folder chosen in onboarding ('' = detect: Steam or `TI_GAME_DIR`). */
+	gameDir: string;
+	/** Game build ids whose update notice was dismissed. */
+	dismissedUpdates: string[];
 }
 
 const DEFAULTS: Settings = {
@@ -37,7 +45,11 @@ const DEFAULTS: Settings = {
 	landmarkLabels: false,
 	minimapCorner: 'top-left',
 	mapScale: 'log',
-	mapFilterMode: 'highlight'
+	mapFilterMode: 'highlight',
+	extractLargeArt: true,
+	extractImageFormat: 'png',
+	gameDir: '',
+	dismissedUpdates: []
 };
 
 const STORAGE_KEY = 'ti-tech-tree:settings';
@@ -58,9 +70,14 @@ function load(): Settings {
 		if (out.mapFilterMode !== 'hide' && out.mapFilterMode !== 'highlight')
 			out.mapFilterMode = DEFAULTS.mapFilterMode;
 		if (!CORNERS.includes(out.minimapCorner)) out.minimapCorner = DEFAULTS.minimapCorner;
+		if (out.extractImageFormat !== 'png' && out.extractImageFormat !== 'webp')
+			out.extractImageFormat = DEFAULTS.extractImageFormat;
+		out.dismissedUpdates = Array.isArray(out.dismissedUpdates)
+			? out.dismissedUpdates.filter((id) => typeof id === 'string')
+			: [];
 		return out;
 	} catch {
-		return { ...DEFAULTS };
+		return { ...DEFAULTS, dismissedUpdates: [] };
 	}
 }
 

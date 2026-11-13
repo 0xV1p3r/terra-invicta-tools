@@ -10,14 +10,22 @@
 	import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
 	import Tip from '$lib/components/toolbar/Tip.svelte';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
+	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
 	import Settings from '@lucide/svelte/icons/settings';
-	import { api, mockMode, type BuildInfo } from '$lib/api';
+	import Trash2 from '@lucide/svelte/icons/trash-2';
+	import { api, type BuildInfo, type ExtractArgs } from '$lib/api';
+	import ExtractionProgress from '$lib/components/onboarding/ExtractionProgress.svelte';
+	import ExtractOptions from '$lib/components/onboarding/ExtractOptions.svelte';
+	import * as AlertDialog from '$lib/components/ui/alert-dialog/index.js';
+	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
 	import * as Select from '$lib/components/ui/select/index.js';
 	import { Switch } from '$lib/components/ui/switch/index.js';
 	import * as ToggleGroup from '$lib/components/ui/toggle-group/index.js';
+	import { extractArgs, extraction, gameLabel } from '$lib/extraction.svelte';
+	import { formatBytes } from '$lib/game';
 	import { settings, type Corner } from '$lib/settings.svelte';
 	import { app } from '$lib/state.svelte';
 	import { pillIcon } from '$lib/components/toolbar/Pill.svelte';
@@ -44,17 +52,24 @@
 		chooseDataDir: (current?: string) => Promise<void>;
 		/** Load another build (null = always the latest) and reload the page's data. */
 		switchBuild: (buildId: string | null) => Promise<void>;
+		/** Extract the game data and load the new build. */
+		extract: (args: ExtractArgs) => Promise<void>;
 	}
-	let { chooseDataDir, switchBuild }: Props = $props();
+	let { chooseDataDir, switchBuild, extract }: Props = $props();
 
 	const LATEST = 'latest';
 	let builds = $state.raw<BuildInfo[]>([]);
+	/** Bytes per build directory; filled after the list (walking the folders takes a moment). */
+	let sizes = $state.raw<Record<string, number>>({});
 	let switching = $state(false);
 	let dataError = $state('');
+	/** Bumped after deleting a build, to reload the list. */
+	let buildsRevision = $state(0);
 	$effect(() => {
 		void app.meta?.buildId;
 		void app.meta?.dataDir;
-		if (!open || mockMode) return;
+		void buildsRevision;
+		if (!open) return;
 		let stale = false;
 		api.listBuilds().then(
 			(result) => {
@@ -64,10 +79,38 @@
 				if (!stale) dataError = String(cause);
 			}
 		);
+		api.getBuildSizes().then(
+			(result) => {
+				if (!stale) sizes = Object.fromEntries(result.map((s) => [s.dir, s.bytes]));
+			},
+			() => {}
+		);
+		void extraction.detect();
 		return () => {
 			stale = true;
 		};
 	});
+
+	/** Build awaiting delete confirmation. */
+	let deleting = $state.raw<BuildInfo | null>(null);
+	function confirmDelete(build: BuildInfo) {
+		const dir = build.dir;
+		deleting = null;
+		void run(async () => {
+			await api.deleteBuild(dir);
+			buildsRevision += 1;
+		});
+	}
+
+	function deleteSummary(build: BuildInfo) {
+		const size = sizes[build.dir];
+		return `${buildLabel(build, build.buildId)}${size === undefined ? '' : `, ${formatBytes(size)}`}`;
+	}
+
+	function extractAgain() {
+		if (extraction.game) void extract(extractArgs(extraction.game, true));
+	}
+	const showProgress = $derived(extraction.running || extraction.error !== null);
 
 	function buildLabel(build: BuildInfo | undefined, id: string) {
 		if (!build) return `Build ${id}`;
@@ -148,7 +191,7 @@
 					>
 				</Select.Root>
 			</div>
-			{#if !mockMode && app.meta}
+			{#if app.meta}
 				<h2 class="font-semibold">Game data</h2>
 				<div class="flex items-start justify-between gap-4">
 					<div class="grid min-w-0 gap-1">
@@ -167,7 +210,7 @@
 						variant="outline"
 						size="sm"
 						aria-describedby="setting-data-dir"
-						disabled={switching || app.meta.dataDirSource === 'env'}
+						disabled={switching || extraction.running || app.meta.dataDirSource === 'env'}
 						onclick={() => run(() => chooseDataDir(app.meta?.dataDir))}>Change…</Button
 					>
 				</div>
@@ -177,7 +220,7 @@
 						<Select.Root
 							type="single"
 							value={buildValue}
-							disabled={switching}
+							disabled={switching || extraction.running}
 							onValueChange={(value) => {
 								if (value !== buildValue) run(() => switchBuild(value === LATEST ? null : value));
 							}}
@@ -200,6 +243,62 @@
 								</Select.Group></Select.Content
 							>
 						</Select.Root>
+					</div>
+				{/if}
+				<div class="flex items-start justify-between gap-4">
+					<div class="grid min-w-0 gap-1">
+						<span id="setting-extract" class="font-medium">Game install</span>
+						<span class="text-xs leading-relaxed text-muted-foreground">
+							{#if extraction.game}
+								{gameLabel(extraction.game)}. Extracting again replaces the data of this build.
+							{:else if extraction.detected}
+								No Terra Invicta install found.
+							{:else}
+								Looking for Terra Invicta…
+							{/if}
+						</span>
+					</div>
+					<Button
+						variant="outline"
+						size="sm"
+						aria-describedby="setting-extract"
+						disabled={switching || extraction.running || !extraction.game}
+						onclick={extractAgain}><RotateCcw /> Extract again</Button
+					>
+				</div>
+				<ExtractOptions disabled={extraction.running} />
+				{#if showProgress}
+					<ExtractionProgress
+						onRetry={() => extraction.lastArgs && void extract(extraction.lastArgs)}
+						onBack={() => extraction.dismissError()}
+					/>
+				{/if}
+				{#if builds.length > 1}
+					<div class="grid gap-2">
+						<span id="setting-stored-builds" class="font-medium">Extracted builds</span>
+						<ul class="grid gap-1" aria-labelledby="setting-stored-builds">
+							{#each builds as build (build.dir)}
+								<li class="flex items-center justify-between gap-3 rounded-md border px-2.5 py-1.5">
+									<span class="grid min-w-0">
+										<span class="truncate">{buildLabel(build, build.buildId)}</span>
+										<span class="text-xs text-muted-foreground"
+											>{sizes[build.dir] === undefined ? '…' : formatBytes(sizes[build.dir])}</span
+										>
+									</span>
+									{#if build.loaded}
+										<Badge variant="secondary">Loaded</Badge>
+									{:else}
+										<Button
+											variant="ghost"
+											size="sm"
+											aria-label="Delete build {build.buildId}"
+											disabled={switching || extraction.running}
+											onclick={() => (deleting = build)}><Trash2 /> Delete</Button
+										>
+									{/if}
+								</li>
+							{/each}
+						</ul>
 					</div>
 				{/if}
 				{#if switching}
@@ -299,3 +398,29 @@
 		</div>
 	</Dialog.Content>
 </Dialog.Root>
+
+<AlertDialog.Root
+	open={deleting !== null}
+	onOpenChange={(next) => {
+		if (!next) deleting = null;
+	}}
+>
+	<AlertDialog.Content>
+		{#if deleting}
+			{@const build = deleting}
+			<AlertDialog.Header>
+				<AlertDialog.Title>Delete build {build.buildId}?</AlertDialog.Title>
+				<AlertDialog.Description>
+					This removes {deleteSummary(build)} from the data folder. You can only extract it again while
+					the game is at that build.
+				</AlertDialog.Description>
+			</AlertDialog.Header>
+			<AlertDialog.Footer>
+				<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
+				<AlertDialog.Action variant="destructive" onclick={() => confirmDelete(build)}
+					>Delete</AlertDialog.Action
+				>
+			</AlertDialog.Footer>
+		{/if}
+	</AlertDialog.Content>
+</AlertDialog.Root>

@@ -1,6 +1,6 @@
 // Tauri command wrappers. DTOs are generated from src-tauri/src/dto.rs.
 // Regenerate from the workspace root: cargo test -p ti-tech-tree export_bindings
-import { convertFileSrc, invoke, isTauri } from '@tauri-apps/api/core';
+import { Channel, convertFileSrc, invoke, isTauri } from '@tauri-apps/api/core';
 
 import type { EntityKey } from './generated/EntityKey';
 export type { EntityKey } from './generated/EntityKey';
@@ -12,6 +12,19 @@ export type { Meta } from './generated/Meta';
 export type { DataDirSource } from './generated/DataDirSource';
 import type { BuildInfo } from './generated/BuildInfo';
 export type { BuildInfo } from './generated/BuildInfo';
+import type { BuildSize } from './generated/BuildSize';
+export type { BuildSize } from './generated/BuildSize';
+import type { GameInfo } from './generated/GameInfo';
+export type { GameInfo } from './generated/GameInfo';
+export type { ImageFormat } from './generated/ImageFormat';
+import type { ExtractArgs } from './generated/ExtractArgs';
+export type { ExtractArgs } from './generated/ExtractArgs';
+import type { ExtractStage } from './generated/ExtractStage';
+export type { ExtractStage } from './generated/ExtractStage';
+import type { ExtractEvent } from './generated/ExtractEvent';
+export type { ExtractEvent } from './generated/ExtractEvent';
+import type { ExtractResult } from './generated/ExtractResult';
+export type { ExtractResult } from './generated/ExtractResult';
 export type { ScenarioInfo } from './generated/ScenarioInfo';
 export type { FactionInfo } from './generated/FactionInfo';
 export type { NodeKind } from './generated/NodeKind';
@@ -91,6 +104,9 @@ export function matchesFilter(n: TreeNode, filter: TreeFilter): boolean {
 /** Outside Tauri (plain `pnpm dev` in a browser) the API is served from static fixtures. */
 export const mockMode = !isTauri();
 
+/** Error message of a cancelled extraction (`extraction::CANCELLED` in the backend). */
+export const EXTRACTION_CANCELLED = 'Extraction cancelled.';
+
 const tauriApi = {
 	getWikiIndex: (scope: ScopeArgs, spoilers = false) =>
 		invoke<WikiSection[]>('get_wiki_index', { scope, spoilers }),
@@ -107,6 +123,30 @@ const tauriApi = {
 	setBuild: (buildId: string | null) => invoke<void>('set_build', { buildId }),
 	/** Load the data folder at `path` (it must contain `index.json`) and remember it. */
 	setDataDir: (path: string) => invoke<void>('set_data_dir', { path }),
+	/** Disk usage of every build of the data folder (walks the folders: only when shown). */
+	getBuildSizes: () => invoke<BuildSize[]>('get_build_sizes'),
+	/** Delete a build (by `BuildInfo.dir`) of the data folder; the loaded one is refused. */
+	deleteBuild: (dir: string) => invoke<void>('delete_build', { dir }),
+	/** The install at `saved` (chosen earlier), else Steam's or `TI_GAME_DIR`; null if none. */
+	detectGame: (saved: string | null = null) => invoke<GameInfo | null>('detect_game', { saved }),
+	/** The install at `path`; rejects with a message when it is not one. */
+	inspectGame: (path: string) => invoke<GameInfo>('inspect_game', { path }),
+	/**
+	 * Extract the game data, reporting progress to `onEvent`; resolves once the new build is
+	 * loaded. Rejects with `EXTRACTION_CANCELLED` after `cancelExtraction`.
+	 */
+	extractGameData: (args: ExtractArgs, onEvent: (event: ExtractEvent) => void) => {
+		const onProgress = new Channel<ExtractEvent>();
+		onProgress.onmessage = onEvent;
+		return invoke<ExtractResult>('extract_game_data', { args, onProgress });
+	},
+	cancelExtraction: () => invoke<void>('cancel_extraction'),
+	/** Native folder picker; null when dismissed. */
+	pickFolder: async (title: string, defaultPath?: string) => {
+		const { open } = await import('@tauri-apps/plugin-dialog');
+		const path = await open({ directory: true, title, defaultPath });
+		return typeof path === 'string' ? path : null;
+	},
 	/** `mergeEdges`: long edges run as shared lines (more compact, not traceable one by one). */
 	getTree: (
 		scope: ScopeArgs,
@@ -179,6 +219,52 @@ function focusFromTree(graph: TreeGraph, root: EntityKey): TreeGraph {
 	return { ...graph, nodes, edges, root, bands: [], anyOf: [] };
 }
 
+/**
+ * Mock onboarding for UI work: `?onboarding=detect|none|progress|error` starts without data
+ * (`none`: no install found; `progress`: an extraction runs slowly; `error`: it fails), and
+ * `?update` reports a newer game build than the fixtures. `?builds=2` adds an older build.
+ */
+const mockParams = new URLSearchParams(typeof location === 'undefined' ? '' : location.search);
+export const mockOnboarding = mockMode
+	? (['detect', 'none', 'progress', 'error'] as const).find(
+			(m) => m === mockParams.get('onboarding')
+		)
+	: undefined;
+let mockExtracted = !mockOnboarding;
+let mockCancel = false;
+
+const MOCK_GAME_ROOT = '/home/player/.local/share/Steam/steamapps/common/Terra Invicta';
+const MOCK_OLD_BUILD = '18823307';
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Fake extraction: walks the stages with step counts; `error` mode fails during images. */
+async function mockExtract(args: ExtractArgs, onEvent: (event: ExtractEvent) => void) {
+	mockCancel = false;
+	// [stage, steps, milliseconds, step label]; `progress` mode lingers in the images.
+	const imagesMs = mockOnboarding === 'progress' ? 60_000 : 2500;
+	const stages: [ExtractStage, number, number, (i: number) => string | null][] = [
+		['templates', 60, 1200, (i) => `Templates/TITechTemplate${i}.json`],
+		['locale', 14, 600, () => null],
+		['schema', 1, 300, () => null],
+		['images', args.largeArt ? 4000 : 1200, imagesMs, (i) => (i < 800 ? 'icons' : 'illustrations')],
+		['finish', 1, 300, () => null]
+	];
+	for (const [stage, total, ms, label] of stages) {
+		onEvent({ kind: 'stage', stage });
+		for (let done = 1; done <= total; done++) {
+			await sleep(ms / total);
+			if (mockCancel) throw EXTRACTION_CANCELLED;
+			if (mockOnboarding === 'error' && stage === 'images' && done > total / 3)
+				throw 'Could not read bundle illustrations: unexpected end of file';
+			onEvent({ kind: 'step', done, total, label: label(done) });
+		}
+	}
+	mockExtracted = true;
+	const meta = await fixture<Meta>('meta');
+	return { buildId: meta.buildId, extracted: true, issues: 3, parseErrors: 0, seconds: 12.4 };
+}
+
 const mockApi: typeof tauriApi = {
 	getWikiIndex: async (_scope, spoilers = false) =>
 		(await fixture<WikiSection[]>('wiki-index')).filter((s) => spoilers || !s.spoiler),
@@ -205,17 +291,20 @@ const mockApi: typeof tauriApi = {
 		};
 	},
 	// Older fixtures lack the build fields; mock data counts as the latest build of a found folder.
-	getMeta: async () => ({
-		latest: true,
-		pinnedBuild: null,
-		dataDirSource: 'found' as const,
-		...(await fixture<Partial<Meta> & Omit<Meta, 'latest' | 'pinnedBuild' | 'dataDirSource'>>(
-			'meta'
-		))
-	}),
+	getMeta: async () => {
+		if (!mockExtracted) throw 'No extracted game data found. (mock onboarding)';
+		return {
+			latest: true,
+			pinnedBuild: null,
+			dataDirSource: 'found' as const,
+			...(await fixture<Partial<Meta> & Omit<Meta, 'latest' | 'pinnedBuild' | 'dataDirSource'>>(
+				'meta'
+			))
+		};
+	},
 	listBuilds: async () => {
 		const meta = await fixture<Meta>('meta');
-		return [
+		const builds: BuildInfo[] = [
 			{
 				dir: meta.buildId,
 				buildId: meta.buildId,
@@ -225,6 +314,16 @@ const mockApi: typeof tauriApi = {
 				latest: true
 			}
 		];
+		if (mockParams.has('builds'))
+			builds.unshift({
+				dir: MOCK_OLD_BUILD,
+				buildId: MOCK_OLD_BUILD,
+				lastUpdated: 1751328000,
+				gameVersion: '1.0.29',
+				loaded: false,
+				latest: false
+			});
+		return builds;
 	},
 	setBuild: async () => {
 		throw 'Switching builds is not available in mock mode';
@@ -232,6 +331,32 @@ const mockApi: typeof tauriApi = {
 	setDataDir: async () => {
 		throw 'Choosing a data folder is not available in mock mode';
 	},
+	getBuildSizes: async () =>
+		(await mockApi.listBuilds()).map((b, i) => ({ dir: b.dir, bytes: (i + 1) * 873_000_000 })),
+	deleteBuild: async () => {
+		throw 'Deleting builds is not available in mock mode';
+	},
+	// The fixtures' build, so a mock extraction yields the detected build (`?update`: a newer one).
+	detectGame: async () => {
+		if (mockOnboarding === 'none') return null;
+		const meta = await fixture<Meta>('meta');
+		return {
+			root: MOCK_GAME_ROOT,
+			version: meta.gameVersion,
+			buildId: mockParams.has('update') ? '21474836' : meta.buildId
+		};
+	},
+	inspectGame: async (path) => {
+		if (!path.includes('Terra Invicta'))
+			throw `${path} is not a Terra Invicta install. Choose the game folder, the one that contains TerraInvicta_Data.`;
+		return { root: path, version: '1.0.53b', buildId: null };
+	},
+	extractGameData: mockExtract,
+	cancelExtraction: async () => {
+		mockCancel = true;
+	},
+	// No native dialog in a browser.
+	pickFolder: async (title, defaultPath) => prompt(title, defaultPath ?? MOCK_GAME_ROOT),
 	getTree: async (_scope, filter, layout = 'layered') => {
 		const unfiltered = filter.categories.length === 0 && filter.properties.length === 0;
 		if (layout === 'bands') {
