@@ -225,3 +225,62 @@ fn cancel_removes_partial_build() {
     assert!(matches!(result, Err(Error::Cancelled)));
     assert_eq!(std::fs::read_dir(&output).unwrap().count(), 0);
 }
+
+#[test]
+fn unsafe_build_ids_are_rejected_from_options_and_install() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("game");
+    write(&root, "TerraInvicta_Data/StreamingAssets/Templates/A.json", b"[]");
+    let output = tmp.path().join("out");
+    let mut install = ti_extract::discover(&root).unwrap();
+    for id in ["", ".", "..", ".hidden", "../x", "/absolute", "a/b", "a\\b", "C:x", "a\0b", "a\nb", "a\u{7f}b"] {
+        for from_install in [false, true] {
+            install.build_id = Some(id.into());
+            let opts = ExtractOptions {
+                build_id: if from_install { None } else { Some(id.into()) },
+                force: true,
+                ..options(&output)
+            };
+            let error = ti_extract::extract(&install, &opts, &mut |_| {}, &AtomicBool::new(false)).unwrap_err();
+            assert!(
+                matches!(&error, Error::Other(message) if message.contains("invalid build id")),
+                "{id:?}: {error}"
+            );
+            assert!(!output.exists());
+        }
+    }
+}
+
+#[test]
+fn refuses_unrecognized_build_directory_even_with_force() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("game");
+    write(&root, "TerraInvicta_Data/StreamingAssets/Templates/A.json", b"[]");
+    let output = tmp.path().join("out");
+    let sentinel = write(&output, "test/keep.txt", b"keep me");
+    for force in [false, true] {
+        let error = extract(&root, &ExtractOptions { force, ..options(&output) }).unwrap_err();
+        assert!(
+            matches!(&error, Error::Other(message) if message.contains("no manifest.json") && message.contains(&output.join("test").display().to_string()))
+        );
+        assert_eq!(std::fs::read(&sentinel).unwrap(), b"keep me");
+        assert!(!output.join(".test.old").exists());
+    }
+}
+
+#[test]
+fn stale_partial_is_removed_and_deep_templates_report_parse_errors() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("game");
+    let text = format!("{}0{}", "[".repeat(2000), "]".repeat(2000));
+    write(&root, "TerraInvicta_Data/StreamingAssets/Templates/Deep.json", text.as_bytes());
+    let output = tmp.path().join("out");
+    write(&output, ".test.partial/stale.txt", b"stale");
+    let report = extract(&root, &options(&output)).unwrap();
+    assert_eq!(report.parse_errors, 1);
+    let issues = read(&output.join("test/reports/issues.json"));
+    assert_eq!(issues["issues"][0]["kind"], "parse_error");
+    assert!(issues["issues"][0]["error"].as_str().unwrap().contains("Maximum nesting depth exceeded"));
+    assert!(!output.join("test/stale.txt").exists());
+    assert!(!output.join(".test.partial").exists());
+}

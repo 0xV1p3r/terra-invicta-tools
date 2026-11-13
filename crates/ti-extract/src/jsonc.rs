@@ -454,14 +454,17 @@ impl Parser<'_> {
         self.s.get(i..i + w.len()) == Some(&w[..])
     }
 
-    fn scan(&self, i: usize) -> Result<(Raw, usize), Fail> {
+    fn scan(&self, i: usize, depth: usize) -> Result<(Raw, usize), Fail> {
         let Some(&c) = self.s.get(i) else {
             return Err(Fail::Stop(i));
         };
+        if matches!(c, '{' | '[') && depth >= 512 {
+            return Err(Fail::Error("Maximum nesting depth exceeded", i));
+        }
         match c {
             '"' => self.string(i + 1).map(|(s, end)| (Raw::Scalar(Value::Str(s)), end)),
-            '{' => self.object(i + 1),
-            '[' => self.array(i + 1),
+            '{' => self.object(i + 1, depth + 1),
+            '[' => self.array(i + 1, depth + 1),
             'n' if self.starts(i, "null") => Ok((Raw::Scalar(Value::Null), i + 4)),
             't' if self.starts(i, "true") => Ok((Raw::Scalar(Value::Bool(true)), i + 4)),
             'f' if self.starts(i, "false") => Ok((Raw::Scalar(Value::Bool(false)), i + 5)),
@@ -586,7 +589,7 @@ impl Parser<'_> {
         }
     }
 
-    fn object(&self, start: usize) -> Result<(Raw, usize), Fail> {
+    fn object(&self, start: usize, depth: usize) -> Result<(Raw, usize), Fail> {
         let s = self.s;
         let mut pairs = Vec::new();
         let mut i = self.skip_ws(start);
@@ -601,7 +604,7 @@ impl Parser<'_> {
                     return Err(Fail::Error("Expecting ':' delimiter", i));
                 }
                 i = self.skip_ws(i + 1);
-                let (value, next) = self.scan(i)?;
+                let (value, next) = self.scan(i, depth)?;
                 pairs.push((key, value));
                 i = self.skip_ws(next);
                 if s.get(i) == Some(&'}') {
@@ -616,13 +619,13 @@ impl Parser<'_> {
         Ok((Raw::Object(pairs), i + 1))
     }
 
-    fn array(&self, start: usize) -> Result<(Raw, usize), Fail> {
+    fn array(&self, start: usize, depth: usize) -> Result<(Raw, usize), Fail> {
         let s = self.s;
         let mut items = Vec::new();
         let mut i = self.skip_ws(start);
         if s.get(i) != Some(&']') {
             loop {
-                let (value, next) = self.scan(i)?;
+                let (value, next) = self.scan(i, depth)?;
                 items.push(value);
                 i = self.skip_ws(next);
                 if s.get(i) == Some(&']') {
@@ -653,7 +656,7 @@ fn parse_raw(text: &str) -> Result<Raw, ParseError> {
     }
     let p = Parser { s: &chars };
     let start = p.skip_ws(0);
-    let (value, end) = p.scan(start).map_err(|f| p.error(f))?;
+    let (value, end) = p.scan(start, 0).map_err(|f| p.error(f))?;
     let end = p.skip_ws(end);
     if end != chars.len() {
         return Err(decode_error(&chars, "Extra data", end));
@@ -888,5 +891,18 @@ mod tests {
         assert_eq!(json("[1, true]"), json("[1.0, 1]"));
         assert_ne!(json(r#"{"a": 1}"#), json(r#"{"a": 1, "b": 2}"#));
         assert_eq!(json(r#"{"a": 1, "b": 2}"#), json(r#"{"b": 2, "a": 1}"#));
+    }
+    #[test]
+    fn nesting_limit_for_arrays_objects_and_mixed_containers() {
+        for (open, close) in [("[", "]"), ("{\"x\":", "}"), ("[{\"x\":", "}]")] {
+            let text = format!("{}0{}", open.repeat(2000), close.repeat(2000));
+            assert!(parse(&text).unwrap_err().0.contains("Maximum nesting depth exceeded"));
+            assert!(loads_plain(&text).unwrap_err().0.contains("Maximum nesting depth exceeded"));
+            let normal = format!("{}0{}", open.repeat(32), close.repeat(32));
+            assert!(parse(&normal).is_ok());
+            assert!(loads_plain(&normal).is_ok());
+        }
+        let boundary = format!("{}0{}", "[".repeat(512), "]".repeat(512));
+        assert!(parse(&boundary).is_ok());
     }
 }
