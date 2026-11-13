@@ -104,9 +104,9 @@ pub struct GameInfo {
 #[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
 #[serde(rename_all = "camelCase")]
 pub enum ImageFormat {
-    #[default]
     Png,
     /// Lossless WebP: smaller files, same pixels.
+    #[default]
     Webp,
 }
 

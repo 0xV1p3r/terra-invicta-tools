@@ -49,9 +49,9 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ImageFormat {
-    #[default]
     Png,
     /// Lossless WebP.
+    #[default]
     Webp,
 }
 
@@ -110,7 +110,7 @@ impl ExtractOptions {
             force: false,
             allow_parse_errors: false,
             images: Images::All,
-            image_format: ImageFormat::Png,
+            image_format: ImageFormat::Webp,
         }
     }
 }
