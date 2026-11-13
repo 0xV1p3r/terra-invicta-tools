@@ -132,7 +132,7 @@ pub fn run(install: &GameInstall, opts: &ExtractOptions, progress: &mut dyn FnMu
         .iter()
         .filter(|i| i.get("kind").and_then(Value::as_str) == Some("parse_error"))
         .count();
-    let build_id = match opts.build_id.clone().or_else(|| install.build_id.clone()) {
+    let build_id = match opts.build_id.clone().or_else(|| install.build_id.clone()).filter(|id| !id.is_empty()) {
         Some(id) => id,
         None => {
             let digest = sha256_bytes(python_dumps_sorted(&source_hashes).as_bytes());
