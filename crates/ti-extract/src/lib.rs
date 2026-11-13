@@ -86,7 +86,10 @@ pub struct ExtractOptions {
     pub data_dir: PathBuf,
     /// Output directory name instead of the Steam build id.
     pub build_id: Option<String>,
-    /// Replace an existing extraction of the same build.
+    /// Replace an existing extraction of the same build. The old build is renamed to
+    /// `.<id>.old` while the new one moves in and is deleted afterwards, so readers of the
+    /// old build keep working until then (open files must allow deletion on Windows, which
+    /// Rust's `File` does).
     pub force: bool,
     /// Treat template files that fail to parse as success. [`extract`] itself always writes
     /// the build and returns `Ok`, counting the failures in [`ExtractReport::parse_errors`]
