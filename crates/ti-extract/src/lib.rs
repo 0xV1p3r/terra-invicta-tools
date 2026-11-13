@@ -1,8 +1,7 @@
 //! Extracts Terra Invicta game data into a stable, build-pinned dataset:
 //! `<data dir>/<build id>/` plus `<data dir>/index.json`, read by `ti-data`.
 //!
-//! Port of the Python `extractor/` (`ti_extract`); the output format is the same
-//! (`FORMAT_VERSION`), so builds written by either one load the same way.
+//! Originally ported from the Python extractor; existing datasets remain compatible.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
@@ -96,7 +95,7 @@ pub struct ExtractOptions {
     /// Treat template files that fail to parse as success. [`extract`] itself always writes
     /// the build and returns `Ok`, counting the failures in [`ExtractReport::parse_errors`]
     /// (details in `reports/issues.json`); callers decide what to do with them. The CLI exits
-    /// with status 1 when this is off and `parse_errors > 0`, like the Python one.
+    /// with status 1 when this is off and `parse_errors > 0`.
     pub allow_parse_errors: bool,
     pub images: Images,
     pub image_format: ImageFormat,
@@ -135,7 +134,7 @@ pub enum Progress {
     /// Work within the current phase: `done` of `total` units (files, images, ...), with an
     /// optional label such as the bundle being exported.
     Step { done: u64, total: u64, label: Option<String> },
-    /// A human-readable log line (what the Python CLI prints).
+    /// A human-readable log line.
     Log { message: String },
 }
 

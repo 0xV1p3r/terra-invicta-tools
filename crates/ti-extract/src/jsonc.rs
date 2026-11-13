@@ -1,4 +1,4 @@
-//! Lenient JSON reader for the game's template files (port of `jsonc.py`).
+//! Lenient JSON reader for the game's template files.
 //!
 //! The templates are mostly JSON, but some contain `//` and `/* */` comments and
 //! trailing commas. Comments are blanked out (not removed) so that line/column

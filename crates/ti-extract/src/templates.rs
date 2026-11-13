@@ -1,4 +1,4 @@
-//! Reading template files of every layer into plain records (port of `templates.py`).
+//! Reading template files of every layer into plain records.
 
 use std::path::{Path, PathBuf};
 

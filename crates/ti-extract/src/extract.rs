@@ -1,4 +1,4 @@
-//! The `extract` pipeline (port of `cmd_extract` in `cli.py`).
+//! The `extract` pipeline.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
