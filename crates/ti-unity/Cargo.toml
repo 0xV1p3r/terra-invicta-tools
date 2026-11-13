@@ -1,0 +1,10 @@
+[package]
+name = "ti-unity"
+version = "0.1.0"
+description = "Minimal reader for the Unity asset bundles of Terra Invicta: textures and sprites"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+thiserror.workspace = true
