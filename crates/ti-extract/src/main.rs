@@ -41,8 +41,8 @@ enum Cmd {
         /// exit successfully even if template files fail to parse
         #[arg(long)]
         allow_parse_errors: bool,
-        /// output image format
-        #[arg(long, value_enum, default_value = "png")]
+        /// output image format (lossless WebP by default)
+        #[arg(long, value_enum, default_value = "webp")]
         image_format: Format,
         /// skip image extraction
         #[arg(long)]

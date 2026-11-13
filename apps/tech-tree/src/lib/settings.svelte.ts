@@ -47,7 +47,7 @@ const DEFAULTS: Settings = {
 	mapScale: 'log',
 	mapFilterMode: 'highlight',
 	extractLargeArt: true,
-	extractImageFormat: 'png',
+	extractImageFormat: 'webp',
 	gameDir: '',
 	dismissedUpdates: []
 };

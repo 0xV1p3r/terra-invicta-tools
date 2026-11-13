@@ -40,16 +40,17 @@
 				onValueChange={(v) => (settings.extractImageFormat = v === 'webp' ? 'webp' : 'png')}
 			>
 				<div class="flex items-center gap-2">
+					<RadioGroup.Item value="webp" id="{id}-webp" />
+					<Label for="{id}-webp" class="font-normal">WebP (default)</Label>
+				</div>
+				<div class="flex items-center gap-2">
 					<RadioGroup.Item value="png" id="{id}-png" />
 					<Label for="{id}-png" class="font-normal">PNG</Label>
 				</div>
-				<div class="flex items-center gap-2">
-					<RadioGroup.Item value="webp" id="{id}-webp" />
-					<Label for="{id}-webp" class="font-normal"
-						>WebP <span class="text-muted-foreground">(lossless, smaller)</span></Label
-					>
-				</div>
 			</RadioGroup.Root>
+			<p class="text-muted-foreground">
+				WebP is lossless: same quality as PNG, faster to extract and smaller.
+			</p>
 		</div>
 		<p class="text-muted-foreground">Icons, logos and flags are always extracted.</p>
 	</Collapsible.Content>
