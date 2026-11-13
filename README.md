@@ -1,6 +1,4 @@
-<img src="apps/tech-tree/branding/icon.svg" width="96" alt="Terra Invicta Tools icon">
-
-# Terra Invicta Tools
+<h1 align="center"><img src="apps/tech-tree/branding/icon.svg" width="48" align="center" alt=""> Terra Invicta Tools</h1>
 
 Unofficial desktop tools for Terra Invicta. The app reads data from your installed copy of the game and shows the research tree, a wiki and a solar system map. More tools will follow.
 
@@ -97,12 +95,6 @@ git diff --exit-code -- apps/tech-tree/src/lib/generated
 If you change a DTO, commit the regenerated TypeScript bindings with it. Rust tests that need game data skip when `data/` is empty.
 
 From `apps/tech-tree/`, run `pnpm check`, `pnpm lint` and `pnpm test`. From `extractor/`, run `uv run pytest -q`.
-
-## Branding
-
-The icon is a wheel space station. The white hub stands for the shared game data, and each research category docks on the ring as a module. `apps/tech-tree/branding/icon.svg` is the main version, and `icon-small.svg` has heavier lines for sizes of 32 px and below. After editing either file, run `apps/tech-tree/branding/build-icons.sh` to rebuild the app icons and favicon. It needs ImageMagick.
-
-The UI is black, grey and white, and the eight research category colours are the only hues. The colour tokens are in `apps/tech-tree/src/app.css`.
 
 ## Legal
 
