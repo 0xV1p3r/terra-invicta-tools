@@ -84,7 +84,9 @@ pub const LARGE_ART_BUNDLES: &[&str] = &["illustrations", "characterportraits", 
 pub struct ExtractOptions {
     /// Data root: builds go to `<data_dir>/<build id>/`, the build list to `<data_dir>/index.json`.
     pub data_dir: PathBuf,
-    /// Output directory name instead of the Steam build id.
+    /// Output directory name instead of the Steam build id. Must be a single non-empty
+    /// normal path component: no leading `.`, `/`, `\\`, `:`, NUL, or control characters;
+    /// `.` and `..` are forbidden.
     pub build_id: Option<String>,
     /// Replace an existing extraction of the same build. The old build is renamed to
     /// `.<id>.old` while the new one moves in and is deleted afterwards, so readers of the

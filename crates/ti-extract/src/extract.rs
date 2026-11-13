@@ -132,7 +132,7 @@ pub fn run(install: &GameInstall, opts: &ExtractOptions, progress: &mut dyn FnMu
         .iter()
         .filter(|i| i.get("kind").and_then(Value::as_str) == Some("parse_error"))
         .count();
-    let build_id = match opts.build_id.clone().or_else(|| install.build_id.clone()).filter(|id| !id.is_empty()) {
+    let build_id = match opts.build_id.clone().or_else(|| install.build_id.clone()) {
         Some(id) => id,
         None => {
             let digest = sha256_bytes(python_dumps_sorted(&source_hashes).as_bytes());
@@ -142,7 +142,19 @@ pub fn run(install: &GameInstall, opts: &ExtractOptions, progress: &mut dyn FnMu
         }
     };
 
+    if build_id.is_empty() || build_id.starts_with('.') || build_id.chars().any(|c| matches!(c, '/' | '\\' | ':') || c.is_control()) {
+        return Err(Error::Other(format!(
+            "invalid build id {build_id:?}: expected a single non-empty path component with no leading dot, '/', '\\', ':', or control characters"
+        )));
+    }
+
     let final_dir = data_dir.join(&build_id);
+    if final_dir.exists() && !final_dir.join("manifest.json").is_file() {
+        return Err(Error::Other(format!(
+            "refusing to replace directory {}: no manifest.json found",
+            final_dir.display()
+        )));
+    }
     if final_dir.join("manifest.json").is_file() && !opts.force && parse_errors == 0 {
         run.log(format!("build {build_id} already extracted at {} (use --force to redo)", final_dir.display()));
         write_index(data_dir)?;
