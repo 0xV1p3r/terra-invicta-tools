@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Terra Invicta Tools
+{{#if comment}}
+Comment={{comment}}
+{{/if}}
+Exec={{exec}}
+Icon={{icon}}
+StartupWMClass={{exec}}
+Categories=Game;StrategyGame;
+Keywords=Terra Invicta;tech tree;
+Terminal=false
