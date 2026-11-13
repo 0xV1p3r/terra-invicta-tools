@@ -31,9 +31,6 @@
 
 	const current = $derived(STAGES.findIndex((s) => s.id === extraction.stage));
 	const stageLabel = $derived(current >= 0 ? STAGES[current].label : 'Starting');
-	const percent = $derived(
-		extraction.total > 0 ? Math.min(100, (100 * extraction.done) / extraction.total) : null
-	);
 	const count = $derived(
 		extraction.total > 1
 			? `${extraction.done.toLocaleString('en-US')} / ${extraction.total.toLocaleString('en-US')}`
@@ -92,10 +89,10 @@
 	{#if extraction.running}
 		<div class="grid gap-2">
 			<Progress
-				value={percent}
-				class="h-1.5"
-				aria-label="{stageLabel} progress"
-				aria-valuetext={count || stageLabel}
+				value={extraction.percent}
+				class="h-1.5 [&>[data-slot=progress-indicator]]:transition-transform [&>[data-slot=progress-indicator]]:duration-200 [&>[data-slot=progress-indicator]]:ease-linear motion-reduce:[&>[data-slot=progress-indicator]]:transition-none"
+				aria-label="Overall extraction progress"
+				aria-valuetext={`${Math.round(extraction.percent)}% overall, ${stageLabel}`}
 			/>
 			<div class="flex min-w-0 items-baseline justify-between gap-3 text-xs text-muted-foreground">
 				<span class="truncate" title={extraction.label ?? undefined}

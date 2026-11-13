@@ -69,9 +69,7 @@
 	<div class="grid w-full max-w-xl gap-6">
 		<header class="grid gap-4">
 			<h1><img src={wordmark} alt="Terra Invicta Tools" class="h-14 w-auto" /></h1>
-			<p class="text-muted-foreground">
-				These tools are built from your own copy of the game. Nothing is uploaded.
-			</p>
+			<p class="text-muted-foreground">These tools are built from your own copy of the game.</p>
 		</header>
 
 		<Card.Root>

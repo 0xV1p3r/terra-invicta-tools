@@ -10,6 +10,7 @@ import {
 	type ExtractStatus,
 	type GameInfo
 } from '$lib/api';
+import { advanceProgress, initialProgress } from './extraction-progress';
 import { settings } from '$lib/settings.svelte';
 
 export { gameLabel, gameUpdate } from '$lib/game';
@@ -51,6 +52,10 @@ class Extraction {
 	stage = $state<ExtractStage | null>(null);
 	done = $state(0);
 	total = $state(0);
+	percent = $state(0);
+	private progress = initialProgress();
+	private pendingLabel: string | null = null;
+	private progressTimer: ReturnType<typeof setTimeout> | null = null;
 	/** Label of the current step or the latest log line. */
 	label = $state<string | null>(null);
 	/** Why the last extraction failed (`EXTRACTION_CANCELLED` if cancelled). */
@@ -96,16 +101,20 @@ class Extraction {
 		this.running = true;
 		this.cancelling = false;
 		this.error = null;
-		this.stage = null;
-		this.done = this.total = 0;
+		this.pendingLabel = null;
+		this.progress = initialProgress();
+		this.flushProgress();
 		this.label = null;
 		this.lastArgs = args;
 		try {
-			return await api.extractGameData(args, (event) => this.report(event));
+			const result = await api.extractGameData(args, (event) => this.report(event));
+			this.progress = { ...this.progress, percent: 100 };
+			return result;
 		} catch (cause) {
 			this.error = this.cancelling ? EXTRACTION_CANCELLED : String(cause);
 			return null;
 		} finally {
+			this.flushProgress();
 			this.running = false;
 			this.cancelling = false;
 		}
@@ -133,32 +142,48 @@ class Extraction {
 			if (this.cancelling) this.error = EXTRACTION_CANCELLED;
 			return !this.cancelling;
 		} finally {
+			this.flushProgress();
 			this.running = false;
 			this.cancelling = false;
 		}
 	}
 
+	private flushProgress() {
+		if (this.progressTimer !== null) clearTimeout(this.progressTimer);
+		this.progressTimer = null;
+		this.stage = this.progress.stage;
+		this.done = this.progress.done;
+		this.total = this.progress.total;
+		this.percent = this.progress.percent;
+		this.label = this.pendingLabel;
+	}
+
+	private updateProgress(stage: ExtractStage | null, done = 0, total = 0) {
+		const changed = stage !== this.progress.stage;
+		this.progress = advanceProgress(this.progress, stage, done, total);
+		if (changed) this.flushProgress();
+		else if (this.progressTimer === null)
+			this.progressTimer = setTimeout(() => this.flushProgress(), 100);
+	}
+
 	private show(status: ExtractStatus) {
-		this.stage = status.stage;
-		this.done = status.done;
-		this.total = status.total;
-		this.label = status.label;
+		this.pendingLabel = status.label;
+		this.updateProgress(status.stage, status.done, status.total);
 	}
 
 	private report(event: ExtractEvent) {
 		switch (event.kind) {
 			case 'stage':
-				this.stage = event.stage;
-				this.done = this.total = 0;
-				this.label = null;
+				this.pendingLabel = null;
+				this.updateProgress(event.stage);
 				break;
 			case 'step':
-				this.done = event.done;
-				this.total = event.total;
-				if (event.label) this.label = event.label;
+				if (event.label) this.pendingLabel = event.label;
+				this.updateProgress(this.progress.stage, event.done, event.total);
 				break;
 			case 'log':
-				this.label = event.message;
+				this.pendingLabel = event.message;
+				this.updateProgress(this.progress.stage, this.progress.done, this.progress.total);
 				break;
 		}
 	}
