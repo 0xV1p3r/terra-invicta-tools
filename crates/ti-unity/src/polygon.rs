@@ -51,12 +51,13 @@ pub(crate) struct Mask {
 }
 
 impl Mask {
-    pub fn new(width: u32, height: u32) -> Self {
-        Self {
+    /// `width` and `height` are those of a valid [`crate::Image`], so they fit in `i32`.
+    pub fn new(width: u32, height: u32) -> crate::Result<Self> {
+        Ok(Self {
             width: width as i32,
             height: height as i32,
-            data: vec![0; width as usize * height as usize],
-        }
+            data: crate::zeroed(width as usize * height as usize)?,
+        })
     }
 
     fn hline(&mut self, mut x0: i32, y: i32, mut x1: i32) {
@@ -189,14 +190,14 @@ mod tests {
     #[test]
     fn triangle_matches_pillow() {
         // Pillow 13: ImageDraw.Draw(Image.new("1", (6, 5))).polygon([(0, 0), (5, 0), (0, 4)], fill=1)
-        let mut m = Mask::new(6, 5);
+        let mut m = Mask::new(6, 5).unwrap();
         m.fill_polygon(&[(0.0, 0.0), (5.0, 0.0), (0.0, 4.0)]);
         assert_eq!(rows(&m), ["######", "#####.", "###...", "##....", "#....."]);
     }
 
     #[test]
     fn quad_halves_cover_the_rect() {
-        let mut m = Mask::new(4, 3);
+        let mut m = Mask::new(4, 3).unwrap();
         m.fill_polygon(&[(0.0, 0.0), (4.0, 0.0), (4.0, 3.0)]);
         m.fill_polygon(&[(0.0, 0.0), (4.0, 3.0), (0.0, 3.0)]);
         assert!(m.data.iter().all(|&b| b == 1));

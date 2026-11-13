@@ -48,9 +48,13 @@ impl SerializedFile {
     }
 
     pub fn parse(bundle: Arc<Bundle>, node: usize) -> Result<Self> {
-        let name = bundle.nodes[node].path.clone();
+        let n = bundle
+            .nodes
+            .get(node)
+            .ok_or_else(|| format_err(format!("{}: no node {node}", bundle.path().display())))?;
+        let name = n.path.clone();
         let err = |e: Error| format_err(format!("{}/{name}: {e}", bundle.path().display()));
-        let head = bundle.read(node, 0, 48.min(bundle.nodes[node].size as usize)).map_err(err)?;
+        let head = bundle.read(node, 0, n.size.min(48) as usize).map_err(err)?;
         let mut r = Reader::new(&head, true);
         let mut metadata_size = u64::from(r.u32()?);
         let _file_size = r.u32()?;
@@ -68,7 +72,8 @@ impl SerializedFile {
             r.i64()?;
         }
         let meta_start = r.pos;
-        let meta = bundle.read(node, meta_start as u64, metadata_size as usize).map_err(err)?;
+        let meta_size = usize::try_from(metadata_size).map_err(|_| err(format_err("metadata size")))?;
+        let meta = bundle.read(node, meta_start as u64, meta_size).map_err(err)?;
         let parsed = Self::parse_metadata(&meta, version, big_endian, data_offset).map_err(err)?;
         let (types, objects) = parsed;
         Ok(Self {
@@ -89,7 +94,8 @@ impl SerializedFile {
         if !type_tree {
             return Err(Error::Unsupported("serialized file without type trees".into()));
         }
-        let type_count = r.len()?;
+        // Class id, stripped flag, script index, hash, and an empty type tree.
+        let type_count = r.count(31)?;
         let mut types = Vec::with_capacity(type_count);
         for _ in 0..type_count {
             let class_id = r.i32()?;
@@ -106,7 +112,7 @@ impl SerializedFile {
             }
             types.push(SerializedType { class_id, tree });
         }
-        let object_count = r.len()?;
+        let object_count = r.count(if version >= 22 { 24 } else { 20 })?;
         let mut objects = Vec::with_capacity(object_count);
         for _ in 0..object_count {
             r.align(4);
@@ -118,9 +124,12 @@ impl SerializedFile {
                 .get(type_index)
                 .ok_or_else(|| format_err(format!("object {path_id}: bad type index {type_index}")))?
                 .class_id;
+            let offset = data_offset
+                .checked_add(start)
+                .ok_or_else(|| format_err(format!("object {path_id}: bad offset")))?;
             objects.push(ObjectInfo {
                 path_id,
-                offset: data_offset + start,
+                offset,
                 size,
                 type_index,
                 class_id,
@@ -157,7 +166,7 @@ impl SerializedFile {
         if 4 + n > obj.size as usize {
             return Err(format_err(format!("object {}: bad name length", obj.path_id)));
         }
-        let name = self.bundle.read(self.node, obj.offset + 4, n)?;
+        let name = self.bundle.read(self.node, obj.offset.saturating_add(4), n)?;
         Ok(Some(String::from_utf8_lossy(&name).into_owned()))
     }
 
@@ -176,5 +185,55 @@ impl SerializedFile {
             .node_index(name)
             .ok_or_else(|| format_err(format!("stream file {path} not in {}", self.bundle.path().display())))?;
         self.bundle.read(node, offset, size)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Metadata of version 22 (big endian): one type with a one-node tree, then `objects`.
+    fn metadata(type_count: i32, object_count: i32, objects: &[(u64, u32, i32)]) -> Vec<u8> {
+        let mut m = b"2020.3.49f1\0".to_vec();
+        m.extend(19i32.to_be_bytes()); // platform
+        m.push(1); // type trees
+        m.extend(type_count.to_be_bytes());
+        m.extend(28i32.to_be_bytes());
+        m.push(0);
+        m.extend((-1i16).to_be_bytes());
+        m.extend([0; 16]);
+        m.extend(1i32.to_be_bytes()); // nodes
+        m.extend(5i32.to_be_bytes()); // string bytes
+        m.extend([0; 32]);
+        m.extend(b"Base\0");
+        m.extend(0i32.to_be_bytes()); // dependencies
+        m.extend(object_count.to_be_bytes());
+        for &(start, size, ty) in objects {
+            m.resize(m.len().div_ceil(4) * 4, 0);
+            m.extend(1i64.to_be_bytes());
+            m.extend(start.to_be_bytes());
+            m.extend(size.to_be_bytes());
+            m.extend(ty.to_be_bytes());
+        }
+        m
+    }
+
+    #[test]
+    fn metadata_tables() {
+        let (types, objects) = SerializedFile::parse_metadata(&metadata(1, 1, &[(16, 8, 0)]), 22, true, 4096).unwrap();
+        assert_eq!((types.len(), objects[0].offset, objects[0].class_id), (1, 4112, 28));
+    }
+
+    #[test]
+    fn malformed_metadata_is_an_error() {
+        for (meta, data_offset) in [
+            (metadata(i32::MAX, 1, &[(16, 8, 0)]), 0),
+            (metadata(-1, 1, &[(16, 8, 0)]), 0),
+            (metadata(1, i32::MAX, &[(16, 8, 0)]), 0),
+            (metadata(1, 1, &[(16, 8, 5)]), 0),
+            (metadata(1, 1, &[(u64::MAX, 8, 0)]), 16),
+        ] {
+            assert!(SerializedFile::parse_metadata(&meta, 22, true, data_offset).is_err());
+        }
     }
 }

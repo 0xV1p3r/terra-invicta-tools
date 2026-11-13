@@ -8,9 +8,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::{BufWriter, Read};
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::path::{Component, Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, mpsc};
+use std::time::Duration;
 
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
@@ -277,12 +278,30 @@ fn sha256_file(path: &Path) -> Result<String> {
     Ok(h.finalize().iter().map(|b| format!("{b:02x}")).collect())
 }
 
+/// Write `dest` by having `write` fill a temporary file next to it, then renaming that over
+/// `dest`. An existing `dest` (perhaps a hard link into a previous build) is replaced, never
+/// written through, and a failed write leaves it as it was.
+fn write_replacing(dest: &Path, write: impl FnOnce(&Path) -> Result<()>) -> Result<()> {
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let parent = dest.parent().ok_or_else(|| Error::Other(format!("{}: no parent directory", dest.display())))?;
+    fs::create_dir_all(parent).map_err(|e| io_err(parent.display(), e))?;
+    let name = dest.file_name().unwrap_or_default().to_string_lossy();
+    let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let tmp = parent.join(format!(".{name}.{}-{n}.tmp", std::process::id()));
+    let r = write(&tmp).and_then(|()| fs::rename(&tmp, dest).map_err(|e| io_err(dest.display(), e)));
+    if r.is_err() {
+        let _ = fs::remove_file(&tmp);
+    }
+    r
+}
+
 fn save(image: &Image, dest: &Path, format: ImageFormat) -> Result<()> {
+    write_replacing(dest, |tmp| encode(image, tmp, format))
+}
+
+fn encode(image: &Image, dest: &Path, format: ImageFormat) -> Result<()> {
     use image::ImageEncoder;
     let err = |e: image::ImageError| Error::Other(format!("{}: {e}", dest.display()));
-    if let Some(parent) = dest.parent() {
-        fs::create_dir_all(parent).map_err(|e| io_err(parent.display(), e))?;
-    }
     let file = fs::File::create(dest).map_err(|e| io_err(dest.display(), e))?;
     let mut w = BufWriter::new(file);
     let color = match image.mode {
@@ -344,7 +363,8 @@ fn parallel<T: Send, R: Send>(items: Vec<T>, cancel: &AtomicBool, work: impl Fn(
     Ok(())
 }
 
-/// Copy (hard-link) the wanted images of a previous build's bundle entry; `None` if any is unusable.
+/// Copy (hard-link) the wanted images of a previous build's bundle entry; `None` if any is
+/// unusable, after removing the ones already linked.
 fn reuse(prev_dir: &Path, prev: &Value, out_dir: &Path, wanted: &BTreeSet<&str>, format: ImageFormat) -> Option<BTreeMap<String, Value>> {
     let exported = prev.get("exported")?.as_object()?;
     let exported: BTreeMap<String, Value> = exported
@@ -354,21 +374,27 @@ fn reuse(prev_dir: &Path, prev: &Value, out_dir: &Path, wanted: &BTreeSet<&str>,
         .collect();
     let suffix = format!(".{}", format.extension());
     let files: Vec<&str> = exported.values().map(|m| m.get("file").and_then(Value::as_str)).collect::<Option<_>>()?;
-    if files.iter().any(|f| !f.ends_with(&suffix)) {
+    let relative = |f: &str| Path::new(f).components().all(|c| matches!(c, Component::Normal(_)));
+    if files.iter().any(|f| !f.ends_with(&suffix) || !relative(f)) {
         return None;
     }
+    let mut linked = Vec::new();
     for file in files {
         let (src, dest) = (prev_dir.join(file), out_dir.join(file));
-        if !src.is_file() {
+        let linked_one = src.is_file()
+            && write_replacing(&dest, |tmp| {
+                fs::hard_link(&src, tmp)
+                    .or_else(|_| fs::copy(&src, tmp).map(drop))
+                    .map_err(|e| io_err(src.display(), e))
+            })
+            .is_ok();
+        if !linked_one {
+            for dest in linked {
+                let _ = fs::remove_file(dest);
+            }
             return None;
         }
-        fs::create_dir_all(dest.parent()?).ok()?;
-        if dest.exists() {
-            fs::remove_file(&dest).ok()?;
-        }
-        if fs::hard_link(&src, &dest).is_err() {
-            fs::copy(&src, &dest).ok()?;
-        }
+        linked.push(dest);
     }
     Some(exported)
 }
@@ -397,30 +423,42 @@ fn candidates(files: &[SerializedFile], want: &BTreeMap<String, String>) -> Resu
 /// takes about 150 MB while it is decoded, cut out and encoded).
 const MEMORY_BUDGET: u64 = 1 << 30;
 
+/// How often a worker waiting for memory checks for cancellation.
+const CANCEL_POLL: Duration = Duration::from_millis(50);
+
 /// A counting semaphore over bytes, keeping peak memory bounded whatever the core count.
-struct Budget {
+struct Budget<'c> {
     free: Mutex<u64>,
     freed: Condvar,
+    cancel: &'c AtomicBool,
 }
 
 struct Permit<'a> {
-    budget: &'a Budget,
+    budget: &'a Budget<'a>,
     bytes: u64,
 }
 
-impl Budget {
-    fn new() -> Self {
+impl<'c> Budget<'c> {
+    fn new(cancel: &'c AtomicBool) -> Self {
         Self {
             free: Mutex::new(MEMORY_BUDGET),
             freed: Condvar::new(),
+            cancel,
         }
     }
 
-    fn acquire(&self, bytes: u64) -> Permit<'_> {
+    /// `bytes` of the budget (all of it at most), or `None` once cancelled.
+    fn acquire(&self, bytes: u64) -> Option<Permit<'_>> {
         let bytes = bytes.min(MEMORY_BUDGET);
-        let mut free = self.freed.wait_while(self.free.lock().unwrap(), |free| *free < bytes).unwrap();
+        let mut free = self.free.lock().unwrap();
+        while *free < bytes && !self.cancel.load(Ordering::Relaxed) {
+            free = self.freed.wait_timeout(free, CANCEL_POLL).unwrap().0;
+        }
+        if self.cancel.load(Ordering::Relaxed) {
+            return None;
+        }
         *free -= bytes;
-        Permit { budget: self, bytes }
+        Some(Permit { budget: self, bytes })
     }
 }
 
@@ -431,24 +469,55 @@ impl Drop for Permit<'_> {
     }
 }
 
-/// Peak bytes of decoding `tex` and cutting an image out of it.
-fn decode_cost(tex: &Texture2D) -> u64 {
-    let pixels = u64::from(tex.width) * u64::from(tex.height);
-    tex.mip0_size().unwrap_or(0) as u64 + pixels * 4 * 2
+/// Peak bytes of saving an image of `bytes`: the encoders hold the whole encoded file, which for
+/// the game's images is smaller than the pixels.
+fn save_bytes(bytes: u64) -> u64 {
+    2 * bytes
 }
 
-/// The image of a sprite or texture object, with the memory permit it holds.
-fn object_image<'b>(sf: &SerializedFile, oi: usize, budget: &'b Budget) -> ti_unity::Result<(Image, Permit<'b>)> {
+/// The image of a sprite or texture object, with the memory permit it holds; `None` if
+/// cancelled while waiting for memory. The permit covers the encoded data, the decoded texture
+/// (and alpha texture) and the copies cutting a sprite out of it makes.
+fn object_image<'b>(sf: &SerializedFile, oi: usize, budget: &'b Budget<'b>) -> ti_unity::Result<Option<(Image, Permit<'b>)>> {
     let obj = &sf.objects[oi];
     if obj.class_id == class_id::SPRITE {
         let sprite = Sprite::from_value(&sf.read(obj)?, sf)?;
-        let tex = sf.object(sprite.texture).map(|o| Texture2D::read(sf, o)).transpose()?;
-        let permit = budget.acquire(tex.as_ref().map_or(0, decode_cost));
-        Ok((sprite.image(sprite.source_image(sf)?)?, permit))
+        let (tex, alpha) = sprite.texture_objects(sf)?;
+        // The peak of each stage: decoding the texture (and the alpha texture while holding the
+        // texture), then the source image while it is cut out, rotated, masked and saved.
+        let header = Texture2D::read_header(sf, tex)?;
+        let (mut decode, mut source) = (header.decode_bytes(), header.image_bytes());
+        let rgba = u64::from(header.width) * u64::from(header.height) * 4;
+        let mut rgb = source < rgba;
+        if let Some(alpha) = alpha {
+            let a = Texture2D::read_header(sf, alpha)?;
+            // Then an RGBA copy of the texture and the combined image.
+            decode = decode.max(source + a.decode_bytes().max(a.image_bytes() + 2 * rgba));
+            (source, rgb) = (rgba, false);
+        }
+        let (x0, y0, x1, y1) = sprite.crop_box()?;
+        let crop = Image::crop_pixels(x0, y0, x1, y1)? * 4;
+        let whole = (x0, y0, x1, y1) == (0, 0, header.width.into(), header.height.into());
+        let (packed, tight) = (sprite.settings_raw & 1 != 0, sprite.settings_raw & 2 == 0);
+        let rotated = packed && (sprite.settings_raw >> 2) & 0xf == 4;
+        let mut cost = decode.max(if whole { source } else { source + crop }).max(save_bytes(crop));
+        if rotated {
+            cost = cost.max(2 * crop);
+        }
+        if tight {
+            // The mask, and an RGBA copy of an RGB image.
+            cost = cost.max(crop + crop / 4 + if rgb { crop } else { 0 });
+        }
+        let Some(permit) = budget.acquire(cost) else { return Ok(None) };
+        let alpha = alpha.map(|a| Texture2D::read(sf, a)).transpose()?;
+        let source = sprite.source_from(sf, &Texture2D::read(sf, tex)?, alpha.as_ref())?;
+        Ok(Some((sprite.image(source)?, permit)))
     } else {
-        let tex = Texture2D::read(sf, obj)?;
-        let permit = budget.acquire(decode_cost(&tex));
-        Ok((tex.image(sf)?, permit))
+        let header = Texture2D::read_header(sf, obj)?;
+        let Some(permit) = budget.acquire(header.decode_bytes().max(save_bytes(header.image_bytes()))) else {
+            return Ok(None);
+        };
+        Ok(Some((Texture2D::read(sf, obj)?.image(sf)?, permit)))
     }
 }
 
@@ -486,34 +555,56 @@ fn export_bundle(bundle: &Bundle, wanted: &BTreeMap<String, Vec<String>>, out_di
     }
     let mut exported = BTreeMap::new();
     let mut failures = Vec::new();
-    let budget = Budget::new();
-    let work = |(stem, cands): (String, Vec<(usize, usize)>)| -> (String, Result<Option<Value>>, Vec<String>) {
-        let mut errors = Vec::new();
-        for (fi, oi) in cands {
-            let sf = &files[fi];
-            match object_image(sf, oi, &budget) {
-                Ok((image, _permit)) => {
-                    let rel = format!("{}/{}", bundle.name, file_name(&stem, format));
-                    let r = save(&image, &out_dir.join(&rel), format).map(|()| Some(image_meta(rel, &image)));
-                    return (stem, r, errors);
+    let budget = Budget::new(cancel);
+    // Stems that sanitize to one file name (`A+B`, `A&B`) go to one worker, which writes that
+    // file last for the stem whose object comes last in UnityPy's order, as the sequential Python
+    // export does; each stem's entry points at the file.
+    type Group = Vec<(String, Vec<(usize, usize)>)>;
+    let mut groups: BTreeMap<String, Group> = BTreeMap::new();
+    for (stem, cands) in todo {
+        groups.entry(file_name(&stem, format)).or_default().push((stem, cands));
+    }
+    type Done = (Vec<(String, Value)>, usize);
+    let work = |(name, group): (String, Group)| -> (Result<Done>, Vec<String>) {
+        let rel = format!("{}/{name}", bundle.name);
+        let (mut metas, mut errors, mut written) = (Vec::new(), Vec::new(), None);
+        let stems = group.len();
+        for (stem, cands) in group {
+            for (fi, oi) in cands {
+                let sf = &files[fi];
+                match object_image(sf, oi, &budget) {
+                    Ok(Some((image, _permit))) => {
+                        if cancel.load(Ordering::Relaxed) {
+                            return (Err(Error::Cancelled), errors);
+                        }
+                        let order = (sf.objects[oi].class_id != class_id::SPRITE, fi, oi);
+                        if written.is_none_or(|w| order > w) {
+                            if let Err(e) = save(&image, &out_dir.join(&rel), format) {
+                                return (Err(e), errors);
+                            }
+                            written = Some(order);
+                        }
+                        metas.push((stem, image_meta(rel.clone(), &image)));
+                        break;
+                    }
+                    Ok(None) => return (Err(Error::Cancelled), errors),
+                    // An undecodable object: log it and try the next one of that name.
+                    Err(e) => errors.push(format!(
+                        "  ! {}/{}: {e}",
+                        bundle.name,
+                        sf.peek_name(&sf.objects[oi]).ok().flatten().unwrap_or_default()
+                    )),
                 }
-                // An undecodable object: log it and try the next one of that name.
-                Err(e) => errors.push(format!(
-                    "  ! {}/{}: {e}",
-                    bundle.name,
-                    sf.peek_name(&sf.objects[oi]).ok().flatten().unwrap_or_default()
-                )),
             }
         }
-        (stem, Ok(None), errors)
+        (Ok((metas, stems)), errors)
     };
-    let items: Vec<_> = todo.into_iter().collect();
-    parallel(items, cancel, work, |(stem, r, errors)| {
+    let items: Vec<_> = groups.into_iter().collect();
+    parallel(items, cancel, work, |(r, errors)| {
         failures.extend(errors);
-        if let Some(meta) = r? {
-            exported.insert(stem, meta);
-        }
-        step.advance(1, &bundle.name);
+        let (metas, stems) = r?;
+        exported.extend(metas);
+        step.advance(stems as u64, &bundle.name);
         Ok(())
     })?;
     failures.sort();
@@ -594,10 +685,10 @@ pub fn extract(resources: &BTreeSet<String>, bundles: &BTreeMap<String, Bundle>,
     Ok(result)
 }
 
-/// PIL crop box of a TMP glyph rect (Unity measures y from the bottom).
-pub fn glyph_box(x: i64, y: i64, width: i64, height: i64, sheet_height: i64) -> (i64, i64, i64, i64) {
-    let top = sheet_height - y - height;
-    (x, top, x + width, top + height)
+/// PIL crop box of a TMP glyph rect (Unity measures y from the bottom); `None` if it overflows.
+pub fn glyph_box(x: i64, y: i64, width: i64, height: i64, sheet_height: i64) -> Option<(i64, i64, i64, i64)> {
+    let top = sheet_height.checked_sub(y)?.checked_sub(height)?;
+    Some((x, top, x.checked_add(width)?, top.checked_add(height)?))
 }
 
 /// The glyphs of the TextMeshPro sprite assets in `bundle`: (name, image) in export order.
@@ -606,6 +697,8 @@ fn inline_sprite_glyphs(bundle: &Bundle) -> Result<Vec<(String, Image)>> {
     let files = SerializedFile::all(&unity).map_err(unity_err)?;
     let mut glyphs: Vec<(String, Image)> = Vec::new();
     let mut seen = BTreeSet::new();
+    // All glyphs are held until they are written.
+    let mut bytes = 0u64;
     for sf in &files {
         for obj in sf.objects.iter().filter(|o| o.class_id == class_id::MONO_BEHAVIOUR) {
             let fields: BTreeSet<&str> = sf.tree(obj).field_names().collect();
@@ -636,9 +729,14 @@ fn inline_sprite_glyphs(bundle: &Bundle) -> Result<Vec<(String, Image)>> {
                 if name.is_empty() || seen.contains(name) || w <= 0 || h <= 0 {
                     continue;
                 }
-                let (x0, y0, x1, y1) = glyph_box(v("m_X"), v("m_Y"), w, h, i64::from(sheet.height));
+                let bad = || Error::Other(format!("{}: glyph {name}: bad rect", bundle.name));
+                let (x0, y0, x1, y1) = glyph_box(v("m_X"), v("m_Y"), w, h, i64::from(sheet.height)).ok_or_else(bad)?;
+                bytes += Image::crop_pixels(x0, y0, x1, y1).map_err(unity_err)? * sheet.mode.channels() as u64;
+                if bytes > MEMORY_BUDGET {
+                    return Err(Error::Other(format!("{}: inline sprite glyphs take over {MEMORY_BUDGET} bytes", bundle.name)));
+                }
                 seen.insert(name.to_owned());
-                glyphs.push((name.to_owned(), sheet.crop(x0, y0, x1, y1)));
+                glyphs.push((name.to_owned(), sheet.crop(x0, y0, x1, y1).map_err(unity_err)?));
             }
         }
     }
@@ -682,13 +780,30 @@ pub fn extract_inline_sprites(bundles: &BTreeMap<String, Bundle>, out_dir: &Path
         opts,
     };
     let mut exported = Map::new();
-    let work = |(name, image): (String, Image)| {
+    // Glyph names that sanitize to one file name: only the last is written, as the sequential
+    // Python export ends up with, and every entry points at it.
+    let mut last = BTreeMap::new();
+    for (i, (name, _)) in glyphs.iter().enumerate() {
+        last.insert(file_name(name, format), i);
+    }
+    let items: Vec<_> = glyphs
+        .into_iter()
+        .enumerate()
+        .map(|(i, (name, image))| (last[&file_name(&name, format)] == i, name, image))
+        .collect();
+    let cancel = step.opts.cancel;
+    let work = |(write, name, image): (bool, String, Image)| {
         let rel = format!("{INLINE_SPRITE_DIR}/{}", file_name(&name, format));
-        let r = save(&image, &out_dir.join(&rel), format).map(|()| image_meta(rel, &image));
+        let r = if cancel.load(Ordering::Relaxed) {
+            Err(Error::Cancelled)
+        } else if write {
+            save(&image, &out_dir.join(&rel), format).map(|()| image_meta(rel, &image))
+        } else {
+            Ok(image_meta(rel, &image))
+        };
         (name, r)
     };
-    let cancel = step.opts.cancel;
-    parallel(glyphs, cancel, work, |(name, r)| {
+    parallel(items, cancel, work, |(name, r)| {
         exported.insert(name, r?);
         step.advance(1, INLINE_SPRITE_BUNDLE);
         Ok(())
@@ -761,7 +876,76 @@ mod tests {
 
     #[test]
     fn glyph_box_flips_y() {
-        assert_eq!(glyph_box(10, 20, 30, 40, 256), (10, 196, 40, 236));
+        assert_eq!(glyph_box(10, 20, 30, 40, 256), Some((10, 196, 40, 236)));
+        assert_eq!(glyph_box(0, i64::MIN, 1, 1, 256), None);
+        assert_eq!(glyph_box(i64::MAX, 0, 1, 1, 256), None);
+    }
+
+    fn tiny_image() -> Image {
+        Image {
+            width: 1,
+            height: 1,
+            mode: Mode::Rgba,
+            data: vec![1, 2, 3, 4],
+        }
+    }
+
+    #[test]
+    fn saving_over_a_hard_link_leaves_the_other_name_alone() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (prev, dest) = (tmp.path().join("prev.png"), tmp.path().join("out/a.png"));
+        fs::write(&prev, b"previous build").unwrap();
+        fs::create_dir_all(dest.parent().unwrap()).unwrap();
+        fs::hard_link(&prev, &dest).unwrap();
+        save(&tiny_image(), &dest, ImageFormat::Png).unwrap();
+        assert_eq!(fs::read(&prev).unwrap(), b"previous build");
+        assert_eq!(image::open(&dest).unwrap().into_rgba8().into_raw(), [1, 2, 3, 4]);
+        // No temporary files are left behind, also when the write fails.
+        assert!(write_replacing(&dest, |_| Err(Error::Other("fail".into()))).is_err());
+        let names: Vec<_> = fs::read_dir(dest.parent().unwrap()).unwrap().map(|e| e.unwrap().file_name()).collect();
+        assert_eq!(names, ["a.png"]);
+    }
+
+    #[test]
+    fn failed_reuse_removes_its_links() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (prev_dir, out_dir) = (tmp.path().join("prev"), tmp.path().join("out"));
+        fs::create_dir_all(prev_dir.join("icons")).unwrap();
+        fs::write(prev_dir.join("icons/a.png"), b"a").unwrap();
+        fs::write(prev_dir.join("icons/c.png"), b"c").unwrap();
+        let prev = json!({"exported": {
+            "a": {"file": "icons/a.png", "width": 1, "height": 1},
+            "b": {"file": "icons/b.png", "width": 1, "height": 1},
+            "c": {"file": "icons/c.png", "width": 1, "height": 1},
+        }});
+        let all: BTreeSet<&str> = ["a", "b", "c"].into();
+        assert!(reuse(&prev_dir, &prev, &out_dir, &all, ImageFormat::Png).is_none());
+        assert!(!out_dir.join("icons/a.png").exists());
+        // Without the missing image it links the rest, and exporting over them keeps the originals.
+        let some: BTreeSet<&str> = ["a", "c"].into();
+        let exported = reuse(&prev_dir, &prev, &out_dir, &some, ImageFormat::Png).unwrap();
+        assert_eq!(exported.keys().collect::<Vec<_>>(), ["a", "c"]);
+        assert_eq!(fs::read(out_dir.join("icons/c.png")).unwrap(), b"c");
+        save(&tiny_image(), &out_dir.join("icons/a.png"), ImageFormat::Png).unwrap();
+        assert_eq!(fs::read(prev_dir.join("icons/a.png")).unwrap(), b"a");
+        // Wrong format, or a path leaving the build dir.
+        assert!(reuse(&prev_dir, &prev, &out_dir, &some, ImageFormat::Webp).is_none());
+        let escape = json!({"exported": {"a": {"file": "../prev/icons/a.png"}}});
+        assert!(reuse(&prev_dir, &escape, &out_dir, &["a"].into(), ImageFormat::Png).is_none());
+    }
+
+    #[test]
+    fn cancel_wakes_workers_waiting_for_memory() {
+        let cancel = AtomicBool::new(false);
+        let budget = Budget::new(&cancel);
+        let _all = budget.acquire(MEMORY_BUDGET).unwrap();
+        std::thread::scope(|s| {
+            let waiter = s.spawn(|| budget.acquire(1).is_none());
+            std::thread::sleep(Duration::from_millis(100));
+            cancel.store(true, Ordering::Relaxed);
+            assert!(waiter.join().unwrap());
+        });
+        assert!(budget.acquire(0).is_none());
     }
 
     // End-to-end runs against the installed game, for parity checks with the Python extractor:
@@ -771,7 +955,8 @@ mod tests {
     //     cargo test --release -p ti-extract compare_with_reference -- --ignored --nocapture
     //
     // The resource list comes from the reference `index.json` (`resources` + `missing`), so templates
-    // are not needed. `TI_GAME_DIR` overrides the default Steam location. Both skip without their inputs.
+    // are not needed. `TI_GAME_DIR` overrides the default Steam location, `TI_ASSET_PREVIOUS` names an
+    // earlier export to reuse unchanged bundles from. Both skip without their inputs.
 
     fn env_path(name: &str) -> Option<PathBuf> {
         std::env::var_os(name).filter(|v| !v.is_empty()).map(PathBuf::from)
@@ -811,6 +996,13 @@ mod tests {
         } else {
             ImageFormat::Png
         };
+        let previous: Vec<Previous> = env_path("TI_ASSET_PREVIOUS")
+            .map(|dir| Previous {
+                index: serde_json::from_slice(&fs::read(dir.join("index.json")).unwrap()).unwrap(),
+                dir,
+            })
+            .into_iter()
+            .collect();
         let cancel = AtomicBool::new(false);
         let mut progress = |p: Progress| {
             if let Progress::Log { message } = p {
@@ -819,7 +1011,7 @@ mod tests {
         };
         let mut opts = AssetOptions {
             skip_bundles: &[],
-            previous: &[],
+            previous: &previous,
             image_format: format,
             progress: &mut progress,
             cancel: &cancel,

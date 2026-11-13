@@ -293,7 +293,7 @@ pub(crate) fn decode(data: &[u8], width: usize, height: usize, n: u8) -> Option<
     if data.len() < bw * bh * block_size {
         return None;
     }
-    let mut out = vec![0u8; width * height * 4];
+    let mut out = crate::zeroed(width * height * 4).ok()?;
     for by in 0..bh {
         for bx in 0..bw {
             let src = &data[(by * bw + bx) * block_size..][..block_size];

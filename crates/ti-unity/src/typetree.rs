@@ -106,6 +106,18 @@ impl TypeTree {
         self.read_value(0, r)
     }
 
+    /// The root's fields before the one named `stop`, leaving `r` at the start of that field.
+    pub(crate) fn read_until(&self, r: &mut Reader<'_>, stop: &str) -> Result<Value> {
+        let mut fields = Vec::new();
+        for &c in &self.nodes[0].children {
+            if self.nodes[c].name == stop {
+                return Ok(Value::Object(fields));
+            }
+            fields.push((self.nodes[c].name.clone(), self.read_value(c, r)?));
+        }
+        Err(format_err(format!("missing field {stop}")))
+    }
+
     fn read_value(&self, i: usize, r: &mut Reader<'_>) -> Result<Value> {
         let node = &self.nodes[i];
         let mut align = node.aligned();
@@ -262,6 +274,14 @@ impl Value {
     pub fn get(&self, name: &str) -> Option<&Value> {
         match self {
             Self::Object(fields) => fields.iter().find(|(n, _)| n == name).map(|(_, v)| v),
+            _ => None,
+        }
+    }
+
+    /// Move field `name` out, leaving `Bool(false)` in its place.
+    pub fn take(&mut self, name: &str) -> Option<Value> {
+        match self {
+            Self::Object(fields) => fields.iter_mut().find(|(n, _)| n == name).map(|(_, v)| std::mem::replace(v, Self::Bool(false))),
             _ => None,
         }
     }

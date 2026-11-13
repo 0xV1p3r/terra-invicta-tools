@@ -51,3 +51,29 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 pub(crate) fn format_err(msg: impl Into<String>) -> Error {
     Error::Format(msg.into())
 }
+
+/// Limits on sizes read from bundles, so a corrupt file fails with an error instead of aborting
+/// the process on a huge allocation. The game's largest images are 8192 x 8192.
+pub mod limits {
+    /// Pixels of one image (1 GiB as RGBA).
+    pub const MAX_PIXELS: u64 = 1 << 28;
+    /// Width or height of one image.
+    pub const MAX_DIMENSION: u32 = 1 << 16;
+    /// Bytes of one read from a bundle node (an object or a texture's stream data).
+    pub const MAX_READ: u64 = 1 << 30;
+}
+
+/// A zeroed buffer of `len` bytes, or an error if it cannot be allocated.
+pub(crate) fn zeroed(len: usize) -> Result<Vec<u8>> {
+    let mut v = Vec::new();
+    v.try_reserve_exact(len).map_err(|_| format_err(format!("cannot allocate {len} bytes")))?;
+    v.resize(len, 0);
+    Ok(v)
+}
+
+/// An empty buffer with room for `len` bytes, or an error if it cannot be allocated.
+pub(crate) fn with_capacity(len: usize) -> Result<Vec<u8>> {
+    let mut v = Vec::new();
+    v.try_reserve_exact(len).map_err(|_| format_err(format!("cannot allocate {len} bytes")))?;
+    Ok(v)
+}

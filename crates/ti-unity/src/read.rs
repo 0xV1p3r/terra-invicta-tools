@@ -34,6 +34,20 @@ impl<'a> Reader<'a> {
         Ok(s)
     }
 
+    pub fn remaining(&self) -> usize {
+        self.data.len().saturating_sub(self.pos)
+    }
+
+    /// A [`Reader::len`] count of entries that take at least `min_size` bytes each, checked
+    /// against the bytes left so it can size an allocation.
+    pub fn count(&mut self, min_size: usize) -> Result<usize> {
+        let n = self.len()?;
+        if n.saturating_mul(min_size) > self.remaining() {
+            return Err(format_err(format!("count {n} past the end of the data")));
+        }
+        Ok(n)
+    }
+
     pub fn align(&mut self, n: usize) {
         self.pos = self.pos.div_ceil(n) * n;
     }
