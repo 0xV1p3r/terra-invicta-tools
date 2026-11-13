@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+<title>Terra Invicta Tools</title>
+<rect width="512" height="512" rx="112" fill="#101113"/>
+<line x1="256" y1="256" x2="403.82" y2="317.23" stroke="#8e919a" stroke-width="12" stroke-linecap="round"/>
+<line x1="256" y1="256" x2="194.77" y2="403.82" stroke="#8e919a" stroke-width="12" stroke-linecap="round"/>
+<line x1="256" y1="256" x2="108.18" y2="194.77" stroke="#8e919a" stroke-width="12" stroke-linecap="round"/>
+<line x1="256" y1="256" x2="317.23" y2="108.18" stroke="#8e919a" stroke-width="12" stroke-linecap="round"/>
+<circle cx="256" cy="256" r="160" fill="none" stroke="#f3f3f4" stroke-width="22"/>
+<rect x="221" y="74" width="70" height="44" rx="13.2" fill="#ff6c00" stroke="#101113" stroke-width="9.9" transform="rotate(0 256 96)"/>
+<rect x="334.14" y="120.86" width="70" height="44" rx="13.2" fill="#e75a73" stroke="#101113" stroke-width="9.9" transform="rotate(45 369.14 142.86)"/>
+<rect x="381" y="234" width="70" height="44" rx="13.2" fill="#3cc273" stroke="#101113" stroke-width="9.9" transform="rotate(90 416 256)"/>
+<rect x="334.14" y="347.14" width="70" height="44" rx="13.2" fill="#fdc549" stroke="#101113" stroke-width="9.9" transform="rotate(135 369.14 369.14)"/>
+<rect x="221" y="394" width="70" height="44" rx="13.2" fill="#688c73" stroke="#101113" stroke-width="9.9" transform="rotate(180 256 416)"/>
+<rect x="107.86" y="347.14" width="70" height="44" rx="13.2" fill="#8cd8f4" stroke="#101113" stroke-width="9.9" transform="rotate(225 142.86 369.14)"/>
+<rect x="61" y="234" width="70" height="44" rx="13.2" fill="#0092de" stroke="#101113" stroke-width="9.9" transform="rotate(270 96 256)"/>
+<rect x="107.86" y="120.86" width="70" height="44" rx="13.2" fill="#896bde" stroke="#101113" stroke-width="9.9" transform="rotate(315 142.86 142.86)"/>
+<circle cx="256" cy="256" r="56" fill="#f3f3f4"/>
+<circle cx="256" cy="256" r="20.16" fill="#101113"/>
+</svg>

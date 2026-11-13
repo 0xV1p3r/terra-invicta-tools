@@ -17,7 +17,7 @@
 
 <svelte:head>
 	<link rel="icon" href={favicon} />
-	<title>Terra Invicta Tech Tree</title>
+	<title>Terra Invicta Tools</title>
 </svelte:head>
 
 {@render children?.()}

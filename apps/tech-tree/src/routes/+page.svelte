@@ -232,7 +232,7 @@
 	{:else}
 		{#key dataKey}
 			<div class="flex h-screen flex-col overflow-hidden">
-				<h1 class="sr-only">Terra Invicta Tech Tree</h1>
+				<h1 class="sr-only">Terra Invicta Tools</h1>
 				<!--
 				Toolbar band across the window, so the details panel doesn't squeeze it. The groups wrap
 				as wholes, and the utilities stay at the right end of the first row: `pinUtilities` moves

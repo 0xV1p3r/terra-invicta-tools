@@ -5,40 +5,41 @@
 @custom-variant dark (&:is(.dark *));
 
 /* Dark only. The `dark` class on <html> keeps shadcn's `dark:` variants active. */
+/* Codex palette: monochrome chrome so the eight research categories carry all the colour. */
 :root {
 	color-scheme: dark;
 	--radius: 0.625rem;
-	--background: oklch(0.141 0.005 285.823);
-	--foreground: oklch(0.985 0 0);
-	--card: oklch(0.21 0.006 285.885);
-	--card-foreground: oklch(0.985 0 0);
-	--popover: oklch(0.21 0.006 285.885);
-	--popover-foreground: oklch(0.985 0 0);
-	--primary: oklch(0.92 0.004 286.32);
-	--primary-foreground: oklch(0.21 0.006 285.885);
-	--secondary: oklch(0.274 0.006 286.033);
-	--secondary-foreground: oklch(0.985 0 0);
-	--muted: oklch(0.274 0.006 286.033);
-	--muted-foreground: oklch(0.705 0.015 286.067);
-	--accent: oklch(0.274 0.006 286.033);
-	--accent-foreground: oklch(0.985 0 0);
+	--background: #101113; /* Graphite */
+	--foreground: #f3f3f4; /* Chalk */
+	--card: #191a1e; /* Slate */
+	--card-foreground: #f3f3f4;
+	--popover: #191a1e;
+	--popover-foreground: #f3f3f4;
+	--primary: #f3f3f4;
+	--primary-foreground: #101113;
+	--secondary: #2b2d33; /* Seam */
+	--secondary-foreground: #f3f3f4;
+	--muted: #2b2d33;
+	--muted-foreground: #8e919a; /* Pewter */
+	--accent: #2b2d33;
+	--accent-foreground: #f3f3f4;
 	--destructive: oklch(0.704 0.191 22.216);
-	--border: oklch(1 0 0 / 10%);
-	--input: oklch(1 0 0 / 15%);
-	--ring: oklch(0.705 0.015 286.067);
+	--border: #2b2d33;
+	--input: #3a3c43;
+	--ring: #8e919a;
 	--chart-1: oklch(0.488 0.243 264.376);
 	--chart-2: oklch(0.696 0.17 162.48);
 	--chart-3: oklch(0.769 0.188 70.08);
 	--chart-4: oklch(0.627 0.265 303.9);
 	--chart-5: oklch(0.645 0.246 16.439);
-	--sidebar: oklch(0.21 0.006 285.885);
-	--sidebar-foreground: oklch(0.985 0 0);
-	--sidebar-primary: oklch(0.488 0.243 264.376);
-	--sidebar-primary-foreground: oklch(0.985 0 0);
-	--sidebar-accent: oklch(0.274 0.006 286.033);
-	--sidebar-accent-foreground: oklch(0.985 0 0);
-	--sidebar-border: oklch(1 0 0 / 10%);
-	--sidebar-ring: oklch(0.552 0.016 285.938);
+	--sidebar: #191a1e;
+	--sidebar-foreground: #f3f3f4;
+	--sidebar-primary: #f3f3f4;
+	--sidebar-primary-foreground: #101113;
+	--sidebar-accent: #2b2d33;
+	--sidebar-accent-foreground: #f3f3f4;
+	--sidebar-border: #2b2d33;
+	--sidebar-ring: #8e919a;
 
 	--category-energy: #ff6c00;
 	--category-information: #e75a73;
@@ -71,7 +72,7 @@
 	--warning-border: #b45309;
 
 	/* Backdrop for the game's white icon sprites. */
-	--icon-bg: oklch(0.274 0.006 286.033);
+	--icon-bg: #2b2d33;
 }
 
 @theme inline {

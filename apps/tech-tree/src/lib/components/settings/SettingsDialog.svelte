@@ -120,7 +120,7 @@
 		<Dialog.Header>
 			<Dialog.Title>Settings</Dialog.Title>
 			<Dialog.Description>
-				Terra Invicta Tech Tree{#if app.meta?.gameVersion}, game data v{app.meta.gameVersion}{/if}
+				Terra Invicta Tools{#if app.meta?.gameVersion}, game data v{app.meta.gameVersion}{/if}
 			</Dialog.Description>
 		</Dialog.Header>
 		<div class="grid gap-5 text-sm">
