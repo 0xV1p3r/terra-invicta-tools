@@ -233,7 +233,21 @@ fn unsafe_build_ids_are_rejected_from_options_and_install() {
     write(&root, "TerraInvicta_Data/StreamingAssets/Templates/A.json", b"[]");
     let output = tmp.path().join("out");
     let mut install = ti_extract::discover(&root).unwrap();
-    for id in ["", ".", "..", ".hidden", "../x", "/absolute", "a/b", "a\\b", "C:x", "a\0b", "a\nb", "a\u{7f}b"] {
+    // An empty id counts as missing (like Python): it falls back to a `local-<digest>` id.
+    install.build_id = Some(String::new());
+    let report = ti_extract::extract(
+        &install,
+        &ExtractOptions {
+            build_id: Some(String::new()),
+            ..options(&output)
+        },
+        &mut |_| {},
+        &AtomicBool::new(false),
+    )
+    .unwrap();
+    assert!(report.build_id.starts_with("local-"), "{}", report.build_id);
+    std::fs::remove_dir_all(&output).unwrap();
+    for id in [".", "..", ".hidden", "../x", "/absolute", "a/b", "a\\b", "C:x", "a\0b", "a\nb", "a\u{7f}b"] {
         for from_install in [false, true] {
             install.build_id = Some(id.into());
             let opts = ExtractOptions {
