@@ -167,7 +167,6 @@ mod tests {
         for template in b.ds.templates() {
             let ids: Vec<_> = b.ds.of_template(template).iter().copied().filter(|&id| view.exists(id)).collect();
             let count = ids.iter().filter(|id| spoilers.contains(id)).count();
-            eprintln!("{template}: {count}/{} spoilers", ids.len());
             assert_eq!(index.iter().filter(|s| s.template == template).map(|s| s.count).sum::<usize>(), ids.len());
             let normal = commands::all_wiki_entries(&b, &args, template, None).unwrap();
             assert!(normal.iter().all(|e| !e.entity.spoiler));
@@ -209,9 +208,6 @@ mod tests {
                 let factions = view.annotations(id).factions;
                 let alien_only = !factions.is_empty() && factions.iter().all(|f| f == "AlienCouncil");
                 assert_eq!(spoilers.contains(&id), alien_only, "{}", b.ds.entity(id).data_name);
-                if spoilers.contains(&id) {
-                    eprintln!("Spoiler research: {}", b.ds.entity(id).data_name);
-                }
                 if view.record(id).unwrap()["endGameTech"] == true {
                     assert!(!spoilers.contains(&id));
                 }

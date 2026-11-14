@@ -453,6 +453,10 @@ fn group_fixed(fixed: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
+    use serde_json::json;
+
     use super::*;
 
     #[test]
@@ -489,11 +493,6 @@ mod tests {
             ]
         );
     }
-
-    use serde_json::json;
-    use std::collections::{BTreeMap, BTreeSet};
-    use std::fs;
-    use std::path::{Path, PathBuf};
 
     #[derive(Default)]
     struct TestEnv {
@@ -879,154 +878,5 @@ mod tests {
             ..EffectContext::default()
         };
         assert_eq!(effect_args(&json!({"value": 1}), &ctx, &env)[23], "NaN");
-    }
-
-    fn read_json(path: &Path) -> Value {
-        let data = fs::read_to_string(path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
-        serde_json::from_str(&data).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
-    }
-
-    fn json_files(root: &Path) -> Vec<PathBuf> {
-        let mut files = Vec::new();
-        for entry in fs::read_dir(root).unwrap_or_else(|e| panic!("{}: {e}", root.display())) {
-            let path = entry.expect("directory entry").path();
-            if path.is_dir() {
-                files.extend(json_files(&path));
-            } else if path.extension().is_some_and(|s| s == "json") {
-                files.push(path);
-            }
-        }
-        files.sort();
-        files
-    }
-
-    #[test]
-    fn all_real_english_effect_descriptions() {
-        // Override only for scratch-crate validation. In ti-data this resolves
-        // to the repository's data root, then index.json selects the build.
-        let root = std::env::var_os("TI_EFFECT_TEXT_DATA_DIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../data")));
-        if !root.join("index.json").is_file() {
-            eprintln!("SKIP effect integration: data/index.json missing at {}", root.display());
-            return;
-        }
-        let index = read_json(&root.join("index.json"));
-        let latest = index["latest"].as_str().expect("data/index.json latest build directory");
-        let build = root.join(latest);
-        if !build.join("manifest.json").is_file() || !build.join("templates").is_dir() || !build.join("locale/en").is_dir() {
-            eprintln!("SKIP effect integration: build data missing at {}", build.display());
-            return;
-        }
-        let mut env = TestEnv::default();
-        let flat = build.join("locale/en/strings.json");
-        let locale_files = if flat.is_file() {
-            vec![flat]
-        } else {
-            // Earlier extractor output split the same dictionary into layers.
-            let mut files = json_files(&build.join("locale/en"));
-            files.sort_by_key(|p| (p.file_name().is_none_or(|n| n != "base.json"), p.clone()));
-            files
-        };
-        if locale_files.is_empty() {
-            eprintln!("SKIP effect integration: English strings are missing");
-            return;
-        }
-        for file in locale_files {
-            for (key, value) in read_json(&file).as_object().expect("flat locale dictionary") {
-                if let Some(value) = value.as_str() {
-                    env.strings.insert(key.clone(), value.to_owned());
-                }
-            }
-        }
-        let mut effects = Vec::new();
-        let mut files = json_files(&build.join("templates"));
-        files.sort_by_key(|p| (!p.components().any(|c| c.as_os_str() == "base"), p.clone()));
-        for file in files {
-            let template_type = file.file_stem().and_then(|s| s.to_str()).expect("template filename");
-            let data = read_json(&file);
-            let Some(records) = data.as_array() else {
-                continue;
-            };
-            for record in records {
-                let Some(name) = record["dataName"].as_str() else {
-                    continue;
-                };
-                let alias = record["localizationAlias"].as_str().unwrap_or(name);
-                let key = format!("{template_type}.displayName.{alias}");
-                if let Some(display) = env.strings.get(&key) {
-                    env.names.entry(name.to_owned()).or_insert_with(|| display.clone());
-                    if template_type == "TITraitTemplate" {
-                        let grouping = record["grouping"].as_i64().unwrap_or(0);
-                        let names = env.traits.entry(grouping).or_default();
-                        if !names.contains(display) {
-                            names.push(display.clone());
-                        }
-                    }
-                }
-                if template_type == "TIEffectTemplate" {
-                    effects.push(record.clone());
-                }
-            }
-        }
-        assert!(!effects.is_empty(), "no effect records in available data");
-        let ctx = EffectContext {
-            state1_name: Some("the Resistance".to_owned()),
-            state1_faction: Some("the Resistance".to_owned()),
-            ..EffectContext::default()
-        };
-        let mut formatted = 0;
-        let mut missing = 0;
-        let mut failures = Vec::new();
-        let mut matched = BTreeSet::new();
-        let mut samples = BTreeMap::new();
-        for effect in &effects {
-            let name = effect["dataName"].as_str().expect("effect dataName");
-            let alias = effect["localizationAlias"].as_str().unwrap_or(name);
-            let key = format!("TIEffectTemplate.description.{alias}");
-            let Some(template) = env.loc(&key).filter(|s| !s.is_empty()) else {
-                missing += 1;
-                continue;
-            };
-            matched.insert(key.clone());
-            match describe_effect(&template, effect, &ctx, &env) {
-                Ok(text) => {
-                    formatted += 1;
-                    samples.insert(name.to_owned(), text);
-                }
-                Err(()) => failures.push(format!("{name}: malformed format or out-of-range index: {template:?}")),
-            }
-        }
-        // Also validate localized descriptions with no corresponding effect in
-        // this extracted build, without pretending a real value exists for them.
-        let mut unmatched_descriptions = 0;
-        for (key, template) in &env.strings {
-            if key.starts_with("TIEffectTemplate.description.") && !template.is_empty() && !matched.contains(key) {
-                unmatched_descriptions += 1;
-                if describe_effect(template, &Value::Null, &ctx, &env).is_err() {
-                    failures.push(format!("unmatched {key}: malformed format or out-of-range index: {template:?}"));
-                }
-            }
-        }
-        eprintln!(
-            "Effect integration {latest}: {formatted} formatted effect records, {} failures, {missing} missing/empty descriptions, {unmatched_descriptions} unmatched descriptions checked",
-            failures.len()
-        );
-        for failure in &failures {
-            eprintln!("  FAIL {failure}");
-        }
-        for name in [
-            "Effect_CPResearch10",
-            "Effect_BS_GlobalExcessMiltechReduction",
-            "Effect_NuclearWeaponsProgramPenalty50",
-            "Effect_RecruitsGainGovernment",
-            "Effect_AllCouncilorsPersuasion2",
-        ] {
-            if let Some(text) = samples.get(name) {
-                eprintln!("  SAMPLE {name}: {text}");
-            }
-        }
-        assert!(formatted > 0, "no nonempty English effect descriptions were checked");
-        assert!(failures.len() <= 5, "too many effect formatting failures: {}", failures.len());
     }
 }

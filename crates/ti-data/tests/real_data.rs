@@ -373,25 +373,10 @@ fn wiki_names_and_coverage() {
         let nation = ds.find("TINationTemplate", record[field].as_str().unwrap()).unwrap();
         assert!(view.name(&texts, bilateral).contains(&view.name(&texts, nation)));
     }
-    for template in [
-        "TICodexEntryTemplate",
-        "TIObjectiveTemplate",
-        "TIBilateralTemplate",
-        "TIMapRegionTemplate",
-        "TIStartTimeTemplate",
-        "TIPlayerTemplate",
-        "TIFactionIdeologyTemplate",
-        "TICouncilorTemplate",
-        "TIVictoryTemplate",
-        "TIHabSchematicTemplate",
-    ] {
+    for template in ["TICodexEntryTemplate", "TIObjectiveTemplate"] {
         let ids = ds.of_template(template);
-        let named = ids.iter().filter(|&&id| view.name(&texts, id) != *ds.entity(id).data_name).count();
         let localized = ids.iter().filter(|&&id| view.text_raw(&texts, id, field::DISPLAY_NAME).is_some()).count();
-        println!("{template}: {named}/{} labels, {localized}/{} localized", ids.len(), ids.len());
-        if ["TICodexEntryTemplate", "TIObjectiveTemplate"].contains(&template) {
-            assert!(localized * 100 >= ids.len() * 95);
-        }
+        assert!(localized * 100 >= ids.len() * 95, "{template}: {localized}/{}", ids.len());
     }
     let index = SearchIndex::build(ds, &texts);
     assert!(index.search("Introduction", 20, &|_| true).iter().any(|h| h.id == welcome));
@@ -401,37 +386,8 @@ fn wiki_names_and_coverage() {
 fn wiki_icon_coverage() {
     let ds = data_or_skip!();
     let view = ds.overview();
-    println!("Template | Before | After | Total");
     for template in ds.templates() {
-        let ids: Vec<_> = view.entities(template).collect();
-        let before = ids
-            .iter()
-            .filter(|&&id| {
-                let r = view.record(id).unwrap();
-                let own = [
-                    "iconResource",
-                    "stationIconResource",
-                    "baseIconResource",
-                    "missionIconImagePath",
-                    "flagResource",
-                    "councilIcon64",
-                ]
-                .iter()
-                .find_map(|key| r.get(*key).and_then(Value::as_str).filter(|s| !s.is_empty()));
-                let category = || {
-                    r.get("techCategory")
-                        .and_then(Value::as_str)
-                        .and_then(model::TechCategory::parse)
-                        .unwrap_or_default()
-                        .icon_resource()
-                };
-                own.or_else(|| view.kind(id).is_research().then(category).flatten())
-                    .is_some_and(|r| ds.asset(r).is_some())
-            })
-            .count();
-        let after = ids.iter().filter(|&&id| view.icon_resource(id).is_some()).count();
-        println!("{template} | {before} | {after} | {}", ids.len());
-        for id in ids {
+        for id in view.entities(template) {
             if let Some(resource) = view.icon_resource(id) {
                 assert!(ds.asset(&resource).is_some(), "{template}: {resource}");
             }
@@ -461,30 +417,6 @@ fn scenario_meta_membership() {
         .filter_map(|&id| ds.overview().record(id))
         .flat_map(|r| r["templateNames"].as_array().into_iter().flatten().filter_map(Value::as_str))
         .collect();
-    for scenario in ds.scenarios() {
-        let view = ds.view(Scope {
-            scenario: Some(scenario.idx),
-            ..Scope::default()
-        });
-        for template in [
-            "TINationTemplate",
-            "TIRegionTemplate",
-            "TIArmyTemplate",
-            "TIOrgTemplate",
-            "TICouncilorTemplate",
-            "TISpaceFleetTemplate",
-            "TIHabTemplate",
-            "TITimeEventTemplate",
-        ] {
-            let tags = scenario.tags.iter().map(|t| std::sync::Arc::from(t.as_str())).collect::<Vec<_>>();
-            let before = ds
-                .of_template(template)
-                .iter()
-                .filter(|&&id| ti_data::scenario::resolve(&ds.entity(id).variants, &tags, forced.contains(&*ds.entity(id).data_name)).is_some())
-                .count();
-            eprintln!("{} {template}: {before} -> {}", scenario.data_name, view.entities(template).count());
-        }
-    }
     // Overview must retain exactly the entity set from plain scenarioTags resolution, minus
     // start-date copies that no scenario lists (e.g. `2026_ALN`, never instantiated).
     let prefixes: Vec<String> = ds

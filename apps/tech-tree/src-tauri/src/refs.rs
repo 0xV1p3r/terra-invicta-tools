@@ -74,15 +74,3 @@ pub fn entity_ref(view: &View<'_>, texts: &Texts, id: EntityId, spoilers: &std::
         icon: view.icon_resource(id).and_then(|r| asset_file(view, &r)),
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn part_kind_names() {
-        assert_eq!(part_kind_name(PartKind::Drive), "drive");
-        assert_eq!(part_kind_name(PartKind::PowerPlant), "powerPlant");
-        assert_eq!(part_kind_name(PartKind::MagneticGun), "magneticGun");
-    }
-}

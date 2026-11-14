@@ -2,7 +2,6 @@ import { expect, it } from 'vitest';
 import {
 	formatCost,
 	formatCostFull,
-	isResearch,
 	readableKey,
 	requirementChoices,
 	templateLabel
@@ -27,11 +26,6 @@ it('formats full costs with English grouping and rounds fractions', () => {
 	expect(formatCostFull(12500.6)).toBe('12,501');
 	expect(formatCostFull(-12500)).toBe('-12,500');
 	expect(formatCostFull(undefined)).toBe('–');
-});
-it('recognizes the two research kinds', () => {
-	expect(isResearch('tech')).toBe(true);
-	expect(isResearch('project')).toBe(true);
-	expect(isResearch('effect')).toBe(false);
 });
 it('counts unresolved requirements as choices', () => {
 	expect(

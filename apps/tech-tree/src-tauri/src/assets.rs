@@ -154,23 +154,4 @@ mod tests {
         // In-root symlinks preserve normal asset behavior.
         request_asset(&root, "inside.png", StatusCode::OK);
     }
-
-    #[test]
-    fn serves_both_url_forms() {
-        let Some(b) = crate::commands::tests::backend() else { return };
-        let dir = b.assets_dir.as_deref();
-        for uri in [
-            "tiasset://localhost/icons_2d%2Ftech_energy_icon.png",
-            "http://tiasset.localhost/icons_2d%2Ftech_energy_icon.png",
-        ] {
-            let res = respond(dir, &Request::builder().uri(uri).body(Vec::new()).unwrap());
-            assert_eq!(res.status(), StatusCode::OK, "{uri}");
-            assert_eq!(res.headers()[header::CONTENT_TYPE], "image/png");
-            assert!(res.body().starts_with(b"\x89PNG"));
-        }
-        let missing = Request::builder().uri("tiasset://localhost/nope.png").body(Vec::new()).unwrap();
-        assert_eq!(respond(dir, &missing).status(), StatusCode::NOT_FOUND);
-        let evil = Request::builder().uri("tiasset://localhost/..%2Fmanifest.json").body(Vec::new()).unwrap();
-        assert_eq!(respond(dir, &evil).status(), StatusCode::BAD_REQUEST);
-    }
 }

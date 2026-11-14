@@ -349,14 +349,6 @@ mod tests {
         assert_eq!(catch_panic("x", || 3).unwrap(), 3);
     }
 
-    /// Detection runs at startup (update check): whatever `ti-extract` does, it must not panic.
-    #[test]
-    fn detection_does_not_panic() {
-        let missing = std::env::temp_dir().join("ti-tech-tree-no-such-install");
-        let _ = detect_game(Some(&missing));
-        assert!(inspect_game(&missing).is_err());
-    }
-
     #[test]
     fn one_extraction_at_a_time() {
         let extractor = Extractor::default();

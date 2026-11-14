@@ -543,34 +543,17 @@ mod tests {
         let texts = b.texts("en").unwrap();
         let view = b.ds.overview();
         let effects: BTreeSet<EntityId> = view.research_graph().nodes().iter().flat_map(|&n| view.effects(n)).collect();
-        let mut dump = String::new();
+        let spoilers = &*b.spoilers(&view).unwrap();
         for &e in &effects {
-            let spoilers = &*b.spoilers(&view).unwrap();
             let l = effect_line(&view, &texts, e, entity_ref(&view, &texts, e, spoilers));
-            let text: String = l
-                .segments
-                .iter()
-                .map(|s| if s.kind == "value" { format!("[{}]", s.text) } else { s.text.clone() })
-                .collect();
-            assert!(!text.starts_with('-'), "{text}");
-            dump += &format!(
-                "{:<45} {:<14} {:<55} {:<8} {:<7} {:<45} {:<9} {}\n",
-                l.entity.data_name,
-                l.domain.clone() + if l.icon.is_some() { "*" } else { "" },
-                l.icon.as_deref().unwrap_or(""),
-                l.sentiment,
-                l.modifier.as_deref().unwrap_or(""),
-                l.label.as_deref().unwrap_or(""),
-                l.category.as_deref().unwrap_or(""),
-                text.replace('\n', " / ")
+            assert!(
+                !l.segments.first().is_some_and(|s| s.kind != "value" && s.text.starts_with('-')),
+                "{}",
+                l.entity.data_name
             );
-        }
-        if let Ok(path) = std::env::var("EFFECT_DUMP") {
-            std::fs::write(path, dump).unwrap();
         }
         let line = |name: &str| {
             let id = view.find(ti_data::model::EFFECT, name).unwrap();
-            let spoilers = &*b.spoilers(&view).unwrap();
             effect_line(&view, &texts, id, entity_ref(&view, &texts, id, spoilers))
         };
         let ship = line("Effect_BSBE_ShipConstructionTimePenalty");
@@ -599,13 +582,7 @@ mod tests {
             metal
                 .segments
                 .iter()
-                .any(|s| s.kind == "sprite" && s.icon.as_deref() == Some("sprites/metal.png"))
-        );
-        assert!(
-            line("Effect_MiningMetalsBonus")
-                .segments
-                .iter()
-                .any(|s| s.kind == "sprite" && s.text == "metal")
+                .any(|s| s.kind == "sprite" && s.text == "metal" && s.icon.as_deref() == Some("sprites/metal.png"))
         );
     }
 }

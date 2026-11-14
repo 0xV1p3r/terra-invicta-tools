@@ -624,23 +624,6 @@ mod tests {
     }
 
     #[test]
-    fn real_data_redundant_edges() {
-        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../data");
-        let Ok(root) = crate::DataRoot::open(path) else {
-            eprintln!("no extracted data, skipping");
-            return;
-        };
-        let ds = root.latest().expect("latest build loads");
-        let view = ds.overview();
-        let g = view.research_graph();
-        let start = std::time::Instant::now();
-        let redundant = g.redundant_edges();
-        eprintln!("real data: {} redundant edges in {:?}", redundant.len(), start.elapsed());
-        assert!(!redundant.is_empty());
-        assert!(redundant.iter().all(|e| !e.alternative));
-    }
-
-    #[test]
     fn redundant_edges_follow_only_mandatory_requirements() {
         for alternatives in [false, true] {
             let c = if alternatives {

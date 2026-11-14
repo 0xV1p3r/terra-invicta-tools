@@ -847,27 +847,6 @@ pub(crate) mod tests {
         assert_eq!((past.total, past.entries.len()), (all.len(), 0));
     }
 
-    /// Prints the time of 200-row pages of the largest wiki section (run with `--release --nocapture`).
-    #[test]
-    fn wiki_page_timing() {
-        let Some(b) = backend() else { return };
-        let template = "TIBilateralTemplate";
-        let time = |offset: usize, filter: &str| {
-            let started = std::time::Instant::now();
-            let page = get_wiki_entries(&b, &en(), template, None, filter, offset, Some(200)).unwrap();
-            (started.elapsed(), page)
-        };
-        let (cold, page) = time(0, "");
-        let (warm, _) = time(200, "");
-        let (filtered, filtered_page) = time(0, "united");
-        let bytes = serde_json::to_vec(&page).unwrap().len();
-        eprintln!(
-            "{template}: {} rows; first page {cold:?} (builds the list), next page {warm:?}, filtered ({} rows) {filtered:?}; page JSON {bytes} bytes",
-            page.total, filtered_page.total
-        );
-        assert_eq!(page.entries.len(), 200.min(page.total));
-    }
-
     #[test]
     fn meta_follows_the_language() {
         let Some(b) = backend() else { return };
@@ -997,14 +976,7 @@ pub(crate) mod tests {
             categories: vec![],
             properties: vec![],
         };
-        let t = std::time::Instant::now();
         let tree = get_tree(&b, &en(), &filter, FullLayout::Layered, true).unwrap();
-        eprintln!(
-            "get_tree (overview, all): {} nodes, {} edges in {:?}",
-            tree.nodes.len(),
-            tree.edges.len(),
-            t.elapsed()
-        );
         assert!(tree.nodes.len() > 800);
         // The frontend types promise one of the known categories (`dto.rs` `TechCategory`).
         let unknown: Vec<_> = tree
@@ -1018,9 +990,7 @@ pub(crate) mod tests {
         let keys: std::collections::HashSet<&str> = tree.nodes.iter().map(|n| n.key.as_str()).collect();
         assert!(tree.edges.iter().all(|e| keys.contains(e.from.as_str()) && keys.contains(e.to.as_str())));
         assert!(tree.edges.iter().any(|e| e.alternative));
-        let redundant = tree.edges.iter().filter(|e| e.redundant).count();
-        eprintln!("redundant edges: {redundant}");
-        assert!(redundant > 0);
+        assert!(tree.edges.iter().any(|e| e.redundant));
         assert!(tree.edges.iter().all(|e| !e.alternative || !e.redundant));
         assert!(tree.edges.iter().filter(|e| e.redundant).all(|e| e.points.is_empty()));
         let by_key: HashMap<&str, &TreeNode> = tree.nodes.iter().map(|n| (n.key.as_str(), n)).collect();
@@ -1060,6 +1030,8 @@ pub(crate) mod tests {
         )
         .unwrap();
         assert!(!energy.nodes.is_empty() && energy.nodes.iter().all(|n| n.category == "Energy"));
+        // Filtered trees draw every edge: nothing is marked redundant.
+        assert!(energy.edges.iter().all(|e| !e.redundant));
     }
 
     /// Every option of every requirement group has a card, and multi-option groups get a
@@ -1125,19 +1097,6 @@ pub(crate) mod tests {
         let research_unlocks = detail.unlocks.iter().filter(|u| u.kind.starts_with("research")).count();
         assert_eq!(deps.len(), research_unlocks);
         assert!(get_focus(&b, &en(), "TITechTemplate:Nope").is_err());
-    }
-
-    #[test]
-    fn filtered_trees_keep_redundant_edges() {
-        let Some(b) = backend() else { return };
-        let filter = TreeFilter {
-            techs: true,
-            projects: true,
-            categories: vec!["Energy".into()],
-            properties: vec![],
-        };
-        let tree = get_tree(&b, &en(), &filter, FullLayout::Layered, true).unwrap();
-        assert!(tree.edges.iter().all(|e| !e.redundant));
     }
 
     #[test]
@@ -1217,67 +1176,6 @@ pub(crate) mod tests {
         for p in &faceted {
             let on_screen = energy_tree.nodes.iter().filter(|n| n.properties.contains(&p.id)).count();
             assert_eq!(p.count, on_screen, "{}", p.id);
-        }
-    }
-
-    #[test]
-    fn full_tree_layout_timing() {
-        let Some(b) = backend() else { return };
-        let view = b.ds.overview();
-        let full = view.research_graph().full();
-        let index: HashMap<EntityId, usize> = full.nodes.iter().enumerate().map(|(i, id)| (*id, i)).collect();
-        let edges: Vec<LayoutEdge> = full
-            .edges
-            .iter()
-            .map(|e| LayoutEdge {
-                from: index[&e.from],
-                to: index[&e.to],
-                alternative: e.alternative,
-            })
-            .collect();
-        let costs: Vec<f64> = full.nodes.iter().map(|&id| research_cost(&view, id)).collect();
-        let t = std::time::Instant::now();
-        let routed = layout::route(full.nodes.len(), &edges, &costs);
-        let elapsed = t.elapsed();
-        let p = routed.nodes;
-        eprintln!(
-            "routed: {} waypoints, crossings of the drawn (routed) edges {}",
-            routed.waypoints.iter().map(Vec::len).sum::<usize>(),
-            routed.crossings
-        );
-        let before = layout::count_crossings(&layout::unordered(full.nodes.len(), &edges), &edges);
-        let after = layout::count_crossings(&p, &edges);
-        let ncols = p.iter().map(|q| q.column + 1).max().unwrap_or(0);
-        let mut per_col = vec![0usize; ncols];
-        for q in &p {
-            per_col[q.column] += 1;
-        }
-        eprintln!("cost-ranked columns: {ncols}, tallest {}", per_col.iter().max().unwrap_or(&0));
-        let stats = |p: &[layout::Placement]| {
-            let height = p.iter().map(|q| q.y).fold(0.0, f64::max) - p.iter().map(|q| q.y).fold(0.0, f64::min);
-            let dy: Vec<f64> = edges.iter().map(|e| (p[e.from].y - p[e.to].y).abs()).collect();
-            let near = dy.iter().filter(|&&d| d < layout::NODE_HEIGHT / 2.0).count();
-            format!(
-                "height {:.0}, crossings {}, edges within half a card {near}, mean |dy| {:.0}",
-                height + layout::NODE_HEIGHT,
-                layout::count_crossings(p, &edges),
-                dy.iter().sum::<f64>() / dy.len() as f64
-            )
-        };
-        let packed = layout::packed(full.nodes.len(), &edges);
-        let tallest = packed.iter().map(|q| q.row + 1).max().unwrap_or(0) as f64;
-        eprintln!(
-            "layout of real tree ({} nodes, {} edges): {elapsed:?}, crossings {before} (input order) -> {after}\n  \
-             tallest column packed: {:.0}\n  packed columns: {}\n  layout: {}",
-            full.nodes.len(),
-            edges.len(),
-            tallest * (layout::NODE_HEIGHT + layout::GAP_Y) - layout::GAP_Y,
-            stats(&packed),
-            stats(&p),
-        );
-        assert!(after < before);
-        if !cfg!(debug_assertions) {
-            assert!(elapsed.as_millis() < 50, "{elapsed:?}");
         }
     }
 

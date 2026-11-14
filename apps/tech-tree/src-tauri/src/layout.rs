@@ -298,19 +298,6 @@ pub fn unordered(n: usize, edges: &[LayoutEdge]) -> Vec<Placement> {
     place(&cols, &pos, &vec![0; n], &[0], &vec![1.0; n], n).0
 }
 
-/// Previous placement: barycenter order, each column packed and centered (comparison baseline).
-#[cfg(test)]
-pub fn packed(n: usize, edges: &[LayoutEdge]) -> Vec<Placement> {
-    let column = columns(n, edges);
-    let mut cols = vec![Vec::new(); column.iter().max().map_or(0, |m| m + 1)];
-    for (v, &c) in column.iter().enumerate() {
-        cols[c].push(v);
-    }
-    order(&mut cols, &column, edges, n);
-    let pos = centered_positions(&cols, n);
-    place(&cols, &pos, &vec![0; n], &[0], &vec![1.0; n], n).0
-}
-
 /// Minimum column per node from its log research cost: the 2nd–98th percentile range of
 /// the given costs spans `COST_COLUMNS` columns. All zeros without costs.
 fn cost_floor(costs: &[f64], n: usize) -> Vec<usize> {
@@ -763,9 +750,10 @@ mod tests {
         let n = 500;
         let edges = random_dag(n, 1000, 42);
         let before = count_crossings(&unordered(n, &edges), &edges);
-        let after = count_crossings(&layout(n, &edges), &edges);
-        eprintln!("crossings: input order {before}, laid out {after}");
-        assert!(after < before);
+        let r = route(n, &edges, &[]);
+        assert!(count_crossings(&r.nodes, &edges) < before);
+        // Also for the edges as drawn, through their waypoints.
+        assert!(r.crossings < before);
     }
 
     fn assert_no_overlap(p: &[Placement]) {
@@ -844,16 +832,6 @@ mod tests {
         assert!(band(0).1 + GROUP_GAP - GAP_Y <= band(2).0 + 1e-6);
         assert!(band(2).1 + GROUP_GAP - GAP_Y <= band(3).0 + 1e-6);
         assert_eq!(route_grouped(n, &edges, &[], &[], true), route(n, &edges, &[]));
-    }
-
-    #[test]
-    fn routing_keeps_crossings_low() {
-        let n = 500;
-        let edges = random_dag(n, 1000, 42);
-        let r = route(n, &edges, &[]);
-        let straight = count_crossings(&unordered(n, &edges), &edges);
-        eprintln!("routed crossings {} (input order, straight: {straight})", r.crossings);
-        assert!(r.crossings < straight);
     }
 
     #[test]
