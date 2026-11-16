@@ -395,6 +395,18 @@
 					{/each}
 				</ToggleGroup.Root>
 			</div>
+			<h2 class="font-semibold">About</h2>
+			<div class="grid gap-1 text-xs leading-relaxed text-muted-foreground">
+				<span
+					><span class="font-medium text-foreground">Terra Invicta Tools {__APP_VERSION__}</span>,
+					MIT License</span
+				>
+				<span class="select-text">github.com/0xV1p3r/terra-invicta-tools</span>
+				<span
+					>A fan project with no connection to Pavonis Interactive or Hooded Horse. Game data and
+					images belong to their owners and are read from your own installed copy.</span
+				>
+			</div>
 		</div>
 	</Dialog.Content>
 </Dialog.Root>

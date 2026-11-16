@@ -4,8 +4,9 @@
 	"mainBinaryName": "terra-invicta-tools",
 	"bundle": {
 		"linux": {
-			"deb": { "desktopTemplate": "linux/app.desktop" },
-			"rpm": { "desktopTemplate": "linux/app.desktop" }
+			"deb": {
+				"desktopTemplate": "linux/app.desktop"
+			}
 		}
 	}
 }

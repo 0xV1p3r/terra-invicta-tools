@@ -13,6 +13,18 @@
 
 The app shows the research tree, a wiki and a solar system map. More tools will follow.
 
+## Install
+
+Download the latest version from the [releases page](https://github.com/0xV1p3r/terra-invicta-tools/releases):
+
+| System | Download |
+| --- | --- |
+| Windows 10 and 11 | `Terra Invicta Tools_<version>_x64-setup.exe` |
+| Debian, Ubuntu | `terra-invicta-tools_<version>_amd64.deb`, installed with `sudo apt install ./terra-invicta-tools_<version>_amd64.deb` |
+| Other Linux distributions | `terra-invicta-tools_<version>_amd64.AppImage`. Make it executable and run it. It needs FUSE 2 (`libfuse2`). |
+
+The Windows installer is not code-signed, so SmartScreen may warn about an unknown publisher. Choose *More info*, then *Run anyway*. `SHA256SUMS` lists the checksums of the downloads. [CHANGELOG.md](CHANGELOG.md) lists the changes in each version.
+
 ## Layout
 
 | Path | Contents |
@@ -99,7 +111,9 @@ Give it the data root, not a single build folder. It opens the latest build unle
 
 ## Build release bundles
 
-`scripts/release.sh` writes a `.deb` and a Windows installer (`-setup.exe`) to `dist/<version>/`. Pass `deb` or `exe` to build only one of them. The bundles do not contain game data.
+`scripts/release.sh` writes a `.deb`, an AppImage and a Windows installer (`-setup.exe`) to `dist/<version>/`, with their checksums in `SHA256SUMS`. Pass `deb`, `appimage` or `exe` to build only some of them. The bundles do not contain game data. The version is set in `apps/tech-tree/package.json`, which `tauri.conf.json` reads.
+
+An AppImage contains the system libraries of the machine that built it, so it only runs on distributions at least as new. Release AppImages are built on Ubuntu 22.04 by CI.
 
 The Windows installer is cross-compiled on Linux with cargo-xwin. The first build downloads the MSVC CRT and Windows SDK. It needs:
 
@@ -108,6 +122,12 @@ rustup target add x86_64-pc-windows-msvc
 cargo install --locked cargo-xwin
 sudo apt-get install -y nsis lld llvm clang
 ```
+
+### Publish a release
+
+1. Set the version in `apps/tech-tree/package.json` and move its notes in `CHANGELOG.md` under `## [<version>] - <date>`.
+2. Push a tag `v<version>` to the commit. The `Release` workflow builds the `.deb` and AppImage on Ubuntu 22.04 and the installer on Windows, then opens a draft GitHub release with the bundles, `SHA256SUMS` and that section of `CHANGELOG.md` as notes.
+3. Check the draft and publish it.
 
 ### Browser development
 
@@ -138,6 +158,10 @@ If you change a DTO, commit the regenerated TypeScript bindings with it. Rust te
 
 From `apps/tech-tree/`, run `pnpm check`, `pnpm lint` and `pnpm test`.
 
-## Legal
+CI (`.github/workflows/ci.yml`) runs all of these on pull requests and on pushes to `main`.
+
+## License
+
+[MIT](LICENSE).
 
 This is a fan project with no connection to Pavonis Interactive or Hooded Horse. The game's data and images belong to its publisher and are not in this repository.

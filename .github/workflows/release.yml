@@ -1,0 +1,93 @@
+name: Release
+
+# Push a tag such as v0.1.0 to build the bundles and open a draft GitHub release.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  linux:
+    # The oldest supported runner: the AppImage only runs on distros with this glibc or newer.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the tag matches the app version
+        run: |
+          version="$(jq -r .version apps/tech-tree/package.json)"
+          [[ "$GITHUB_REF_NAME" == "v$version" ]] || { echo "tag $GITHUB_REF_NAME does not match version $version" >&2; exit 1; }
+      - name: Install Tauri build packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential file xdg-utils libxdo-dev libssl-dev librsvg2-dev libayatana-appindicator3-dev patchelf
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: apps/tech-tree/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: pnpm
+          cache-dependency-path: apps/tech-tree/pnpm-lock.yaml
+      - run: scripts/release.sh deb appimage
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: |
+            dist/*/*.deb
+            dist/*/*.AppImage
+          if-no-files-found: error
+
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: apps/tech-tree
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: apps/tech-tree/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: pnpm
+          cache-dependency-path: apps/tech-tree/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm tauri build --bundles nsis
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: target/release/bundle/nsis/*-setup.exe
+          if-no-files-found: error
+
+  release:
+    needs: [linux, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: bundles
+          merge-multiple: true
+      - name: Create a draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd bundles
+          find . -mindepth 2 -type f -exec mv -t . {} +
+          sha256sum -- *.deb *.AppImage *.exe > SHA256SUMS
+          # The release notes are this version's section of CHANGELOG.md.
+          awk -v v="${GITHUB_REF_NAME#v}" '/^## /{p = index($0, "[" v "]") > 0; next} p' ../CHANGELOG.md > notes.md
+          gh release create "$GITHUB_REF_NAME" --draft --title "Terra Invicta Tools $GITHUB_REF_NAME" \
+            --notes-file notes.md *.deb *.AppImage *.exe SHA256SUMS
