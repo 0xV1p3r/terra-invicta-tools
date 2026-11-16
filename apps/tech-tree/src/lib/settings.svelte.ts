@@ -34,6 +34,10 @@ export interface Settings {
 	gameDir: string;
 	/** Game build ids whose update notice was dismissed. */
 	dismissedUpdates: string[];
+	/** Look for a newer version of the app at startup. */
+	checkAppUpdates: boolean;
+	/** App versions whose update notice was dismissed. */
+	dismissedAppUpdates: string[];
 }
 
 const DEFAULTS: Settings = {
@@ -49,7 +53,9 @@ const DEFAULTS: Settings = {
 	extractLargeArt: true,
 	extractImageFormat: 'webp',
 	gameDir: '',
-	dismissedUpdates: []
+	dismissedUpdates: [],
+	checkAppUpdates: true,
+	dismissedAppUpdates: []
 };
 
 const STORAGE_KEY = 'ti-tech-tree:settings';
@@ -75,9 +81,12 @@ function load(): Settings {
 		out.dismissedUpdates = Array.isArray(out.dismissedUpdates)
 			? out.dismissedUpdates.filter((id) => typeof id === 'string')
 			: [];
+		out.dismissedAppUpdates = Array.isArray(out.dismissedAppUpdates)
+			? out.dismissedAppUpdates.filter((v) => typeof v === 'string')
+			: [];
 		return out;
 	} catch {
-		return { ...DEFAULTS, dismissedUpdates: [] };
+		return { ...DEFAULTS, dismissedUpdates: [], dismissedAppUpdates: [] };
 	}
 }
 

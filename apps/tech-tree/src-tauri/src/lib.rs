@@ -240,6 +240,8 @@ async fn get_solar_system(state: State<'_, AppState>, scope: ScopeArgs) -> CmdRe
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
             let config_path = app.path().app_config_dir().ok().map(|dir| dir.join(state::CONFIG_FILE));
             let default_dir = app.path().app_data_dir().ok().map(|dir| dir.join(state::DATA_SUBDIR));

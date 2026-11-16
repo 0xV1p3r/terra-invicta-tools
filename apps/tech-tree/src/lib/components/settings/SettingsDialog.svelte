@@ -13,7 +13,8 @@
 	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
 	import Settings from '@lucide/svelte/icons/settings';
 	import Trash2 from '@lucide/svelte/icons/trash-2';
-	import { api, type BuildInfo, type ExtractArgs } from '$lib/api';
+	import { api, mockMode, type BuildInfo, type ExtractArgs } from '$lib/api';
+	import { appUpdate } from '$lib/app-update.svelte';
 	import ExtractionProgress from '$lib/components/onboarding/ExtractionProgress.svelte';
 	import ExtractOptions from '$lib/components/onboarding/ExtractOptions.svelte';
 	import * as AlertDialog from '$lib/components/ui/alert-dialog/index.js';
@@ -395,6 +396,50 @@
 					{/each}
 				</ToggleGroup.Root>
 			</div>
+			{#if !mockMode}
+				<h2 class="font-semibold">Updates</h2>
+				<div class="flex items-start justify-between gap-4">
+					<Label for="setting-app-updates" class="grid gap-2 font-normal">
+						<span class="font-medium">Check for updates at startup</span>
+						<span class="leading-relaxed text-muted-foreground">
+							Asks GitHub for a newer version of the app. Nothing is installed without asking.
+						</span>
+					</Label>
+					<Switch id="setting-app-updates" bind:checked={settings.checkAppUpdates} />
+				</div>
+				<div class="flex items-start justify-between gap-4">
+					<div class="grid min-w-0 gap-1">
+						<span id="setting-update-check" class="font-medium">Version {__APP_VERSION__}</span>
+						<span class="text-xs leading-relaxed text-muted-foreground" role="status">
+							{#if appUpdate.status === 'checking'}
+								Checking…
+							{:else if appUpdate.status === 'error'}
+								{appUpdate.error}
+							{:else if appUpdate.available}
+								Version {appUpdate.available.version} is available.
+							{:else if appUpdate.checked}
+								This is the latest version.
+							{/if}
+						</span>
+					</div>
+					{#if appUpdate.available}
+						<Button
+							size="sm"
+							aria-describedby="setting-update-check"
+							disabled={appUpdate.busy}
+							onclick={() => void appUpdate.install()}>Install and restart</Button
+						>
+					{:else}
+						<Button
+							variant="outline"
+							size="sm"
+							aria-describedby="setting-update-check"
+							disabled={appUpdate.status === 'checking'}
+							onclick={() => void appUpdate.check()}>Check now</Button
+						>
+					{/if}
+				</div>
+			{/if}
 			<h2 class="font-semibold">About</h2>
 			<div class="grid gap-1 text-xs leading-relaxed text-muted-foreground">
 				<span
