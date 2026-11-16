@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # Build release bundles of the desktop app into dist/<version>/.
 #
-#   scripts/release.sh            # .deb and Windows .exe installer
-#   scripts/release.sh deb        # only the .deb
-#   scripts/release.sh exe        # only the .exe (NSIS installer, cross-compiled)
+#   scripts/release.sh               # .deb, AppImage and Windows .exe installer
+#   scripts/release.sh deb appimage  # only the Linux bundles
+#   scripts/release.sh exe           # only the .exe (NSIS installer, cross-compiled)
+#
+# SHA256SUMS in the output directory lists every bundle there.
 #
 # The .exe is cross-compiled from Linux with cargo-xwin, which downloads the
 # MSVC CRT and Windows SDK on first use (accepting Microsoft's license).
@@ -18,9 +20,10 @@ app="$root/apps/tech-tree"
 win_target="x86_64-pc-windows-msvc"
 
 targets=("$@")
-[[ ${#targets[@]} -eq 0 ]] && targets=(deb exe)
+[[ ${#targets[@]} -eq 0 ]] && targets=(deb appimage exe)
 for t in "${targets[@]}"; do
-	[[ $t == deb || $t == exe ]] || { echo "unknown target: $t (expected deb or exe)" >&2; exit 2; }
+	[[ $t == deb || $t == appimage || $t == exe ]] ||
+		{ echo "unknown target: $t (expected deb, appimage or exe)" >&2; exit 2; }
 done
 
 missing=()
@@ -30,6 +33,7 @@ need cargo "see README requirements"
 for t in "${targets[@]}"; do
 	case $t in
 	deb) need dpkg-deb "apt-get install dpkg" ;;
+	appimage) need file "apt-get install file" ;;
 	exe)
 		need cargo-xwin "cargo install --locked cargo-xwin"
 		need makensis "apt-get install nsis"
@@ -47,7 +51,8 @@ if [[ ${#missing[@]} -gt 0 ]]; then
 	exit 1
 fi
 
-version="$(sed -n 's/^\s*"version": *"\([^"]*\)".*/\1/p' "$app/src-tauri/tauri.conf.json" | head -n1)"
+# tauri.conf.json takes its version from package.json.
+version="$(sed -n 's/^\s*"version": *"\([^"]*\)".*/\1/p' "$app/package.json" | head -n1)"
 out="$root/dist/$version"
 mkdir -p "$out"
 
@@ -63,6 +68,10 @@ for t in "${targets[@]}"; do
 		pnpm tauri build --config "$no_frontend" --bundles deb
 		cp -v "$root"/target/release/bundle/deb/*_"$version"_*.deb "$out/"
 		;;
+	appimage)
+		pnpm tauri build --config "$no_frontend" --bundles appimage
+		cp -v "$root"/target/release/bundle/appimage/*_"$version"_*.AppImage "$out/"
+		;;
 	exe)
 		pnpm tauri build --config "$no_frontend" --runner cargo-xwin --target "$win_target" --bundles nsis
 		cp -v "$root/target/$win_target/release/bundle/nsis/"*_"$version"_*-setup.exe "$out/"
@@ -70,6 +79,10 @@ for t in "${targets[@]}"; do
 	esac
 done
 
+cd "$out"
+shopt -s nullglob
+sha256sum -- *.deb *.AppImage *.exe >SHA256SUMS
+
 echo
 echo "release bundles in $out:"
-ls -1 "$out"
+ls -1
