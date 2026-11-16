@@ -24,8 +24,11 @@ The app finds Terra Invicta in your Steam libraries (or asks for its folder) and
 
 When the game updates, the app offers to extract the new build.
 
+### Updates
+
+At startup the app asks GitHub whether a newer version exists and, if so, offers to install it and restart. Downloads are checked against the release signing key before they are installed. Updating a `.deb` install asks for your administrator password. You can turn the check off, or check by hand, in Settings → Updates.
+
 ### Known limitations
 
 - Mods are not read.
 - No macOS build.
-- No automatic updates: download new versions from the releases page.

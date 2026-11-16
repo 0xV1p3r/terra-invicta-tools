@@ -10,6 +10,7 @@
 	import DetailPanel from '$lib/components/detail/DetailPanel.svelte';
 	import Onboarding from '$lib/components/onboarding/Onboarding.svelte';
 	import UpdateNotice from '$lib/components/onboarding/UpdateNotice.svelte';
+	import AppUpdateNotice from '$lib/components/update/AppUpdateNotice.svelte';
 	import ScopeBar from '$lib/components/scope/ScopeBar.svelte';
 	import WikiDialog from '$lib/components/wiki/WikiDialog.svelte';
 	import SearchPalette from '$lib/components/search/SearchPalette.svelte';
@@ -293,6 +294,7 @@
 						</Tip>
 					</Pill>
 				</div>
+				<AppUpdateNotice />
 				<UpdateNotice {extract} />
 				<div class="flex min-h-0 flex-1">
 					{#if app.page === 'map' && mapState.paneOpen}

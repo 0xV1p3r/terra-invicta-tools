@@ -1,6 +1,8 @@
 name: Release
 
 # Push a tag such as v0.1.0 to build the bundles and open a draft GitHub release.
+# Bundles are signed for the in-app updater with the TAURI_SIGNING_PRIVATE_KEY secret, and
+# latest.json (the updater's manifest) is attached. Publishing the draft releases the update.
 on:
   push:
     tags: ['v*']
@@ -36,12 +38,16 @@ jobs:
           cache: pnpm
           cache-dependency-path: apps/tech-tree/pnpm-lock.yaml
       - run: scripts/release.sh deb appimage
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       - uses: actions/upload-artifact@v4
         with:
           name: linux
           path: |
             dist/*/*.deb
+            dist/*/*.deb.sig
             dist/*/*.AppImage
+            dist/*/*.AppImage.sig
           if-no-files-found: error
 
   windows:
@@ -63,10 +69,14 @@ jobs:
           cache-dependency-path: apps/tech-tree/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - run: pnpm tauri build --bundles nsis
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       - uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: target/release/bundle/nsis/*-setup.exe
+          path: |
+            target/release/bundle/nsis/*-setup.exe
+            target/release/bundle/nsis/*-setup.exe.sig
           if-no-files-found: error
 
   release:
@@ -85,9 +95,25 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cd bundles
+          shopt -s nullglob
           find . -mindepth 2 -type f -exec mv -t . {} +
+          # GitHub turns spaces in asset names into dots; give the installer a plain name.
+          for f in *' '*; do mv -- "$f" "$(tr ' ' '-' <<<"${f,,}")"; done
+          for f in *.deb *.AppImage *.exe; do
+            [[ -f $f.sig ]] || { echo "missing updater signature for $f (is the TAURI_SIGNING_PRIVATE_KEY secret set?)" >&2; exit 1; }
+          done
           sha256sum -- *.deb *.AppImage *.exe > SHA256SUMS
           # The release notes are this version's section of CHANGELOG.md.
           awk -v v="${GITHUB_REF_NAME#v}" '/^## /{p = index($0, "[" v "]") > 0; next} p' ../CHANGELOG.md > notes.md
+          # The updater picks the entry for its own bundle type, falling back to the plain OS key.
+          base="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
+          entry() { jq -n --arg url "$base/$1" --rawfile sig "$1.sig" '{url: $url, signature: $sig}'; }
+          deb=(*.deb) appimage=(*.AppImage) exe=(*.exe)
+          jq -n --arg version "${GITHUB_REF_NAME#v}" --rawfile notes notes.md \
+            --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --argjson deb "$(entry "$deb")" --argjson appimage "$(entry "$appimage")" --argjson exe "$(entry "$exe")" \
+            '{version: $version, notes: $notes, pub_date: $date, platforms: {
+              "linux-x86_64-deb": $deb, "linux-x86_64-appimage": $appimage, "linux-x86_64": $appimage,
+              "windows-x86_64-nsis": $exe, "windows-x86_64": $exe}}' > latest.json
           gh release create "$GITHUB_REF_NAME" --draft --title "Terra Invicta Tools $GITHUB_REF_NAME" \
-            --notes-file notes.md *.deb *.AppImage *.exe SHA256SUMS
+            --notes-file notes.md *.deb *.AppImage *.exe *.sig latest.json SHA256SUMS

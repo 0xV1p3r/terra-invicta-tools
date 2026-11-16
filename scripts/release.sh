@@ -7,6 +7,9 @@
 #
 # SHA256SUMS in the output directory lists every bundle there.
 #
+# With TAURI_SIGNING_PRIVATE_KEY set (the key, or a path to it), each bundle also gets
+# the .sig file the in-app updater checks. Without it the bundles are built unsigned.
+#
 # The .exe is cross-compiled from Linux with cargo-xwin, which downloads the
 # MSVC CRT and Windows SDK on first use (accepting Microsoft's license).
 # Extra prerequisites for it:
@@ -28,8 +31,8 @@ done
 
 missing=()
 need() { command -v "$1" >/dev/null || missing+=("$1 ($2)"); }
-need pnpm "see README requirements"
-need cargo "see README requirements"
+need pnpm "see docs/DEVELOPMENT.md"
+need cargo "see docs/DEVELOPMENT.md"
 for t in "${targets[@]}"; do
 	case $t in
 	deb) need dpkg-deb "apt-get install dpkg" ;;
@@ -60,21 +63,34 @@ cd "$app"
 pnpm install --frozen-lockfile
 pnpm build
 # The frontend is built once above; skip tauri's beforeBuildCommand.
-no_frontend='{"build":{"beforeBuildCommand":""}}'
+if [[ -n ${TAURI_SIGNING_PRIVATE_KEY:-} ]]; then
+	no_frontend='{"build":{"beforeBuildCommand":""}}'
+else
+	echo "TAURI_SIGNING_PRIVATE_KEY is not set: building without updater signatures" >&2
+	no_frontend='{"build":{"beforeBuildCommand":""},"bundle":{"createUpdaterArtifacts":false}}'
+fi
+
+# Copy bundles, and their updater signatures if any, to $out.
+copy_bundle() {
+	for f in "$@"; do
+		cp -v "$f" "$out/"
+		[[ ! -f $f.sig ]] || cp -v "$f.sig" "$out/"
+	done
+}
 
 for t in "${targets[@]}"; do
 	case $t in
 	deb)
 		pnpm tauri build --config "$no_frontend" --bundles deb
-		cp -v "$root"/target/release/bundle/deb/*_"$version"_*.deb "$out/"
+		copy_bundle "$root"/target/release/bundle/deb/*_"$version"_*.deb
 		;;
 	appimage)
 		pnpm tauri build --config "$no_frontend" --bundles appimage
-		cp -v "$root"/target/release/bundle/appimage/*_"$version"_*.AppImage "$out/"
+		copy_bundle "$root"/target/release/bundle/appimage/*_"$version"_*.AppImage
 		;;
 	exe)
 		pnpm tauri build --config "$no_frontend" --runner cargo-xwin --target "$win_target" --bundles nsis
-		cp -v "$root/target/$win_target/release/bundle/nsis/"*_"$version"_*-setup.exe "$out/"
+		copy_bundle "$root/target/$win_target/release/bundle/nsis/"*_"$version"_*-setup.exe
 		;;
 	esac
 done
