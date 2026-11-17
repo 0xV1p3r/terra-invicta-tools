@@ -1,14 +1,21 @@
 name: Release
 
 # Push a tag such as v0.1.0 to build the bundles and open a draft GitHub release.
-# Bundles are signed for the in-app updater with the TAURI_SIGNING_PRIVATE_KEY secret, and
+# The build jobs never see the updater signing key: the sign job, in the `release`
+# environment, signs the finished bundles with its TAURI_SIGNING_PRIVATE_KEY secret.
 # latest.json (the updater's manifest) is attached. Publishing the draft releases the update.
+# No job restores a cache, so nothing a CI run wrote can reach a release.
 on:
   push:
     tags: ['v*']
 
 permissions:
   contents: read
+
+# One release run per tag at a time, never cancelled halfway.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always
@@ -18,7 +25,9 @@ jobs:
     # The oldest supported runner: the AppImage only runs on distros with this glibc or newer.
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
       - name: Check the tag matches the app version
         run: |
           version="$(jq -r .version apps/tech-tree/package.json)"
@@ -27,80 +36,124 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential file xdg-utils libxdo-dev libssl-dev librsvg2-dev libayatana-appindicator3-dev patchelf
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - uses: pnpm/action-setup@v4
+      # Installs the toolchain pinned in rust-toolchain.toml.
+      - run: rustup toolchain install
+      - uses: pnpm/action-setup@v6.1.1
         with:
           package_json_file: apps/tech-tree/package.json
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7.1.0
         with:
-          node-version: lts/*
-          cache: pnpm
-          cache-dependency-path: apps/tech-tree/pnpm-lock.yaml
+          node-version: 26
+          package-manager-cache: false
+      # Unsigned: the sign job adds the updater signatures.
       - run: scripts/release.sh deb appimage
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: linux
           path: |
             dist/*/*.deb
-            dist/*/*.deb.sig
             dist/*/*.AppImage
-            dist/*/*.AppImage.sig
           if-no-files-found: error
 
   windows:
-    runs-on: windows-latest
+    runs-on: windows-2025
     defaults:
       run:
+        shell: bash
         working-directory: apps/tech-tree
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install
+      - uses: pnpm/action-setup@v6.1.1
         with:
           package_json_file: apps/tech-tree/package.json
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7.1.0
         with:
-          node-version: lts/*
-          cache: pnpm
-          cache-dependency-path: apps/tech-tree/pnpm-lock.yaml
+          node-version: 26
+          package-manager-cache: false
       - run: pnpm install --frozen-lockfile
-      - run: pnpm tauri build --bundles nsis
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-      - uses: actions/upload-artifact@v4
+      - run: pnpm tauri build --bundles nsis --config '{"bundle":{"createUpdaterArtifacts":false}}'
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: windows
-          path: |
-            target/release/bundle/nsis/*-setup.exe
-            target/release/bundle/nsis/*-setup.exe.sig
+          path: target/release/bundle/nsis/*-setup.exe
           if-no-files-found: error
 
-  release:
+  sign:
     needs: [linux, windows]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    runs-on: ubuntu-24.04
+    # Holds the TAURI_SIGNING_PRIVATE_KEY secret; only v* tags may deploy to it.
+    environment: release
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6.1.1
+        with:
+          package_json_file: apps/tech-tree/package.json
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 26
+          package-manager-cache: false
+      # Only the Tauri CLI runs in this job: no install scripts, no build.
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+        working-directory: apps/tech-tree
+      - uses: actions/download-artifact@v8.0.2
         with:
           path: bundles
           merge-multiple: true
+      - name: Name the bundles
+        working-directory: bundles
+        run: |
+          shopt -s nullglob
+          find . -mindepth 2 -type f -exec mv -t . {} +
+          # GitHub turns spaces in asset names into dots; give the installer a plain name.
+          for f in *' '*; do mv -- "$f" "$(tr ' ' '-' <<<"${f,,}")"; done
+      - name: Sign the bundles for the updater
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          [[ -n $TAURI_SIGNING_PRIVATE_KEY ]] || { echo "the release environment has no TAURI_SIGNING_PRIVATE_KEY secret" >&2; exit 1; }
+          for f in "$GITHUB_WORKSPACE"/bundles/{*.deb,*.AppImage,*.exe}; do
+            pnpm --dir apps/tech-tree exec tauri signer sign --app-version "${GITHUB_REF_NAME#v}" "$f"
+          done
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: signed
+          path: bundles/
+          if-no-files-found: error
+
+  release:
+    needs: sign
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # create the draft release
+      # Build provenance attestations, checked with `gh attestation verify`.
+      id-token: write # sign them with Sigstore
+      attestations: write # store them
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          name: signed
+          path: bundles
+      - uses: actions/attest@v4.2.2
+        with:
+          subject-path: |
+            bundles/*.deb
+            bundles/*.AppImage
+            bundles/*.exe
       - name: Create a draft release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           cd bundles
-          shopt -s nullglob
-          find . -mindepth 2 -type f -exec mv -t . {} +
-          # GitHub turns spaces in asset names into dots; give the installer a plain name.
-          for f in *' '*; do mv -- "$f" "$(tr ' ' '-' <<<"${f,,}")"; done
           for f in *.deb *.AppImage *.exe; do
-            [[ -f $f.sig ]] || { echo "missing updater signature for $f (is the TAURI_SIGNING_PRIVATE_KEY secret set?)" >&2; exit 1; }
+            [[ -f $f.sig ]] || { echo "missing updater signature for $f" >&2; exit 1; }
           done
           sha256sum -- *.deb *.AppImage *.exe > SHA256SUMS
           # The release notes are this version's section of CHANGELOG.md.
