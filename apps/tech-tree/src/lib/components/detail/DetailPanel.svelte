@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { X, BookOpen } from '@lucide/svelte';
-	import type { EntityKey, EntityRef } from '$lib/api';
-	import { Button } from '$lib/components/ui/button';
-	import { ScrollArea } from '$lib/components/ui/scroll-area';
-	import * as Card from '$lib/components/ui/card';
-	import { app } from '$lib/state.svelte';
-	import { wiki } from '$lib/wiki.svelte';
+	import type { EntityKey, EntityRef } from '#lib/api.ts';
+	import { Button } from '#lib/components/ui/button/index.ts';
+	import { ScrollArea } from '#lib/components/ui/scroll-area/index.ts';
+	import * as Card from '#lib/components/ui/card/index.ts';
+	import { app } from '#lib/state.svelte.ts';
+	import { wiki } from '#lib/wiki.svelte.ts';
 	import EntityIcon from './EntityIcon.svelte';
 	import EntityView from './EntityView.svelte';
 

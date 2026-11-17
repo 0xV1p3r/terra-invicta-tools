@@ -1,8 +1,8 @@
 // Render-ready form of a TreeGraph: per-node geometry and labels, edge paths, bounds and
 // a grid for hit-testing/culling. Built once per loaded graph.
-import type { EntityKey, TreeGraph, TreeNode } from '$lib/api';
-import { CATEGORIES } from '$lib/categories';
-import { formatCost } from '$lib/format';
+import type { EntityKey, TreeGraph, TreeNode } from '#lib/api.ts';
+import { CATEGORIES } from '#lib/categories.ts';
+import { formatCost } from '#lib/format.ts';
 import { activeFlags, type FlagInfo } from './flags';
 import type { Rect } from './camera';
 

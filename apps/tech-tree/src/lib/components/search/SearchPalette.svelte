@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { api, assetUrl, type SearchHit, type EntityKind, type TechCategory } from '$lib/api';
-	import { app } from '$lib/state.svelte';
-	import { KIND_LABELS } from '$lib/format';
-	import * as ToggleGroup from '$lib/components/ui/toggle-group';
-	import * as Command from '$lib/components/ui/command';
-	import { Button } from '$lib/components/ui/button';
-	import Tip from '$lib/components/toolbar/Tip.svelte';
+	import { api, assetUrl, type SearchHit, type EntityKind, type TechCategory } from '#lib/api.ts';
+	import { app } from '#lib/state.svelte.ts';
+	import { KIND_LABELS } from '#lib/format.ts';
+	import * as ToggleGroup from '#lib/components/ui/toggle-group/index.ts';
+	import * as Command from '#lib/components/ui/command/index.ts';
+	import { Button } from '#lib/components/ui/button/index.ts';
+	import Tip from '#lib/components/toolbar/Tip.svelte';
 	import Search from '@lucide/svelte/icons/search';
 	import FlaskConical from '@lucide/svelte/icons/flask-conical';
 	import Wrench from '@lucide/svelte/icons/wrench';

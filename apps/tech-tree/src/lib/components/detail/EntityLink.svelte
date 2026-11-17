@@ -2,10 +2,10 @@
 	import { getSpoilerPolicy } from './navigation';
 	import SpoilerChip from './SpoilerChip.svelte';
 	const spoilersAllowed = getSpoilerPolicy();
-	import type { EntityRef } from '$lib/api';
-	import { KIND_LABELS } from '$lib/format';
+	import type { EntityRef } from '#lib/api.ts';
+	import { KIND_LABELS } from '#lib/format.ts';
 	import { getEntityNavigator } from './navigation';
-	import { Button } from '$lib/components/ui/button';
+	import { Button } from '#lib/components/ui/button/index.ts';
 	const navigate = getEntityNavigator();
 	import EntityIcon from './EntityIcon.svelte';
 

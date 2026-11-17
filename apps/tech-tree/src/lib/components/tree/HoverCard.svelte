@@ -3,21 +3,21 @@
 	// canvas leaves out. Zoomed in, the canvas card shows those, so the hover card expands with
 	// what it can't: flag labels, total cost, summary, requirements, effects and unlocks
 	// (fetched lazily). A pointer-only preview: the detail panel is the accessible path.
-	import type { EntityDetail, UnlockItem, UnlockKind } from '$lib/api';
-	import { CATEGORIES } from '$lib/categories';
-	import EntityIcon from '$lib/components/detail/EntityIcon.svelte';
-	import { Badge } from '$lib/components/ui/badge/index.js';
-	import * as Card from '$lib/components/ui/card/index.js';
-	import { Separator } from '$lib/components/ui/separator/index.js';
-	import { Skeleton } from '$lib/components/ui/skeleton/index.js';
-	import { SENTIMENT } from '$lib/effect-style';
+	import type { EntityDetail, UnlockItem, UnlockKind } from '#lib/api.ts';
+	import { CATEGORIES } from '#lib/categories.ts';
+	import EntityIcon from '#lib/components/detail/EntityIcon.svelte';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import * as Card from '#lib/components/ui/card/index.js';
+	import { Separator } from '#lib/components/ui/separator/index.js';
+	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
+	import { SENTIMENT } from '#lib/effect-style.ts';
 	import {
 		formatCostFull,
 		REQUIREMENT_LABELS,
 		requirementChoices,
 		UNLOCK_LABELS
-	} from '$lib/format';
-	import { app } from '$lib/state.svelte';
+	} from '#lib/format.ts';
+	import { app } from '#lib/state.svelte.ts';
 	import CategoryIcon from './CategoryIcon.svelte';
 	import { cachedDetail, loadDetail } from './hover-detail';
 	import type { SceneNode } from './scene';

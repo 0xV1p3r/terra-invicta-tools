@@ -4,11 +4,11 @@
 	import FolderSearch from '@lucide/svelte/icons/folder-search';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
-	import { api, mockOnboarding, type ExtractArgs } from '$lib/api';
-	import * as Alert from '$lib/components/ui/alert/index.js';
-	import { Button } from '$lib/components/ui/button/index.js';
-	import * as Card from '$lib/components/ui/card/index.js';
-	import { extractArgs, extraction, gameLabel } from '$lib/extraction.svelte';
+	import { api, mockOnboarding, type ExtractArgs } from '#lib/api.ts';
+	import * as Alert from '#lib/components/ui/alert/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Card from '#lib/components/ui/card/index.js';
+	import { extractArgs, extraction, gameLabel } from '#lib/extraction.svelte.ts';
 	import ExtractionProgress from './ExtractionProgress.svelte';
 	import ExtractOptions from './ExtractOptions.svelte';
 	import wordmark from '../../../../branding/wordmark-dark.svg';

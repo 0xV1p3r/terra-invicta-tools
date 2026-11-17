@@ -1,5 +1,5 @@
 // Game install labels and the update check.
-import type { BuildInfo, GameInfo } from '$lib/api';
+import type { BuildInfo, GameInfo } from '#lib/api.ts';
 
 /** "Terra Invicta 1.0.53b (build 21474836)"; the build only for Steam installs. */
 export function gameLabel(game: GameInfo): string {

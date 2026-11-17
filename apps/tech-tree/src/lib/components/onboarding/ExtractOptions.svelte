@@ -1,10 +1,10 @@
 <script lang="ts">
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
-	import * as Collapsible from '$lib/components/ui/collapsible/index.js';
-	import { Label } from '$lib/components/ui/label/index.js';
-	import * as RadioGroup from '$lib/components/ui/radio-group/index.js';
-	import { Switch } from '$lib/components/ui/switch/index.js';
-	import { settings } from '$lib/settings.svelte';
+	import * as Collapsible from '#lib/components/ui/collapsible/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
+	import * as RadioGroup from '#lib/components/ui/radio-group/index.js';
+	import { Switch } from '#lib/components/ui/switch/index.js';
+	import { settings } from '#lib/settings.svelte.ts';
 
 	let { disabled = false }: { disabled?: boolean } = $props();
 

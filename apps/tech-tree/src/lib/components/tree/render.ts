@@ -1,8 +1,8 @@
 // Canvas renderer of the research tree. Everything is drawn in world coordinates with
 // one transform per frame; detail (text, icons, badges) depends on the zoom so a frame
 // costs about the same whether 30 or 900 cards are visible.
-import type { EntityKey, TechCategory } from '$lib/api';
-import { CATEGORIES } from '$lib/categories';
+import type { EntityKey, TechCategory } from '#lib/api.ts';
+import { CATEGORIES } from '#lib/categories.ts';
 import type { Camera, Rect } from './camera';
 import {
 	importanceOf,

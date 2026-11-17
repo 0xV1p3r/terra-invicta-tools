@@ -2,11 +2,11 @@
 	// Overview of the whole tree: nodes pre-drawn once per scene into an offscreen canvas;
 	// each camera change only blits it and draws the viewport frame. Click or drag to pan.
 	import { onDestroy } from 'svelte';
-	import * as Card from '$lib/components/ui/card/index.js';
-	import { settings, type Corner } from '$lib/settings.svelte';
+	import * as Card from '#lib/components/ui/card/index.js';
+	import { settings, type Corner } from '#lib/settings.svelte.ts';
 	import type { Camera } from './camera';
 	import type { Theme } from './render';
-	import type { EntityKey } from '$lib/api';
+	import type { EntityKey } from '#lib/api.ts';
 	import type { Scene } from './scene';
 
 	let {

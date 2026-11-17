@@ -1,5 +1,5 @@
 // Small display formatters shared by tree and detail views.
-import type { EntityKey, EntityKind, RequirementGroup, UnlockKind } from '$lib/api';
+import type { EntityKey, EntityKind, RequirementGroup, UnlockKind } from '#lib/api.ts';
 
 /** Compact research cost: 950 → "950", 12500 → "12.5k", 2_000_000 → "2M". */
 export function formatCost(cost: number | null | undefined): string {

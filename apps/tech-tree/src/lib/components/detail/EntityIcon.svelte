@@ -1,6 +1,6 @@
 <script lang="ts" module>
 	import type { Component } from 'svelte';
-	import type { EntityKind } from '$lib/api';
+	import type { EntityKind } from '#lib/api.ts';
 	import Award from '@lucide/svelte/icons/award';
 	import BookOpen from '@lucide/svelte/icons/book-open';
 	import Building2 from '@lucide/svelte/icons/building-2';
@@ -31,9 +31,9 @@
 </script>
 
 <script lang="ts">
-	import type { EntityRef } from '$lib/api';
-	import { assetUrl } from '$lib/api';
-	import CategoryIcon from '$lib/components/tree/CategoryIcon.svelte';
+	import type { EntityRef } from '#lib/api.ts';
+	import { assetUrl } from '#lib/api.ts';
+	import CategoryIcon from '#lib/components/tree/CategoryIcon.svelte';
 
 	let {
 		entity,

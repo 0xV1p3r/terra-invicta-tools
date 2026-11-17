@@ -9,7 +9,7 @@ import Package from '@lucide/svelte/icons/package';
 import Repeat from '@lucide/svelte/icons/repeat';
 import Shuffle from '@lucide/svelte/icons/shuffle';
 import Users from '@lucide/svelte/icons/users';
-import type { NodeFlags } from '$lib/api';
+import type { NodeFlags } from '#lib/api.ts';
 
 export type FlagKey = keyof NodeFlags;
 

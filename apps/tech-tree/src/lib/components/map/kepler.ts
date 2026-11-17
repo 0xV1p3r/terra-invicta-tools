@@ -13,7 +13,7 @@
 // Self-check (Earth at J2000, M₀ = 358.617°, Ω = 348.7394°, ω = 114.20783°, e = 0.0167):
 // ν ≈ −1.4°, so the heliocentric longitude is Ω + ω + ν ≈ 101.5°, matching the real ≈ 100.5°
 // for 2000-01-01 (the Sun's apparent longitude of ≈ 280.5° plus 180°).
-import type { OrbitElements } from '$lib/api';
+import type { OrbitElements } from '#lib/api.ts';
 
 const DEG = Math.PI / 180;
 const TAU = 2 * Math.PI;

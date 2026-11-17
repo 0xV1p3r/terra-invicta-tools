@@ -18,15 +18,15 @@
 		type EntityRef,
 		type UnlockItem,
 		type UnlockKind
-	} from '$lib/api';
-	import * as Card from '$lib/components/ui/card';
-	import { Badge } from '$lib/components/ui/badge/index.js';
-	import { Button } from '$lib/components/ui/button/index.js';
-	import * as Collapsible from '$lib/components/ui/collapsible/index.js';
-	import * as Tooltip from '$lib/components/ui/tooltip/index.js';
+	} from '#lib/api.ts';
+	import * as Card from '#lib/components/ui/card/index.ts';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Collapsible from '#lib/components/ui/collapsible/index.js';
+	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
 
-	import { Skeleton } from '$lib/components/ui/skeleton/index.js';
-	import { categoryInfo } from '$lib/categories';
+	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
+	import { categoryInfo } from '#lib/categories.ts';
 	import {
 		formatCost,
 		formatCostFull,
@@ -36,8 +36,8 @@
 		REQUIREMENT_LABELS,
 		requirementChoices,
 		UNLOCK_LABELS
-	} from '$lib/format';
-	import { app } from '$lib/state.svelte';
+	} from '#lib/format.ts';
+	import { app } from '#lib/state.svelte.ts';
 	import EffectItem from './EffectItem.svelte';
 	import EntityIcon from './EntityIcon.svelte';
 	import EntityLink from './EntityLink.svelte';
@@ -128,9 +128,9 @@
 		return app.meta?.factions.find((f) => f.name === name)?.label ?? name;
 	}
 
-	import { wikiIcon } from '$lib/wiki-icons';
-	import { wiki } from '$lib/wiki.svelte';
-	import { settings } from '$lib/settings.svelte';
+	import { wikiIcon } from '#lib/wiki-icons.ts';
+	import { wiki } from '#lib/wiki.svelte.ts';
+	import { settings } from '#lib/settings.svelte.ts';
 	import SpoilerChip from './SpoilerChip.svelte';
 	import DataTree from './DataTree.svelte';
 	import ReferenceGroups from './ReferenceGroups.svelte';

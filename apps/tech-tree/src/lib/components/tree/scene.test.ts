@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import type { TreeGraph, TreeNode } from '$lib/api';
+import type { TreeGraph, TreeNode } from '#lib/api.ts';
 import { buildScene, nodeAt, nodesIn } from './scene';
 
 // Flag icons are Svelte components; their presentation does not affect geometry.

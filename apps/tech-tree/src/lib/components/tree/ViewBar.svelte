@@ -1,16 +1,16 @@
 <script lang="ts">
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import ArrowRight from '@lucide/svelte/icons/arrow-right';
-	import type { Direction, TreeGraph } from '$lib/api';
-	import { Button } from '$lib/components/ui/button/index.js';
-	import { Switch } from '$lib/components/ui/switch/index.js';
-	import { Label } from '$lib/components/ui/label/index.js';
-	import * as ToggleGroup from '$lib/components/ui/toggle-group/index.js';
-	import { app, type FullLayout, type ViewKind } from '$lib/state.svelte';
-	import Pill, { pillIcon, pillToggle, segmented } from '$lib/components/toolbar/Pill.svelte';
-	import PillDivider from '$lib/components/toolbar/PillDivider.svelte';
-	import PageSwitch from '$lib/components/toolbar/PageSwitch.svelte';
-	import Tip from '$lib/components/toolbar/Tip.svelte';
+	import type { Direction, TreeGraph } from '#lib/api.ts';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { Switch } from '#lib/components/ui/switch/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
+	import * as ToggleGroup from '#lib/components/ui/toggle-group/index.js';
+	import { app, type FullLayout, type ViewKind } from '#lib/state.svelte.ts';
+	import Pill, { pillIcon, pillToggle, segmented } from '#lib/components/toolbar/Pill.svelte';
+	import PillDivider from '#lib/components/toolbar/PillDivider.svelte';
+	import PageSwitch from '#lib/components/toolbar/PageSwitch.svelte';
+	import Tip from '#lib/components/toolbar/Tip.svelte';
 	import CategoryIcon from './CategoryIcon.svelte';
 
 	let { graph }: { graph: TreeGraph | null } = $props();

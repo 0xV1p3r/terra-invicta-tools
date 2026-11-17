@@ -8,28 +8,28 @@
 	import ArrowDownRight from '@lucide/svelte/icons/arrow-down-right';
 	import ArrowUpLeft from '@lucide/svelte/icons/arrow-up-left';
 	import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
-	import Tip from '$lib/components/toolbar/Tip.svelte';
+	import Tip from '#lib/components/toolbar/Tip.svelte';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
 	import Settings from '@lucide/svelte/icons/settings';
 	import Trash2 from '@lucide/svelte/icons/trash-2';
-	import { api, mockMode, type BuildInfo, type ExtractArgs } from '$lib/api';
-	import { appUpdate } from '$lib/app-update.svelte';
-	import ExtractionProgress from '$lib/components/onboarding/ExtractionProgress.svelte';
-	import ExtractOptions from '$lib/components/onboarding/ExtractOptions.svelte';
-	import * as AlertDialog from '$lib/components/ui/alert-dialog/index.js';
-	import { Badge } from '$lib/components/ui/badge/index.js';
-	import { Button } from '$lib/components/ui/button/index.js';
-	import * as Dialog from '$lib/components/ui/dialog/index.js';
-	import { Label } from '$lib/components/ui/label/index.js';
-	import * as Select from '$lib/components/ui/select/index.js';
-	import { Switch } from '$lib/components/ui/switch/index.js';
-	import * as ToggleGroup from '$lib/components/ui/toggle-group/index.js';
-	import { extractArgs, extraction, gameLabel } from '$lib/extraction.svelte';
-	import { formatBytes } from '$lib/game';
-	import { settings, type Corner } from '$lib/settings.svelte';
-	import { app } from '$lib/state.svelte';
-	import { pillIcon } from '$lib/components/toolbar/Pill.svelte';
+	import { api, mockMode, type BuildInfo, type ExtractArgs } from '#lib/api.ts';
+	import { appUpdate } from '#lib/app-update.svelte.ts';
+	import ExtractionProgress from '#lib/components/onboarding/ExtractionProgress.svelte';
+	import ExtractOptions from '#lib/components/onboarding/ExtractOptions.svelte';
+	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
+	import * as Select from '#lib/components/ui/select/index.js';
+	import { Switch } from '#lib/components/ui/switch/index.js';
+	import * as ToggleGroup from '#lib/components/ui/toggle-group/index.js';
+	import { extractArgs, extraction, gameLabel } from '#lib/extraction.svelte.ts';
+	import { formatBytes } from '#lib/game.ts';
+	import { settings, type Corner } from '#lib/settings.svelte.ts';
+	import { app } from '#lib/state.svelte.ts';
+	import { pillIcon } from '#lib/components/toolbar/Pill.svelte';
 
 	const LANGUAGES: Record<string, string> = {
 		en: 'English',

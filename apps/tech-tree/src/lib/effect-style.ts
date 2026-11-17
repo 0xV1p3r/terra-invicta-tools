@@ -1,6 +1,6 @@
 // Display metadata for effects shared by the detail panel and the effect filter.
 import type { Component } from 'svelte';
-import type { EffectDomain, EffectSentiment } from '$lib/api';
+import type { EffectDomain, EffectSentiment } from '#lib/api.ts';
 import Award from '@lucide/svelte/icons/award';
 import Bug from '@lucide/svelte/icons/bug';
 import Building2 from '@lucide/svelte/icons/building-2';

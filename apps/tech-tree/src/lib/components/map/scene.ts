@@ -2,8 +2,14 @@
 // units after a radial distance mapping (log or linear). Orbits are static (the game doesn't
 // precess them), so their paths are built once per system and scale; only positions follow
 // the date.
-import type { BodyType, EntityKey, LagrangePointInfo, SolarSystem, SpaceBodyInfo } from '$lib/api';
-import type { MapScale } from '$lib/settings.svelte';
+import type {
+	BodyType,
+	EntityKey,
+	LagrangePointInfo,
+	SolarSystem,
+	SpaceBodyInfo
+} from '#lib/api.ts';
+import type { MapScale } from '#lib/settings.svelte.ts';
 import { orbitPath, positionAt, type Vec3 } from './kepler';
 
 export type ItemType = BodyType | 'lagrange';

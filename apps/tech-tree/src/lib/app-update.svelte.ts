@@ -1,8 +1,8 @@
 // Updates of the app itself (not the game data), from the GitHub releases (Svelte 5 runes).
 // The updater plugin verifies each download against the public key in tauri.conf.json.
 import type { Update } from '@tauri-apps/plugin-updater';
-import { mockMode } from '$lib/api';
-import { settings } from '$lib/settings.svelte';
+import { mockMode } from '#lib/api.ts';
+import { settings } from '#lib/settings.svelte.ts';
 
 type Status = 'idle' | 'checking' | 'downloading' | 'installing' | 'error';
 

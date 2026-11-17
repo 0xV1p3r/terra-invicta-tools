@@ -2,11 +2,11 @@
 	// Header controls of the solar system map: focus on a major body (any of them; the map's hotbar
 	// has the planets), distance scale.
 	import Crosshair from '@lucide/svelte/icons/crosshair';
-	import Pill, { pillItem, pillToggle, segmented } from '$lib/components/toolbar/Pill.svelte';
-	import Tip from '$lib/components/toolbar/Tip.svelte';
-	import * as Select from '$lib/components/ui/select/index.js';
-	import * as ToggleGroup from '$lib/components/ui/toggle-group/index.js';
-	import { settings, type MapScale } from '$lib/settings.svelte';
+	import Pill, { pillItem, pillToggle, segmented } from '#lib/components/toolbar/Pill.svelte';
+	import Tip from '#lib/components/toolbar/Tip.svelte';
+	import * as Select from '#lib/components/ui/select/index.js';
+	import * as ToggleGroup from '#lib/components/ui/toggle-group/index.js';
+	import { settings, type MapScale } from '#lib/settings.svelte.ts';
 	import BodyIcon from './BodyIcon.svelte';
 	import { majors } from './majors.svelte';
 	import type { MapBody } from './scene';

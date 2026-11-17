@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { OrbitElements } from '$lib/api';
+import type { OrbitElements } from '#lib/api.ts';
 import { eccentricAnomaly, epochMs, orbitPath, parseDate, positionAt } from './kepler';
 
 const orbit: OrbitElements = {
