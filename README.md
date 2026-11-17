@@ -42,8 +42,8 @@ Optional large artwork (illustrations, portraits and hab modules) takes about 1.
 
 Extracted data lives in:
 
-- Linux: `~/.local/share/dev.terra-invicta-tools.tech-tree/data`
-- Windows: `%APPDATA%\dev.terra-invicta-tools.tech-tree\data`
+- Linux: `~/.local/share/com.terra-invicta-tools.desktop/data`
+- Windows: `%APPDATA%\com.terra-invicta-tools.desktop\data`
 
 ## Development
 
