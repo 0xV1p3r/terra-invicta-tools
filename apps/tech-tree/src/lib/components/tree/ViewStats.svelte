@@ -1,7 +1,7 @@
 <script lang="ts">
-	import type { TreeGraph } from '$lib/api';
-	import { formatCost, formatCostFull } from '$lib/format';
-	import { app } from '$lib/state.svelte';
+	import type { TreeGraph } from '#lib/api.ts';
+	import { formatCost, formatCostFull } from '#lib/format.ts';
+	import { app } from '#lib/state.svelte.ts';
 
 	let { graph }: { graph: TreeGraph } = $props();
 

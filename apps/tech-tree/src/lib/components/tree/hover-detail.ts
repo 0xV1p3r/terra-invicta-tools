@@ -1,5 +1,5 @@
 // Entity details for the expanded hover card, cached across hovers; dropped when the scope changes.
-import { api, type EntityDetail, type EntityKey, type ScopeArgs } from '$lib/api';
+import { api, type EntityDetail, type EntityKey, type ScopeArgs } from '#lib/api.ts';
 
 let cacheScope = '';
 /** Bumped on every scope change, so requests from a scope left and re-entered stay stale. */

@@ -2,9 +2,9 @@
 // one transform; bodies, rings and labels are drawn in screen space so their size doesn't
 // depend on the zoom. A frame is O(items) apart from label collision checks (grid-bucketed).
 // Orbits of a tier are merged into one path, so dense bands don't add up to a solid ring.
-import type { EntityKey } from '$lib/api';
-import type { Camera } from '$lib/components/tree/camera';
-import type { Theme } from '$lib/components/tree/render';
+import type { EntityKey } from '#lib/api.ts';
+import type { Camera } from '#lib/components/tree/camera.ts';
+import type { Theme } from '#lib/components/tree/render.ts';
 import type { MapItem, SystemScene } from './scene';
 
 export interface MapRenderState {

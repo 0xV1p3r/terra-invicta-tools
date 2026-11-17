@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { SvelteMap } from 'svelte/reactivity';
-	import type { EntityKey, RefGroup } from '$lib/api';
-	import { templateLabel } from '$lib/format';
-	import { wiki } from '$lib/wiki.svelte';
-	import * as Card from '$lib/components/ui/card';
-	import { Button } from '$lib/components/ui/button';
+	import type { EntityKey, RefGroup } from '#lib/api.ts';
+	import { templateLabel } from '#lib/format.ts';
+	import { wiki } from '#lib/wiki.svelte.ts';
+	import * as Card from '#lib/components/ui/card/index.ts';
+	import { Button } from '#lib/components/ui/button/index.ts';
 	import EntityLink from './EntityLink.svelte';
 	let {
 		title,

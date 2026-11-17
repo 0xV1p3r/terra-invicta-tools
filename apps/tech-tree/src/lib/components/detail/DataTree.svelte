@@ -1,7 +1,7 @@
 <script lang="ts">
-	import * as Collapsible from '$lib/components/ui/collapsible';
-	import * as Card from '$lib/components/ui/card';
-	import { Button } from '$lib/components/ui/button';
+	import * as Collapsible from '#lib/components/ui/collapsible/index.ts';
+	import * as Card from '#lib/components/ui/card/index.ts';
+	import { Button } from '#lib/components/ui/button/index.ts';
 	import DataTree from './DataTree.svelte';
 	let { value, label = 'Record' }: { value: unknown; label?: string } = $props();
 	let limit = $state(25);

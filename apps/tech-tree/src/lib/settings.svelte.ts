@@ -1,5 +1,5 @@
 // User preferences, persisted in localStorage (Svelte 5 runes).
-import type { ImageFormat } from '$lib/api';
+import type { ImageFormat } from '#lib/api.ts';
 
 export type FilterMode = 'hide' | 'highlight';
 

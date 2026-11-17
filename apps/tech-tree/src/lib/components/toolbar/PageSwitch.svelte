@@ -3,8 +3,8 @@
 	import type { Component } from 'svelte';
 	import Network from '@lucide/svelte/icons/network';
 	import Orbit from '@lucide/svelte/icons/orbit';
-	import * as ToggleGroup from '$lib/components/ui/toggle-group/index.js';
-	import { app, type Page } from '$lib/state.svelte';
+	import * as ToggleGroup from '#lib/components/ui/toggle-group/index.js';
+	import { app, type Page } from '#lib/state.svelte.ts';
 	import { pillToggle, segmented } from './Pill.svelte';
 	import Tip from './Tip.svelte';
 

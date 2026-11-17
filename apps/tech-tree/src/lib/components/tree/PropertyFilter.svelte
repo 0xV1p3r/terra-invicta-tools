@@ -2,7 +2,7 @@
 	import type { Component } from 'svelte';
 	import ArrowDown from '@lucide/svelte/icons/arrow-down';
 	import ArrowUp from '@lucide/svelte/icons/arrow-up';
-	import type { PropertyGroup, PropertyInfo } from '$lib/api';
+	import type { PropertyGroup, PropertyInfo } from '#lib/api.ts';
 
 	const GROUPS: { group: PropertyGroup; heading: string }[] = [
 		{ group: 'effect', heading: 'Effects' },
@@ -20,18 +20,18 @@
 <script lang="ts">
 	import Check from '@lucide/svelte/icons/check';
 	import { Command as CommandPrimitive } from 'bits-ui';
-	import Tip from '$lib/components/toolbar/Tip.svelte';
+	import Tip from '#lib/components/toolbar/Tip.svelte';
 	import Funnel from '@lucide/svelte/icons/funnel';
 	import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
 	import X from '@lucide/svelte/icons/x';
-	import { api } from '$lib/api';
-	import { Badge } from '$lib/components/ui/badge/index.js';
-	import { Button } from '$lib/components/ui/button/index.js';
-	import * as Command from '$lib/components/ui/command/index.js';
-	import * as Popover from '$lib/components/ui/popover/index.js';
-	import { SENTIMENT } from '$lib/effect-style';
-	import { app } from '$lib/state.svelte';
-	import { pillItem } from '$lib/components/toolbar/Pill.svelte';
+	import { api } from '#lib/api.ts';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Command from '#lib/components/ui/command/index.js';
+	import * as Popover from '#lib/components/ui/popover/index.js';
+	import { SENTIMENT } from '#lib/effect-style.ts';
+	import { app } from '#lib/state.svelte.ts';
+	import { pillItem } from '#lib/components/toolbar/Pill.svelte';
 	import PropertyIcon from './PropertyIcon.svelte';
 
 	let { disabled = false }: { disabled?: boolean } = $props();

@@ -24,7 +24,7 @@
 	// wholes; a group wider than the toolbar wraps its own controls rather than being clipped.
 	import type { Snippet } from 'svelte';
 	import type { HTMLAttributes } from 'svelte/elements';
-	import { cn } from '$lib/utils.js';
+	import { cn } from '#lib/utils.js';
 
 	let {
 		class: className,

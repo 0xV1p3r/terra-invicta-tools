@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { assetUrl, type EntityStats } from '$lib/api';
-	import { Badge } from '$lib/components/ui/badge/index.js';
-	import { SENTIMENT } from '$lib/effect-style';
+	import { assetUrl, type EntityStats } from '#lib/api.ts';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { SENTIMENT } from '#lib/effect-style.ts';
 	import EntityLink from './EntityLink.svelte';
 
 	// `tags` is off where the caller already shows them (unlock card headers).

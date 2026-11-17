@@ -1,5 +1,5 @@
 // UI state of the solar system map shared by its canvas and header controls (Svelte 5 runes).
-import type { ResourceRating, SolarSystem, SpaceBodyInfo, SpaceResource } from '$lib/api';
+import type { ResourceRating, SolarSystem, SpaceBodyInfo, SpaceResource } from '#lib/api.ts';
 import { buildIndex, type ItemType, type SolarIndex } from './scene';
 
 export const ITEM_TYPES: ItemType[] = [

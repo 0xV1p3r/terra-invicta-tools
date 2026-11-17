@@ -9,11 +9,11 @@ import {
 	type ExtractStage,
 	type ExtractStatus,
 	type GameInfo
-} from '$lib/api';
+} from '#lib/api.ts';
 import { advanceProgress, initialProgress } from './extraction-progress';
-import { settings } from '$lib/settings.svelte';
+import { settings } from '#lib/settings.svelte.ts';
 
-export { gameLabel, gameUpdate } from '$lib/game';
+export { gameLabel, gameUpdate } from '#lib/game.ts';
 
 /** How often `resume` asks the backend for the progress of an extraction it cannot follow. */
 const STATUS_POLL_MS = 500;

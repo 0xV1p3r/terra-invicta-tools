@@ -1,6 +1,6 @@
 <script lang="ts">
 	// A space body's game icon; without one (mock mode, missing asset) a shaded disc in its map color.
-	import { assetUrl, type SpaceBodyInfo } from '$lib/api';
+	import { assetUrl, type SpaceBodyInfo } from '#lib/api.ts';
 	import { bodyColor } from './scene';
 
 	let { info, size = 20 }: { info: SpaceBodyInfo; size?: number } = $props();

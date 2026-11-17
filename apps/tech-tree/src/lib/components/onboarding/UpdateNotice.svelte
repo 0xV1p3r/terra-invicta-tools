@@ -1,12 +1,12 @@
 <script lang="ts">
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import X from '@lucide/svelte/icons/x';
-	import { api, type BuildInfo, type ExtractArgs } from '$lib/api';
-	import Tip from '$lib/components/toolbar/Tip.svelte';
-	import { Button } from '$lib/components/ui/button/index.js';
-	import * as Dialog from '$lib/components/ui/dialog/index.js';
-	import { extractArgs, extraction, gameUpdate } from '$lib/extraction.svelte';
-	import { settings } from '$lib/settings.svelte';
+	import { api, type BuildInfo, type ExtractArgs } from '#lib/api.ts';
+	import Tip from '#lib/components/toolbar/Tip.svelte';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import { extractArgs, extraction, gameUpdate } from '#lib/extraction.svelte.ts';
+	import { settings } from '#lib/settings.svelte.ts';
 	import ExtractionProgress from './ExtractionProgress.svelte';
 
 	// Remounted with the page on every data switch, so the build list is current.

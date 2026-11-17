@@ -3,11 +3,11 @@
 	import Pause from '@lucide/svelte/icons/pause';
 	import Play from '@lucide/svelte/icons/play';
 	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
-	import { Button } from '$lib/components/ui/button/index.js';
-	import { Input } from '$lib/components/ui/input/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
 	import { untrack } from 'svelte';
-	import * as Select from '$lib/components/ui/select/index.js';
-	import { Slider } from '$lib/components/ui/slider/index.js';
+	import * as Select from '#lib/components/ui/select/index.js';
+	import { Slider } from '#lib/components/ui/slider/index.js';
 	import { DAY_MS, mapState } from './map-state.svelte';
 
 	/** Span after the start date. */

@@ -1,5 +1,5 @@
-import type { EntityKey, WikiSection } from '$lib/api';
-import { templateLabel } from '$lib/format';
+import type { EntityKey, WikiSection } from '#lib/api.ts';
+import { templateLabel } from '#lib/format.ts';
 class WikiState {
 	reset() {
 		this.open = false;

@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { app } from '$lib/state.svelte';
-	import { assetUrl } from '$lib/api';
-	import * as Select from '$lib/components/ui/select';
-	import { Badge } from '$lib/components/ui/badge';
-	import Pill, { pillItem } from '$lib/components/toolbar/Pill.svelte';
-	import Tip from '$lib/components/toolbar/Tip.svelte';
+	import { app } from '#lib/state.svelte.ts';
+	import { assetUrl } from '#lib/api.ts';
+	import * as Select from '#lib/components/ui/select/index.ts';
+	import { Badge } from '#lib/components/ui/badge/index.ts';
+	import Pill, { pillItem } from '#lib/components/toolbar/Pill.svelte';
+	import Tip from '#lib/components/toolbar/Tip.svelte';
 	// Outlined triggers, like the other toolbar controls. A fixed width keeps the toolbar from
 	// reflowing when a long scenario or faction name is chosen; a long value truncates, and the
 	// tooltip carries it in full.

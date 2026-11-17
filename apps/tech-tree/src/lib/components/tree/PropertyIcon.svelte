@@ -1,6 +1,6 @@
 <script lang="ts" module>
 	import type { Component } from 'svelte';
-	import type { EntityKind } from '$lib/api';
+	import type { EntityKind } from '#lib/api.ts';
 
 	/** Entity kind of an `unlock:<kind>` property (for its icon). */
 	function unlockKind(id: string): EntityKind {
@@ -18,9 +18,9 @@
 
 <script lang="ts">
 	import Sparkles from '@lucide/svelte/icons/sparkles';
-	import { assetUrl, type PropertyInfo } from '$lib/api';
-	import { KIND_ICONS } from '$lib/components/detail/EntityIcon.svelte';
-	import { DOMAIN_ICONS, SENTIMENT } from '$lib/effect-style';
+	import { assetUrl, type PropertyInfo } from '#lib/api.ts';
+	import { KIND_ICONS } from '#lib/components/detail/EntityIcon.svelte';
+	import { DOMAIN_ICONS, SENTIMENT } from '#lib/effect-style.ts';
 	import CategoryIcon from './CategoryIcon.svelte';
 
 	let { property, size = 28 }: { property: PropertyInfo; size?: number } = $props();

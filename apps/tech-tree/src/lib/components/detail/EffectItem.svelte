@@ -26,12 +26,12 @@
 	import { getSpoilerPolicy } from './navigation';
 	import SpoilerChip from './SpoilerChip.svelte';
 	const spoilersAllowed = getSpoilerPolicy();
-	import { assetUrl, type EffectLine } from '$lib/api';
-	import { Badge } from '$lib/components/ui/badge/index.js';
+	import { assetUrl, type EffectLine } from '#lib/api.ts';
+	import { Badge } from '#lib/components/ui/badge/index.js';
 	import EffectIcon from './EffectIcon.svelte';
-	import { SENTIMENT } from '$lib/effect-style';
+	import { SENTIMENT } from '#lib/effect-style.ts';
 	import { getEntityNavigator } from './navigation';
-	import { Button } from '$lib/components/ui/button';
+	import { Button } from '#lib/components/ui/button/index.ts';
 	const navigate = getEntityNavigator();
 
 	let { line }: { line: EffectLine } = $props();

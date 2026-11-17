@@ -2,9 +2,9 @@
 	import Download from '@lucide/svelte/icons/download';
 	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import X from '@lucide/svelte/icons/x';
-	import { appUpdate } from '$lib/app-update.svelte';
-	import Tip from '$lib/components/toolbar/Tip.svelte';
-	import { Button } from '$lib/components/ui/button/index.js';
+	import { appUpdate } from '#lib/app-update.svelte.ts';
+	import Tip from '#lib/components/toolbar/Tip.svelte';
+	import { Button } from '#lib/components/ui/button/index.js';
 
 	// After the first paint: the check is a network request.
 	$effect(() => {

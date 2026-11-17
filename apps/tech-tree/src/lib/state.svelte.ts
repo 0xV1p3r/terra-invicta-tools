@@ -8,7 +8,7 @@ import type {
 	ScopeArgs,
 	TechCategory,
 	TreeFilter
-} from '$lib/api';
+} from '#lib/api.ts';
 
 export type { FullLayout };
 

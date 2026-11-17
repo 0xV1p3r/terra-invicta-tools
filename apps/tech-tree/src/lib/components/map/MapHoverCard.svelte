@@ -1,7 +1,7 @@
 <script lang="ts">
 	// Summary of the hovered body or Lagrange point, next to it.
-	import { Badge } from '$lib/components/ui/badge/index.js';
-	import * as Card from '$lib/components/ui/card/index.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import * as Card from '#lib/components/ui/card/index.js';
 	import { RESOURCES } from './map-state.svelte';
 	import { TYPE_LABELS, type MapItem } from './scene';
 

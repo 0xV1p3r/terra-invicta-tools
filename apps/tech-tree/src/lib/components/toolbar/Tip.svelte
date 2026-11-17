@@ -5,7 +5,7 @@
 	// control (not the wrapper) is described by it.
 	import type { Snippet } from 'svelte';
 	import type { Attachment } from 'svelte/attachments';
-	import * as Tooltip from '$lib/components/ui/tooltip/index.js';
+	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
 
 	let {
 		text,

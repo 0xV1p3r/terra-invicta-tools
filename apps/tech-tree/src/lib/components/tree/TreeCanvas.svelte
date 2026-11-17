@@ -19,12 +19,12 @@
 		type TechCategory,
 		type TreeFilter,
 		type TreeGraph
-	} from '$lib/api';
-	import { CATEGORIES, CATEGORY_ORDER } from '$lib/categories';
-	import { Button } from '$lib/components/ui/button/index.js';
-	import * as Popover from '$lib/components/ui/popover/index.js';
-	import { settings } from '$lib/settings.svelte';
-	import { app } from '$lib/state.svelte';
+	} from '#lib/api.ts';
+	import { CATEGORIES, CATEGORY_ORDER } from '#lib/categories.ts';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Popover from '#lib/components/ui/popover/index.js';
+	import { settings } from '#lib/settings.svelte.ts';
+	import { app } from '#lib/state.svelte.ts';
 	import { Camera } from './camera';
 	import { FLAGS } from './flags';
 	import HoverCard from './HoverCard.svelte';

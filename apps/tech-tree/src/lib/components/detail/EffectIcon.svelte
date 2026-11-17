@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { assetUrl, type EffectLine } from '$lib/api';
-	import * as Card from '$lib/components/ui/card';
-	import CategoryIcon from '$lib/components/tree/CategoryIcon.svelte';
-	import { DOMAIN_ICONS, SENTIMENT } from '$lib/effect-style';
+	import { assetUrl, type EffectLine } from '#lib/api.ts';
+	import * as Card from '#lib/components/ui/card/index.ts';
+	import CategoryIcon from '#lib/components/tree/CategoryIcon.svelte';
+	import { DOMAIN_ICONS, SENTIMENT } from '#lib/effect-style.ts';
 	import Sparkles from '@lucide/svelte/icons/sparkles';
 	let { line }: { line: EffectLine } = $props();
 	const DomainIcon = $derived(DOMAIN_ICONS[line.domain] ?? Sparkles);

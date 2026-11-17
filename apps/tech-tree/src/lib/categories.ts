@@ -1,13 +1,13 @@
 // Display metadata for research categories (colors mirror `--category-*` in app.css).
-import type { TechCategory } from '$lib/api';
-import EnergyIcon from '$lib/assets/tech_energy_icon.png';
-import InformationIcon from '$lib/assets/tech_info_icon.png';
-import LifeIcon from '$lib/assets/tech_life_icon.png';
-import MaterialIcon from '$lib/assets/tech_material_icon.png';
-import MilitaryIcon from '$lib/assets/tech_military_icon.png';
-import SocialIcon from '$lib/assets/tech_social_icon.png';
-import SpaceIcon from '$lib/assets/tech_space_icon.png';
-import XenologyIcon from '$lib/assets/tech_xeno_icon.png';
+import type { TechCategory } from '#lib/api.ts';
+import EnergyIcon from '#lib/assets/tech_energy_icon.png';
+import InformationIcon from '#lib/assets/tech_info_icon.png';
+import LifeIcon from '#lib/assets/tech_life_icon.png';
+import MaterialIcon from '#lib/assets/tech_material_icon.png';
+import MilitaryIcon from '#lib/assets/tech_military_icon.png';
+import SocialIcon from '#lib/assets/tech_social_icon.png';
+import SpaceIcon from '#lib/assets/tech_space_icon.png';
+import XenologyIcon from '#lib/assets/tech_xeno_icon.png';
 
 export interface CategoryInfo {
 	label: string;

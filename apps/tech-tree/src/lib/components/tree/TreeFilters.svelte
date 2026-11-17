@@ -2,22 +2,22 @@
 	import { tick } from 'svelte';
 	import Funnel from '@lucide/svelte/icons/funnel';
 	import Undo2 from '@lucide/svelte/icons/undo-2';
-	import { Badge } from '$lib/components/ui/badge/index.js';
+	import { Badge } from '#lib/components/ui/badge/index.js';
 	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
 	import FlaskConical from '@lucide/svelte/icons/flask-conical';
 	import Wrench from '@lucide/svelte/icons/wrench';
-	import type { TechCategory } from '$lib/api';
-	import { CATEGORIES, CATEGORY_ORDER } from '$lib/categories';
-	import { Button } from '$lib/components/ui/button/index.js';
-	import * as ToggleGroup from '$lib/components/ui/toggle-group/index.js';
-	import { app } from '$lib/state.svelte';
+	import type { TechCategory } from '#lib/api.ts';
+	import { CATEGORIES, CATEGORY_ORDER } from '#lib/categories.ts';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as ToggleGroup from '#lib/components/ui/toggle-group/index.js';
+	import { app } from '#lib/state.svelte.ts';
 	import Pill, {
 		pillIcon,
 		pillItem,
 		pillToggle,
 		segmented
-	} from '$lib/components/toolbar/Pill.svelte';
-	import Tip from '$lib/components/toolbar/Tip.svelte';
+	} from '#lib/components/toolbar/Pill.svelte';
+	import Tip from '#lib/components/toolbar/Tip.svelte';
 	import CategoryIcon from './CategoryIcon.svelte';
 	import PropertyFilter from './PropertyFilter.svelte';
 

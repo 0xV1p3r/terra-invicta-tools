@@ -1,6 +1,6 @@
 import { getContext, setContext } from 'svelte';
-import type { EntityRef } from '$lib/api';
-import { app } from '$lib/state.svelte';
+import type { EntityRef } from '#lib/api.ts';
+import { app } from '#lib/state.svelte.ts';
 const key = Symbol('entity-navigation');
 type Navigator = (entity: Pick<EntityRef, 'key' | 'kind' | 'spoiler'>) => void;
 export function setEntityNavigator(fn: Navigator) {

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { EyeOff } from '@lucide/svelte';
-	import * as Tooltip from '$lib/components/ui/tooltip';
+	import * as Tooltip from '#lib/components/ui/tooltip/index.ts';
 </script>
 
 <Tooltip.Root

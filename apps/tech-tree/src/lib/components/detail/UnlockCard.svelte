@@ -3,11 +3,11 @@
 	import SpoilerChip from './SpoilerChip.svelte';
 	const spoilersAllowed = getSpoilerPolicy();
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
-	import type { EntityStats, EntityRef } from '$lib/api';
-	import * as Collapsible from '$lib/components/ui/collapsible/index.js';
+	import type { EntityStats, EntityRef } from '#lib/api.ts';
+	import * as Collapsible from '#lib/components/ui/collapsible/index.js';
 	import { getEntityNavigator } from './navigation';
-	import { Badge } from '$lib/components/ui/badge/index.js';
-	import { Button } from '$lib/components/ui/button';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Button } from '#lib/components/ui/button/index.ts';
 	const navigate = getEntityNavigator();
 	import { untrack } from 'svelte';
 	import EntityIcon from './EntityIcon.svelte';

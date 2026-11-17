@@ -1,7 +1,7 @@
 <script lang="ts">
 	// Hotbar over the map: the Sun and each planet, one click to focus it (like the game's).
-	import { Button } from '$lib/components/ui/button/index.js';
-	import * as Tooltip from '$lib/components/ui/tooltip/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
 	import BodyIcon from './BodyIcon.svelte';
 	import { majors } from './majors.svelte';
 </script>

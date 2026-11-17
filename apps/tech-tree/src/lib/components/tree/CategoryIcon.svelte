@@ -1,6 +1,6 @@
 <script lang="ts">
-	import type { TechCategory } from '$lib/api';
-	import { CATEGORIES } from '$lib/categories';
+	import type { TechCategory } from '#lib/api.ts';
+	import { CATEGORIES } from '#lib/categories.ts';
 
 	let {
 		category,

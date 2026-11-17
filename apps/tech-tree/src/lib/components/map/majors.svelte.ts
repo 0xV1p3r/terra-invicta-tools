@@ -1,6 +1,6 @@
 // Major bodies of the solar system map, shared by the focus picker and the hotbar (Svelte 5 runes).
-import type { EntityKey } from '$lib/api';
-import { app } from '$lib/state.svelte';
+import type { EntityKey } from '#lib/api.ts';
+import { app } from '#lib/state.svelte.ts';
 import { mapState } from './map-state.svelte';
 import type { MapBody } from './scene';
 
