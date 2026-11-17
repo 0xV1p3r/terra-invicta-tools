@@ -105,7 +105,18 @@ If you change a DTO, commit the regenerated TypeScript bindings with it. Rust te
 
 From `apps/tech-tree/`, run `pnpm check`, `pnpm lint` and `pnpm test`.
 
-CI (`.github/workflows/ci.yml`) runs all of these on pull requests and on pushes to `main`.
+CI (`.github/workflows/ci.yml`) runs all of these on pull requests and on pushes to `main`, with the Rust toolchain pinned in `rust-toolchain.toml`.
+
+### Workflow actions
+
+`.github/workflows/actions.lock` records the commit each action in the workflows runs, and CI fails when it is out of date. After changing a `uses:` line, regenerate it with the [`gh actions-lock`](https://github.com/github/gh-actions-lock) extension and commit it:
+
+```sh
+gh extension install github/gh-actions-lock
+gh actions-lock
+```
+
+Dependabot updates actions, the lockfile, the Rust toolchain and dependencies weekly, a week after each new version comes out.
 
 ## Build release bundles
 
@@ -123,12 +134,12 @@ sudo apt-get install -y nsis lld llvm clang
 
 ### Updater signing
 
-The in-app updater only installs bundles signed with the release key. Its public key is in `tauri.conf.json` (`plugins.updater.pubkey`); the private key is the `TAURI_SIGNING_PRIVATE_KEY` secret of the GitHub repository. Keep a backup of the private key: if it is lost, installed copies can no longer be updated and have to be reinstalled by hand.
+The in-app updater only installs bundles signed with the release key. Its public key is in `tauri.conf.json` (`plugins.updater.pubkey`); the private key is the `TAURI_SIGNING_PRIVATE_KEY` secret of the repository's `release` environment, which only `v*` tags can use. Keep a backup of the private key: if it is lost, installed copies can no longer be updated and have to be reinstalled by hand.
 
 To sign local builds, set `TAURI_SIGNING_PRIVATE_KEY` to the key or a path to it (and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` if it has one) before running `scripts/release.sh`. Without it, the bundles are built without signatures.
 
 ### Publish a release
 
 1. Set the version in `apps/tech-tree/package.json` and move its notes in `CHANGELOG.md` under `## [<version>] - <date>`.
-2. Push a tag `v<version>` to the commit. The `Release` workflow builds the `.deb` and AppImage on Ubuntu 22.04 and the installer on Windows, then opens a draft GitHub release with the bundles, their signatures, `latest.json` (the updater's manifest), `SHA256SUMS` and that section of `CHANGELOG.md` as notes.
+2. Push a tag `v<version>` to the commit. The `Release` workflow builds the `.deb` and AppImage on Ubuntu 22.04 and the installer on Windows, without the key. The `sign` job then signs them, and the `release` job attests their build provenance and opens a draft GitHub release with the bundles, their signatures, `latest.json` (the updater's manifest), `SHA256SUMS` and that section of `CHANGELOG.md` as notes.
 3. Check the draft and publish it. Installed copies see the update once it is the latest published release.

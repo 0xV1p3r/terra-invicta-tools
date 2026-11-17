@@ -1,0 +1,5 @@
+# CI and release builds use this toolchain too; Dependabot proposes updates.
+[toolchain]
+channel = "1.100.0"
+components = ["rustfmt", "clippy"]
+profile = "minimal"
