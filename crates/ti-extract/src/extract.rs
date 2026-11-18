@@ -25,7 +25,57 @@ fn read_json(path: &Path) -> Result<Value> {
     jsonc::parse(&String::from_utf8_lossy(&bytes)).map_err(|e| Error::Other(format!("{}: {e}", path.display())))
 }
 
-pub fn write_index(data_dir: &Path) -> Result<()> {
+fn is_parse_error(issue: &Value) -> bool {
+    issue.get("kind").and_then(Value::as_str) == Some("parse_error")
+}
+
+/// Whether the stored build at `dir` recorded template parse errors. An unreadable report counts
+/// as one, so the build is redone rather than trusted.
+fn had_parse_errors(dir: &Path) -> bool {
+    read_json(&dir.join("reports/issues.json")).map_or(true, |report| {
+        report
+            .get("issues")
+            .and_then(Value::as_array)
+            .is_none_or(|issues| issues.iter().any(is_parse_error))
+    })
+}
+
+/// Advisory lock on `<data_dir>/.lock`, held while builds or `index.json` are changed, so two
+/// processes (e.g. the CLI and the desktop app) never write the same data folder at once.
+pub struct DataDirLock {
+    _file: std::fs::File,
+    dir: PathBuf,
+}
+
+impl DataDirLock {
+    pub fn acquire(data_dir: &Path) -> Result<Self> {
+        std::fs::create_dir_all(data_dir).map_err(|e| io_error(data_dir, e))?;
+        let path = data_dir.join(".lock");
+        let file = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(&path)
+            .map_err(|e| io_error(&path, e))?;
+        match file.try_lock() {
+            Ok(()) => Ok(Self {
+                _file: file,
+                dir: data_dir.to_path_buf(),
+            }),
+            Err(std::fs::TryLockError::WouldBlock) => Err(Error::Other(format!(
+                "{} is in use by another extraction; try again when it has finished",
+                data_dir.display()
+            ))),
+            Err(std::fs::TryLockError::Error(e)) => Err(io_error(&path, e)),
+        }
+    }
+
+    pub fn write_index(&self) -> Result<()> {
+        write_index(&self.dir)
+    }
+}
+
+fn write_index(data_dir: &Path) -> Result<()> {
     let mut builds = Vec::new();
     for b in complete_builds(data_dir) {
         let m = read_json(&b.join("manifest.json"))?;
@@ -127,11 +177,7 @@ pub fn run(install: &GameInstall, opts: &ExtractOptions, progress: &mut dyn FnMu
         .iter()
         .map(|(path, digest)| (rel_posix(path, &install.root), digest.clone()))
         .collect();
-    let parse_errors = ts
-        .issues
-        .iter()
-        .filter(|i| i.get("kind").and_then(Value::as_str) == Some("parse_error"))
-        .count();
+    let parse_errors = ts.issues.iter().filter(|i| is_parse_error(i)).count();
     let build_id = match opts.build_id.clone().or_else(|| install.build_id.clone()).filter(|id| !id.is_empty()) {
         Some(id) => id,
         None => {
@@ -148,6 +194,7 @@ pub fn run(install: &GameInstall, opts: &ExtractOptions, progress: &mut dyn FnMu
         )));
     }
 
+    let lock = DataDirLock::acquire(data_dir)?;
     let final_dir = data_dir.join(&build_id);
     if final_dir.exists() && !final_dir.join("manifest.json").is_file() {
         return Err(Error::Other(format!(
@@ -155,9 +202,10 @@ pub fn run(install: &GameInstall, opts: &ExtractOptions, progress: &mut dyn FnMu
             final_dir.display()
         )));
     }
-    if final_dir.join("manifest.json").is_file() && !opts.force && parse_errors == 0 {
+    // A stored build with parse errors is missing templates, so a run that parses them all redoes it.
+    if final_dir.join("manifest.json").is_file() && !opts.force && parse_errors == 0 && !had_parse_errors(&final_dir) {
         run.log(format!("build {build_id} already extracted at {} (use --force to redo)", final_dir.display()));
-        write_index(data_dir)?;
+        lock.write_index()?;
         return Ok(ExtractReport {
             build_id,
             build_dir: final_dir,
@@ -203,7 +251,7 @@ pub fn run(install: &GameInstall, opts: &ExtractOptions, progress: &mut dyn FnMu
         // Best effort: a leftover is removed by the next run of this build.
         let _ = std::fs::remove_dir_all(&old);
     }
-    write_index(data_dir)?;
+    lock.write_index()?;
 
     let seconds = started.elapsed().as_secs_f64();
     run.log(format!(

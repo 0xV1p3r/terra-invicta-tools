@@ -7,7 +7,7 @@
 #
 # SHA256SUMS in the output directory lists every bundle there.
 #
-# With TAURI_SIGNING_PRIVATE_KEY set (the key, or a path to it), each bundle also gets
+# With TAURI_SIGNING_PRIVATE_KEY set (the key, or a path to it), the AppImage and .exe also get
 # the .sig file the in-app updater checks. Without it the bundles are built unsigned.
 #
 # The .exe is cross-compiled from Linux with cargo-xwin, which downloads the
@@ -70,11 +70,18 @@ else
 	no_frontend='{"build":{"beforeBuildCommand":""},"bundle":{"createUpdaterArtifacts":false}}'
 fi
 
-# Copy bundles, and their updater signatures if any, to $out.
+# Copy bundles to $out, with their updater signatures when this run signs (the updater uses the
+# AppImage and the .exe; a .deb has none). A signature left in $out or the build output by an
+# earlier signed build would not match the new bundle.
 copy_bundle() {
 	for f in "$@"; do
 		cp -v "$f" "$out/"
-		[[ ! -f $f.sig ]] || cp -v "$f.sig" "$out/"
+		rm -f "$out/$(basename "$f").sig"
+		if [[ -n ${TAURI_SIGNING_PRIVATE_KEY:-} && $f != *.deb ]]; then
+			[[ -f $f.sig && ! $f -nt $f.sig ]] ||
+				{ echo "no fresh updater signature for $f" >&2; exit 1; }
+			cp -v "$f.sig" "$out/"
+		fi
 	done
 }
 

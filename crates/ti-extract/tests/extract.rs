@@ -152,6 +152,36 @@ fn parse_errors_exit_after_reports() {
 }
 
 #[test]
+fn fixed_template_replaces_build_with_parse_errors() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("game");
+    let bad = write(&root, "TerraInvicta_Data/StreamingAssets/Templates/Bad.json", br#"[{"dataName": ]"#);
+    let output = tmp.path().join("out");
+    assert_eq!(cli(&root, &output, &[]), 1);
+
+    // Same build id, template repaired: the stored build is redone, not reused.
+    std::fs::write(&bad, br#"[{"dataName": "x"}]"#).unwrap();
+    assert_eq!(cli(&root, &output, &[]), 0);
+    assert_eq!(read(&output.join("test/templates/base/Bad.json")), json!([{"dataName": "x"}]));
+    assert_eq!(read(&output.join("test/reports/issues.json"))["issues"], json!([]));
+    assert!(!extract(&root, &options(&output)).unwrap().extracted);
+}
+
+#[test]
+fn locked_data_dir_is_refused() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("game");
+    write(&root, "TerraInvicta_Data/StreamingAssets/Templates/TITest.json", br#"[{"dataName": "x"}]"#);
+    let output = tmp.path().join("out");
+    let lock = ti_extract::DataDirLock::acquire(&output).unwrap();
+    assert_ne!(cli(&root, &output, &[]), 0);
+    assert!(!output.join("test").exists());
+    assert!(ti_extract::write_index(&output).is_err());
+    drop(lock);
+    assert_eq!(cli(&root, &output, &[]), 0);
+}
+
+#[test]
 fn nonfinite_output_and_report() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().join("game");
@@ -223,7 +253,8 @@ fn cancel_removes_partial_build() {
     };
     let result = ti_extract::extract(&install, &options(&output), &mut on_progress, &cancel);
     assert!(matches!(result, Err(Error::Cancelled)));
-    assert_eq!(std::fs::read_dir(&output).unwrap().count(), 0);
+    let names: Vec<_> = std::fs::read_dir(&output).unwrap().map(|e| e.unwrap().file_name()).collect();
+    assert_eq!(names, [".lock"]);
 }
 
 #[test]

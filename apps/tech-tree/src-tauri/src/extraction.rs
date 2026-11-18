@@ -301,10 +301,11 @@ pub fn delete_build(state: &AppState, extractor: &Extractor, dir: &str) -> CmdRe
     let backend = state.backend()?;
     let root = ti_data::DataRoot::open(&backend.data_dir)?;
     let path = deletable_build_dir(&root, backend.ds.build_id(), dir)?;
+    // The in-process guard does not stop a CLI extraction writing the same data folder.
+    let lock = ti_extract::DataDirLock::acquire(&backend.data_dir).map_err(|e| CmdError::msg(e.to_string()))?;
     std::fs::remove_dir_all(&path).map_err(|e| CmdError::msg(format!("Could not delete {}: {e}", path.display())))?;
     eprintln!("ti-tech-tree: deleted build {}", path.display());
-    catch_panic("Updating index.json", || ti_extract::write_index(&backend.data_dir))?
-        .map_err(|e| CmdError::msg(format!("Deleted {dir}, but could not update index.json: {e}")))
+    catch_panic("Updating index.json", || lock.write_index())?.map_err(|e| CmdError::msg(format!("Deleted {dir}, but could not update index.json: {e}")))
 }
 
 /// Bytes of the regular files below `path` (symlinks are not followed).
