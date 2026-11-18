@@ -239,21 +239,18 @@ class AppState {
 	}
 
 	openSubtree(root: EntityKey, direction: Direction = 'up') {
-		this.page = 'tree';
 		this.go({ kind: 'subtree', root, direction, alternatives: this.subtreeAlternatives });
 		this.selected = root;
 		this.focus = root;
 	}
 
 	openFocus(root: EntityKey) {
-		this.page = 'tree';
 		this.go({ kind: 'focus', root });
 		this.selected = root;
 		this.focus = root;
 	}
 
 	showFullTree(focus: EntityKey | null = null) {
-		this.page = 'tree';
 		this.go({ kind: 'full', layout: this.fullLayout });
 		this.focus = focus;
 	}

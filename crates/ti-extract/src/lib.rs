@@ -17,6 +17,7 @@ pub mod templates;
 
 mod extract;
 
+pub use extract::DataDirLock;
 pub use game::{GameInstall, Layer, discover, find_game_dir, resolve_game_dir};
 
 /// Bump on any incompatible change to the layout or content of an extracted build.
@@ -160,13 +161,17 @@ pub struct ExtractReport {
 /// Writes into `<data_dir>/.<build id>.partial` and renames it into place at the end, so a
 /// failed or cancelled run never leaves a half-written build. `cancel` is polled between
 /// files and images; when set, the partial directory is removed and `Error::Cancelled` returned.
+/// Holds the data folder's [`DataDirLock`] from the up-to-date check to the index update, and
+/// fails if another process holds it.
 pub fn extract(install: &GameInstall, opts: &ExtractOptions, progress: &mut dyn FnMut(Progress), cancel: &AtomicBool) -> Result<ExtractReport> {
     extract::run(install, opts, progress, cancel)
 }
 
 /// Rewrite `<data_dir>/index.json` from the complete builds (those with a `manifest.json`).
+/// Fails while another process holds the data folder's [`DataDirLock`]; a caller that holds it
+/// uses [`DataDirLock::write_index`].
 pub fn write_index(data_dir: &Path) -> Result<()> {
-    extract::write_index(data_dir)
+    DataDirLock::acquire(data_dir)?.write_index()
 }
 
 #[cfg(test)]
