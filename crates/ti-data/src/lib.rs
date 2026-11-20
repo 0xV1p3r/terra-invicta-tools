@@ -17,6 +17,7 @@ pub mod error;
 pub mod graph;
 pub mod manifest;
 pub mod model;
+pub mod plan;
 pub mod refs;
 pub mod scenario;
 pub mod search;
@@ -32,6 +33,7 @@ pub use dataset::{DataRoot, Dataset, Entity, EntityId, Layer, LayerIdx, Referenc
 pub use effect_text::{EffectContext, EffectSegment};
 pub use error::{Error, Result};
 pub use graph::{PrereqGroup, ResearchGraph, Subgraph, Traversal};
+pub use plan::{Choice, Picks, Plan, Planner, Progress, Status};
 pub use scenario::{Scenario, ScenarioIdx, ScenarioSet};
 pub use search::{Hit, MatchField, SearchIndex};
 pub use text::{Locale, Texts};

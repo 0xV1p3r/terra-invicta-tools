@@ -10,10 +10,12 @@
 //! * `effects`  – effect descriptions
 //! * `properties` – filterable tech/project properties (effects, unlocks)
 //! * `assets`   – `tiasset://` protocol for images
+//! * `campaigns` – saved campaigns and research planning
 //! * `extraction` – in-app extraction with `ti-extract`, game detection, deleting builds
 //! * `fixtures` – (test only) writes mock JSON for browser-based UI work
 
 mod assets;
+mod campaigns;
 mod commands;
 mod dto;
 mod effects;
@@ -30,6 +32,7 @@ mod state;
 mod stats;
 mod wiki;
 
+use campaigns::CampaignStore;
 use dto::*;
 use error::{CmdError, CmdResult};
 use extraction::Extractor;
@@ -236,6 +239,40 @@ async fn get_solar_system(state: State<'_, AppState>, scope: ScopeArgs) -> CmdRe
     run_in_language(state, scope.lang.clone(), move |b| commands::get_solar_system(b, &scope)).await
 }
 
+#[tauri::command]
+async fn list_campaigns(store: State<'_, CampaignStore>) -> CmdResult<Vec<Campaign>> {
+    store.list()
+}
+
+/// Save a campaign (`id: ""` = a new one); returns it with its id and save time.
+#[tauri::command]
+async fn save_campaign(store: State<'_, CampaignStore>, campaign: Campaign) -> CmdResult<Campaign> {
+    store.save(campaign)
+}
+
+#[tauri::command]
+async fn delete_campaign(store: State<'_, CampaignStore>, id: String) -> CmdResult<()> {
+    store.delete(&id)
+}
+
+/// Status of every tech and project and the plan for the campaign's goals, in its scenario and faction.
+#[tauri::command]
+async fn get_plan(state: State<'_, AppState>, lang: String, campaign: Campaign) -> CmdResult<PlanResult> {
+    run_in_language(state, lang.clone(), move |b| campaigns::get_plan(b, &lang, &campaign)).await
+}
+
+/// Keys to mark completed for "researched up to here".
+#[tauri::command]
+async fn plan_up_to(state: State<'_, AppState>, campaign: Campaign, key: String) -> CmdResult<Vec<String>> {
+    run_blocking(state, move |b| campaigns::plan_up_to(b, &campaign, &key)).await
+}
+
+/// Completed research that loses a requirement when `key` is un-marked.
+#[tauri::command]
+async fn plan_dependents_lost(state: State<'_, AppState>, campaign: Campaign, key: String) -> CmdResult<Vec<String>> {
+    run_blocking(state, move |b| campaigns::plan_dependents_lost(b, &campaign, &key)).await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -247,6 +284,8 @@ pub fn run() {
             let default_dir = app.path().app_data_dir().ok().map(|dir| dir.join(state::DATA_SUBDIR));
             app.manage(AppState::load_in_background(Locator::from_env(config_path, default_dir)));
             app.manage(Extractor::default());
+            let campaigns_dir = app.path().app_data_dir().ok().map(|dir| dir.join(campaigns::CAMPAIGNS_SUBDIR));
+            app.manage(CampaignStore::new(campaigns_dir));
             Ok(())
         })
         .register_asynchronous_uri_scheme_protocol(assets::SCHEME, |ctx, request, responder| {
@@ -277,7 +316,13 @@ pub fn run() {
             get_properties,
             get_entity,
             search,
-            get_solar_system
+            get_solar_system,
+            list_campaigns,
+            save_campaign,
+            delete_campaign,
+            get_plan,
+            plan_up_to,
+            plan_dependents_lost
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
