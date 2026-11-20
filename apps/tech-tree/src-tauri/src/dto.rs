@@ -869,3 +869,127 @@ struct SpaceResource(String);
     type = "'empty' | 'possible' | 'low' | 'medium' | 'high' | 'max'"
 )]
 struct ResourceRatingBinding(String);
+
+// ---- research planning ------------------------------------------------------
+
+/// A playthrough to plan for: what it has researched and what it aims for. Saved as
+/// `<app data dir>/campaigns/<id>.json`. Keys are entity keys, so a campaign survives
+/// re-extraction; keys missing from a build are kept and reported (`PlanResult::unknown`).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
+#[serde(rename_all = "camelCase")]
+pub struct Campaign {
+    /// Assigned on the first save (send `""` for a new campaign).
+    pub id: String,
+    pub name: String,
+    /// `TIMetaTemplate` dataName.
+    pub scenario: String,
+    /// `TIFactionTemplate` dataName.
+    pub faction: String,
+    #[serde(default)]
+    pub completed: Vec<Completion>,
+    /// Research to reach, in priority order.
+    #[serde(default)]
+    #[cfg_attr(test, ts(as = "Vec<EntityKey>"))]
+    pub goals: Vec<String>,
+    #[serde(default)]
+    pub picks: Vec<PlanPick>,
+    /// Last save, Unix seconds (set by the backend).
+    #[serde(default)]
+    #[cfg_attr(test, ts(type = "number"))]
+    pub updated: i64,
+}
+
+/// Completed research and how often (repeatable projects and end-game techs).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
+#[serde(rename_all = "camelCase")]
+pub struct Completion {
+    #[cfg_attr(test, ts(as = "EntityKey"))]
+    pub key: String,
+    pub count: u32,
+}
+
+/// The option chosen for requirement group `group` of `node` (an "any of" requirement).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
+#[serde(rename_all = "camelCase")]
+pub struct PlanPick {
+    #[cfg_attr(test, ts(as = "EntityKey"))]
+    pub node: String,
+    pub group: usize,
+    #[cfg_attr(test, ts(as = "EntityKey"))]
+    pub option: String,
+}
+
+/// Where a tech or project stands in a campaign.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
+#[serde(rename_all = "camelCase")]
+pub enum PlanStatus {
+    Done,
+    /// Prerequisites met (projects may still need their unlock roll).
+    Available,
+    Locked,
+    /// Never researchable in the campaign's scenario and faction.
+    Unobtainable,
+}
+
+/// One step of the plan, in research order.
+#[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
+#[serde(rename_all = "camelCase")]
+pub struct PlanStep {
+    pub entity: EntityRef,
+    /// Research cost of the next completion (repeat scaling applied).
+    pub cost: f64,
+    /// `available` or `locked`.
+    pub status: PlanStatus,
+    /// Later steps that need this one (transitively).
+    pub unblocks: usize,
+    /// One of the campaign's goals.
+    pub goal: bool,
+}
+
+/// An "any of" requirement the plan decided.
+#[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
+#[serde(rename_all = "camelCase")]
+pub struct PlanChoice {
+    pub node: EntityRef,
+    pub group: usize,
+    /// Researchable options.
+    pub options: Vec<EntityRef>,
+    #[cfg_attr(test, ts(as = "EntityKey"))]
+    pub chosen: String,
+    /// Chosen by the user (else the option with the cheapest missing chain).
+    pub picked: bool,
+}
+
+/// The campaign's research state and plan (`get_plan`).
+#[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
+#[serde(rename_all = "camelCase")]
+pub struct PlanResult {
+    /// Every tech and project of the campaign's scope.
+    #[cfg_attr(test, ts(as = "std::collections::HashMap<EntityKey, PlanStatus>"))]
+    pub status: std::collections::BTreeMap<String, PlanStatus>,
+    pub steps: Vec<PlanStep>,
+    /// Keys of the available steps, most unblocking first: what to research next.
+    #[cfg_attr(test, ts(as = "Vec<EntityKey>"))]
+    pub next: Vec<String>,
+    pub choices: Vec<PlanChoice>,
+    pub tech_cost: f64,
+    pub project_cost: f64,
+    /// Goals that can never be researched in this scope.
+    pub unreachable: Vec<EntityRef>,
+    /// Campaign keys (completed, goals, picks) that are not research of this build and scope.
+    pub unknown: Vec<String>,
+}
