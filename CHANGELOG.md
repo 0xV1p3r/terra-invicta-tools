@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- **Research planner**: create a campaign for a scenario and faction, mark what you have researched (right-click a card, or use the detail panel) and pick goals. The plan panel lists the missing research in an order you can research it, what to research next, the research points still needed and the "any of" requirements it chose (you can switch them). The tree shows completed research, research you can start now, plan step numbers and goals, and can hide or dim completed research.
+
 ## [0.1.0] - 2026-11-16
 
 The first release. Terra Invicta Tools reads the data of your installed copy of Terra Invicta and shows:

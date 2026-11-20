@@ -17,6 +17,8 @@ export interface Settings {
 	mergeLinks: boolean;
 	/** Full-tree filters remove non-matching research, or only dim it (layout stays put). */
 	filterMode: FilterMode;
+	/** With an active campaign: completed research shown (off: hidden or dimmed per `filterMode`). */
+	showCompleted: boolean;
 	/** Zoomed far out: plain category blocks instead of cards. */
 	overviewLabels: boolean;
 	/** Zoomed out: screen-sized name labels on the most depended-on research. */
@@ -45,6 +47,7 @@ const DEFAULTS: Settings = {
 	hideRedundantLinks: true,
 	mergeLinks: true,
 	filterMode: 'hide',
+	showCompleted: true,
 	overviewLabels: true,
 	landmarkLabels: false,
 	minimapCorner: 'top-left',
