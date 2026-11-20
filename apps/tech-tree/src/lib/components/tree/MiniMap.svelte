@@ -13,13 +13,16 @@
 		scene,
 		camera,
 		theme,
-		matches = null
+		matches = null,
+		done = null
 	}: {
 		scene: Scene;
 		camera: Camera;
 		theme: Theme;
 		/** Filter matches in highlight mode; the rest are faded. */
 		matches?: ReadonlySet<EntityKey> | null;
+		/** Research the active campaign has completed (faded). */
+		done?: ReadonlySet<EntityKey> | null;
 	} = $props();
 
 	const WIDTH = 200;
@@ -56,7 +59,7 @@
 		const w = Math.max(1.5, scene.width * scale);
 		const h = Math.max(1.5, scene.height * scale);
 		for (const n of scene.nodes) {
-			ctx.globalAlpha = matches && !matches.has(n.key) ? 0.15 : 1;
+			ctx.globalAlpha = matches && !matches.has(n.key) ? 0.15 : done?.has(n.key) ? 0.35 : 1;
 			ctx.fillStyle = theme.categories[n.item.category] ?? n.color;
 			ctx.fillRect(ox + n.x * scale, oy + n.y * scale, w, h);
 		}

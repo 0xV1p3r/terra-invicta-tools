@@ -20,6 +20,7 @@
 		type TreeFilter,
 		type TreeGraph
 	} from '#lib/api.ts';
+	import { campaign } from '#lib/campaign.svelte.ts';
 	import { CATEGORIES, CATEGORY_ORDER } from '#lib/categories.ts';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Popover from '#lib/components/ui/popover/index.js';
@@ -29,6 +30,8 @@
 	import { FLAGS } from './flags';
 	import HoverCard from './HoverCard.svelte';
 	import MiniMap from './MiniMap.svelte';
+	import { CHECK_GLYPH, GOAL_GLYPH, planMarks, statusLabels } from './plan-marks';
+	import PlanMenu, { type MenuTarget } from './PlanMenu.svelte';
 	import { DETAIL_ZOOM, readTheme, render, type Theme } from './render';
 	import { buildScene, nodeAt, type SceneNode } from './scene';
 	import ViewStats from './ViewStats.svelte';
@@ -65,13 +68,34 @@
 	);
 	const requestKey = $derived(JSON.stringify(request));
 
+	/** The active campaign's statuses, steps and goals for the renderer (null without one). */
+	const marks = $derived(
+		campaign.active && campaign.plan ? planMarks(campaign.plan, campaign.active.goals) : null
+	);
+	/** The "Completed" filter is off: completed research is hidden or dimmed like non-matches. */
+	const completedOut = $derived(marks !== null && !settings.showCompleted && app.mode === 'full');
+
 	/** Highlight mode with active filters: keys of the matching nodes (others are dimmed). */
 	const matches = $derived.by(() => {
-		if (settings.filterMode !== 'highlight' || app.mode !== 'full' || !app.filtersActive)
-			return null;
+		if (settings.filterMode !== 'highlight' || app.mode !== 'full') return null;
+		if (!app.filtersActive && !completedOut) return null;
 		const filter = app.filter;
-		return new Set((graph?.nodes ?? []).filter((n) => matchesFilter(n, filter)).map((n) => n.key));
+		const done = completedOut ? marks!.done : null;
+		return new Set(
+			(graph?.nodes ?? [])
+				.filter((n) => matchesFilter(n, filter) && !done?.has(n.key))
+				.map((n) => n.key)
+		);
 	});
+
+	/**
+	 * Hide mode with "Completed" off: completed research, left out of the scene client-side
+	 * (the backend filter knows no campaigns), so the layout stays put. A string so the scene
+	 * is only rebuilt when the set changes, not on every campaign save.
+	 */
+	const hiddenKey = $derived(
+		completedOut && settings.filterMode === 'hide' ? [...marks!.done].sort().join('\n') : ''
+	);
 
 	let loaded = $state.raw<{ key: string; graph: TreeGraph } | null>(null);
 	let loading = $state(false);
@@ -84,9 +108,20 @@
 	$effect(() => {
 		shown = ready ? graph : null;
 	});
-	const scene = $derived(
-		graph ? buildScene(graph, { hideRedundant: settings.hideRedundantLinks }) : null
-	);
+	const scene = $derived.by(() => {
+		if (!graph) return null;
+		const options = { hideRedundant: settings.hideRedundantLinks };
+		if (!hiddenKey) return buildScene(graph, options);
+		const hidden = new Set(hiddenKey.split('\n'));
+		return buildScene(
+			{
+				...graph,
+				nodes: graph.nodes.filter((n) => !hidden.has(n.key)),
+				edges: graph.edges.filter((e) => !hidden.has(e.from) && !hidden.has(e.to))
+			},
+			options
+		);
+	});
 
 	// The full tree is large; keep the last one per layout to make going back instant.
 	const fullCache: Partial<Record<FullLayout, { key: string; graph: TreeGraph }>> = {};
@@ -154,7 +189,11 @@
 		img.src = CATEGORIES[category].icon;
 		icons[category] = img;
 	}
-	const glyphs = new Map(FLAGS.map((f) => [f.key as string, new Path2D(f.glyph)]));
+	const glyphs = new Map([
+		...FLAGS.map((f) => [f.key as string, new Path2D(f.glyph)] as const),
+		['plan:check', new Path2D(CHECK_GLYPH)],
+		['plan:goal', new Path2D(GOAL_GLYPH)]
+	]);
 
 	let frame = 0;
 	function requestRender() {
@@ -173,11 +212,13 @@
 		}
 		render(ctx, dpr, camera, scene, {
 			selected: app.selected,
-			hovered: dragging ? null : hovered,
+			// The card a menu is open for stays outlined.
+			hovered: menu?.key ?? (dragging ? null : hovered),
 			root: app.root ? (graph?.root ?? app.root) : null,
 			theme,
 			icons,
 			glyphs,
+			plan: marks,
 			matches,
 			overview: settings.overviewLabels,
 			landmarks: settings.landmarkLabels
@@ -273,6 +314,8 @@
 			dpr,
 			assetVersion,
 			matches,
+			marks,
+			menu,
 			settings.overviewLabels,
 			settings.landmarkLabels
 		];
@@ -301,19 +344,23 @@
 
 	// --- fitting and focusing ------------------------------------------------------
 
-	/** Graph the camera was last fitted to (scenes are rebuilt for display settings too). */
+	/**
+	 * Loaded graph the camera was last fitted to (scenes are rebuilt for display settings and
+	 * hidden completed research too).
+	 */
 	let fitted: TreeGraph | null = null;
 
 	$effect(() => {
 		const s = scene;
+		const g = graph;
 		const focus = app.focus;
-		if (!s || !ready || width <= 0 || height <= 0) return;
+		if (!s || !g || !ready || width <= 0 || height <= 0) return;
 		untrack(() => {
 			measureOverlays();
 			const target = focus ? s.byKey.get(focus) : undefined;
-			if (s.graph !== fitted && (!target || focus === s.graph.root)) {
+			if (g !== fitted && (!target || focus === s.graph.root)) {
 				const first = fitted === null;
-				fitted = s.graph;
+				fitted = g;
 				if (s.nodes.length) camera.animateTo(camera.fitted(s.bounds), first ? 0 : 300);
 				// A freshly opened subtree is shown whole rather than centered on its root.
 				if (target && focus === s.graph.root) {
@@ -323,9 +370,12 @@
 			}
 			if (!focus) return;
 			if (target) {
-				fitted = s.graph;
+				fitted = g;
 				centerOn(target, Math.max(camera.zoom, 0.9));
 				app.focus = null;
+			} else if (hiddenKey && hiddenKey.split('\n').includes(focus)) {
+				// Hidden as completed: show completed research, focus once the scene has it.
+				settings.showCompleted = true;
 			} else if (app.mode === 'full' && app.filtersActive) {
 				// Hidden by the filters: show everything, focus once the full tree is loaded.
 				app.clearFilters();
@@ -510,7 +560,11 @@
 		if (e.altKey) return; // Alt+arrows: history (window handler)
 		const current = app.selected ? scene?.byKey.get(app.selected) : undefined;
 		const arrow = ARROWS[e.key];
-		if (arrow) {
+		if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) {
+			e.preventDefault();
+			keyboardMenu = performance.now();
+			if (current) openMenuAt(current);
+		} else if (arrow) {
 			e.preventDefault();
 			const next = current ? neighbour(current, ...arrow) : nearestToCenter();
 			if (next) {
@@ -552,6 +606,7 @@
 		['Arrow keys', 'Move the selection'],
 		['Enter / Space', 'Show details'],
 		['Shift+Enter', 'Requirements tree'],
+		['Shift+F10', 'Plan menu'],
 		['+ / −', 'Zoom in / out'],
 		['0', 'Fit the tree'],
 		['Esc', 'Clear the selection'],
@@ -567,8 +622,47 @@
 		// The same flags and dimming the card shows, in words.
 		const notes = n.flags.map((f) => f.label);
 		if (matches && !matches.has(n.key)) notes.push('Outside the active filters');
+		if (marks)
+			notes.push(
+				...statusLabels(
+					marks.status[n.key],
+					campaign.stepIndex.get(n.key),
+					marks.goals.has(n.key),
+					campaign.completions(n.key)
+				)
+			);
 		return [`${n.item.name}, ${n.kind}, ${category}, cost ${n.cost}`, ...notes].join('. ');
 	});
+
+	// --- plan menu --------------------------------------------------------------------
+
+	/** Card the plan menu is open for. */
+	let menu = $state.raw<MenuTarget | null>(null);
+	/** Time the menu key last opened the menu (its own contextmenu event is then ignored). */
+	let keyboardMenu = -Infinity;
+
+	function oncontextmenu(e: MouseEvent) {
+		e.preventDefault();
+		if (performance.now() - keyboardMenu < 500) return;
+		const n = hit(e);
+		if (!n) return;
+		camera.stop();
+		menu = { key: n.key, name: n.item.name, x: e.clientX, y: e.clientY };
+	}
+
+	/** Open the menu below a card's bottom-left corner (keyboard). */
+	function openMenuAt(n: SceneNode) {
+		if (!canvas || !scene) return;
+		const r = canvas.getBoundingClientRect();
+		const x = Math.min(Math.max(r.left + camera.x + n.x * camera.zoom, r.left), r.right);
+		const y = Math.min(
+			Math.max(r.top + camera.y + (n.y + scene.height) * camera.zoom, r.top),
+			r.bottom
+		);
+		menu = { key: n.key, name: n.item.name, x, y };
+	}
+
+	const nameOf = (key: EntityKey) => graph?.nodes.find((n) => n.key === key)?.name ?? key;
 
 	// --- hover card -------------------------------------------------------------------
 
@@ -626,17 +720,21 @@
 			{ondblclick}
 			{onwheel}
 			{onkeydown}
+			{oncontextmenu}
 		>
 			<canvas bind:this={canvas} class="block size-full" aria-hidden="true"></canvas>
 		</div>
 		<p id="research-tree-keyboard-help" class="sr-only">
 			Arrow keys move the selection. Enter or Space shows details, Shift+Enter opens the
-			requirements subtree (in the focus view, Enter makes the selection the focus). Alt+Left and
-			Alt+Right go back and forward between views. Plus and minus zoom, 0 fits the tree.
+			requirements subtree (in the focus view, Enter makes the selection the focus). Shift+F10 or
+			the menu key opens the plan menu of the selection. Alt+Left and Alt+Right go back and forward
+			between views. Plus and minus zoom, 0 fits the tree.
 		</p>
 		<p class="sr-only" aria-live="polite">{announcement}</p>
 
-		{#if hoveredNode && hoverAnchor}
+		<PlanMenu bind:target={menu} {nameOf} onclose={() => surface?.focus({ preventScroll: true })} />
+
+		{#if hoveredNode && hoverAnchor && !menu}
 			<HoverCard
 				node={hoveredNode}
 				x={hoverAnchor.x}
@@ -722,7 +820,7 @@
 
 		{#if scene?.nodes.length}
 			{#if theme}
-				<MiniMap {scene} {camera} {theme} {matches} />
+				<MiniMap {scene} {camera} {theme} {matches} done={marks?.done ?? null} />
 			{/if}
 		{/if}
 

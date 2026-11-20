@@ -4,6 +4,7 @@
 import type { EntityKey, TechCategory } from '#lib/api.ts';
 import { CATEGORIES } from '#lib/categories.ts';
 import type { Camera, Rect } from './camera';
+import type { PlanMarks } from './plan-marks';
 import {
 	importanceOf,
 	JUNCTION_RADIUS,
@@ -29,6 +30,11 @@ export interface Theme {
 	iconBg: string;
 	/** Third text level (kinds). */
 	faint: string;
+	primary: string;
+	primaryForeground: string;
+	/** Campaign marks: prerequisites met (ring) and goals. */
+	success: string;
+	warning: string;
 	/** Category colors for small marks and text. */
 	categories: Partial<Record<TechCategory, string>>;
 	font: string;
@@ -50,6 +56,10 @@ export function readTheme(el: Element): Theme {
 		destructive: v('--destructive'),
 		iconBg: v('--icon-bg'),
 		faint: v('--faint') || v('--muted-foreground'),
+		primary: v('--primary'),
+		primaryForeground: v('--primary-foreground'),
+		success: v('--success') || '#34d399',
+		warning: v('--warning') || '#fbbf24',
 		categories: Object.fromEntries(
 			Object.entries(CATEGORIES).map(([key, info]) => {
 				const name = info.cssVar.slice(4, -1); // var(--category-x) → --category-x
@@ -70,8 +80,10 @@ export interface RenderState {
 	root: EntityKey | null;
 	theme: Theme;
 	icons: Partial<Record<TechCategory, HTMLImageElement>>;
-	/** Flag glyphs as Path2D (24×24 box), by flag key. */
+	/** Flag glyphs as Path2D (24×24 box), by flag key (plus `plan:check` and `plan:goal`). */
 	glyphs: Map<string, Path2D>;
+	/** The active campaign's statuses, steps and goals; null = no campaign (no marks). */
+	plan: PlanMarks | null;
 	/** Filter matches in highlight mode (others are dimmed); null = no highlighting. */
 	matches: ReadonlySet<EntityKey> | null;
 	/** Draw the far-out overview (category blocks) below `OVERVIEW_ZOOM`. */
@@ -128,6 +140,13 @@ const tintBorderAt = (detail: boolean) => (detail ? 0.26 : 0.4);
 const ICON_TINT = 0.16;
 /** Width (screen px) of the category ring around filter matches. */
 const MATCH_RING = 2.5;
+/** Width and gap (screen px) of the ring around research whose prerequisites are met. */
+const AVAILABLE_RING = 2;
+const AVAILABLE_GAP = 4.5;
+/** Radius (screen px) of campaign marks (check, step number, goal), up to a quarter card. */
+const MARK_RADIUS = 10;
+/** Smallest mark radius (screen px) worth drawing; zoomed out further they're left out. */
+const MARK_MIN = 5;
 
 const RADIUS = 12;
 const BIG_FONT_PX = 26;
@@ -174,11 +193,13 @@ export function render(
 	const w = scene.width;
 	const h = scene.height;
 	const lineage = cachedLineage(scene, state.selected);
-	const { matches } = state;
+	const { matches, plan } = state;
 	const unrelated = (n: SceneNode) =>
 		(lineage !== null && !lineage.nodes.has(n.key)) || (matches !== null && !matches.has(n.key));
-	/** Secondary cards: unrelated ones, and unobtainable ones (which also get a dashed border). */
-	const secondary = (n: SceneNode) => unrelated(n) || !n.item.flags.obtainable;
+	/** Faded cards: unrelated ones, and research the campaign has completed. */
+	const faded = (n: SceneNode) => unrelated(n) || (plan !== null && plan.done.has(n.key));
+	/** Secondary cards: faded ones, and unobtainable ones (which also get a dashed border). */
+	const secondary = (n: SceneNode) => faded(n) || !n.item.flags.obtainable;
 	const px = 1 / z; // one screen pixel in world units
 	const overview = state.overview && z < OVERVIEW_ZOOM;
 
@@ -254,9 +275,11 @@ export function render(
 	for (const dashed of [false, true]) {
 		for (const outside of [false, true]) {
 			const group = visible.filter(
-				(n) => n.item.flags.obtainable === !dashed && unrelated(n) === outside
+				(n) => n.item.flags.obtainable === !dashed && faded(n) === outside
 			);
 			if (!group.length) continue;
+			// Completed matches are faded but still marked as matches.
+			const matched = matches ? group.filter((n) => !unrelated(n)) : [];
 			ctx.globalAlpha = outside ? DIM : 1;
 			if (overview) {
 				// Plain category blocks.
@@ -270,7 +293,8 @@ export function render(
 					ctx.fillStyle = color;
 					ctx.fill(p);
 				}
-				if (matches && !outside) ringMatches(ctx, group, theme, w, h, px);
+				ctx.globalAlpha = 1;
+				if (matched.length) ringMatches(ctx, matched, theme, w, h, px);
 				continue;
 			}
 			const body = new Path2D();
@@ -316,10 +340,10 @@ export function render(
 				}
 			}
 			ctx.globalAlpha = base;
-			if (matches && !outside) {
+			if (matched.length) {
 				// Filter matches: tinted in their category color so they read at any zoom.
 				const tints = new Map<string, Path2D>();
-				for (const n of group) {
+				for (const n of matched) {
 					const color = accent(theme, n);
 					let p = tints.get(color);
 					if (!p) tints.set(color, (p = new Path2D()));
@@ -331,15 +355,17 @@ export function render(
 					ctx.fill(p);
 				}
 				ctx.globalAlpha = 1;
-				ringMatches(ctx, group, theme, w, h, px);
+				ringMatches(ctx, matched, theme, w, h, px);
 			}
 		}
 	}
+	ctx.globalAlpha = 1;
+	if (plan?.available.size) ringAvailable(ctx, visible, plan, theme, w, h, px, unrelated);
 
 	// --- content --------------------------------------------------------------
 	ctx.globalAlpha = 1;
 	if (detail) {
-		for (const n of visible) drawDetail(ctx, n, scene, state, secondary(n), unrelated(n));
+		for (const n of visible) drawDetail(ctx, n, scene, state, secondary(n), faded(n));
 	} else if (z >= NAME_ZOOM && !overview) {
 		ctx.font = `600 ${BIG_FONT_PX}px ${theme.font}`;
 		ctx.textBaseline = 'middle';
@@ -353,6 +379,7 @@ export function render(
 		}
 	}
 	ctx.globalAlpha = 1;
+	if (plan) drawPlanMarks(ctx, visible, scene, state, z, unrelated);
 
 	// --- "any of" requirement groups (focus view) -------------------------------
 	if (scene.graph.anyOf.length) {
@@ -450,6 +477,127 @@ function ringMatches(
 		ctx.strokeStyle = color;
 		ctx.stroke(p);
 	}
+}
+
+/**
+ * A ring just outside the match ring around research the campaign can research now, so
+ * the next steps stand out at any zoom. Unrelated cards get a faded one.
+ */
+function ringAvailable(
+	ctx: CanvasRenderingContext2D,
+	visible: SceneNode[],
+	plan: PlanMarks,
+	theme: Theme,
+	w: number,
+	h: number,
+	px: number,
+	unrelated: (n: SceneNode) => boolean
+) {
+	const gap = AVAILABLE_GAP * px;
+	const rings = [new Path2D(), new Path2D()];
+	let any = false;
+	for (const n of visible) {
+		if (!plan.available.has(n.key)) continue;
+		any = true;
+		rings[unrelated(n) ? 1 : 0].roundRect(
+			n.x - gap,
+			n.y - gap,
+			w + 2 * gap,
+			h + 2 * gap,
+			RADIUS + gap
+		);
+	}
+	if (!any) return;
+	ctx.strokeStyle = theme.success;
+	ctx.lineWidth = AVAILABLE_RING * px;
+	ctx.stroke(rings[0]);
+	ctx.globalAlpha = DIM;
+	ctx.stroke(rings[1]);
+	ctx.globalAlpha = 1;
+}
+
+/**
+ * Campaign marks straddling each card's top edge at the right: a check on completed
+ * research or the plan step number, and a target on goals left of it. Constant screen size
+ * (up to a quarter card), left out where they'd be too small to read.
+ */
+function drawPlanMarks(
+	ctx: CanvasRenderingContext2D,
+	visible: SceneNode[],
+	scene: Scene,
+	state: RenderState,
+	z: number,
+	unrelated: (n: SceneNode) => boolean
+) {
+	const { theme, plan } = state;
+	if (!plan) return;
+	const r = Math.min(scene.height / 4, MARK_RADIUS / z);
+	if (r * z < MARK_MIN) return;
+	const check = state.glyphs.get('plan:check');
+	const target = state.glyphs.get('plan:goal');
+	const glyph = (path: Path2D | undefined, cx: number, cy: number, color: string) => {
+		if (!path) return;
+		const size = 1.15 * r;
+		ctx.save();
+		ctx.translate(cx - size / 2, cy - size / 2);
+		ctx.scale(size / 24, size / 24);
+		ctx.strokeStyle = color;
+		ctx.lineWidth = 2.5;
+		ctx.lineCap = 'round';
+		ctx.lineJoin = 'round';
+		ctx.stroke(path);
+		ctx.restore();
+	};
+	ctx.font = `700 ${1.1 * r}px ${theme.font}`;
+	ctx.textAlign = 'center';
+	ctx.textBaseline = 'middle';
+	const border = Math.max(1, 0.12 * r);
+	for (const n of visible) {
+		const done = plan.done.has(n.key);
+		const step = done ? undefined : plan.steps.get(n.key);
+		const goal = plan.goals.has(n.key);
+		if (!done && step === undefined && !goal) continue;
+		ctx.globalAlpha = unrelated(n) ? DIM_CONTENT : 1;
+		let right = n.x + scene.width - 0.6 * r;
+		const cy = n.y;
+		if (done) {
+			const cx = right - r;
+			ctx.beginPath();
+			ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+			ctx.fillStyle = theme.secondary;
+			ctx.fill();
+			ctx.strokeStyle = theme.background;
+			ctx.lineWidth = border;
+			ctx.stroke();
+			glyph(check, cx, cy, theme.foreground);
+			right -= 2 * r + 0.4 * r;
+		} else if (step !== undefined) {
+			const width = Math.max(2 * r, ctx.measureText(step).width + r);
+			ctx.beginPath();
+			ctx.roundRect(right - width, cy - r, width, 2 * r, r);
+			ctx.fillStyle = theme.primary;
+			ctx.fill();
+			ctx.strokeStyle = theme.background;
+			ctx.lineWidth = border;
+			ctx.stroke();
+			ctx.fillStyle = theme.primaryForeground;
+			ctx.fillText(step, right - width / 2, cy + 0.05 * r);
+			right -= width + 0.4 * r;
+		}
+		if (goal) {
+			const cx = right - r;
+			ctx.beginPath();
+			ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+			ctx.fillStyle = theme.card;
+			ctx.fill();
+			ctx.strokeStyle = theme.warning;
+			ctx.lineWidth = Math.max(border, 0.15 * r);
+			ctx.stroke();
+			glyph(target, cx, cy, theme.warning);
+		}
+	}
+	ctx.globalAlpha = 1;
+	ctx.textAlign = 'start';
 }
 
 /** Category name at the top left of each band, kept on screen while the band is visible. */

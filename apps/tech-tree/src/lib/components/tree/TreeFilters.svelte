@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { tick } from 'svelte';
+	import CircleCheck from '@lucide/svelte/icons/circle-check';
 	import Funnel from '@lucide/svelte/icons/funnel';
 	import Undo2 from '@lucide/svelte/icons/undo-2';
 	import { Badge } from '#lib/components/ui/badge/index.js';
@@ -7,9 +8,11 @@
 	import FlaskConical from '@lucide/svelte/icons/flask-conical';
 	import Wrench from '@lucide/svelte/icons/wrench';
 	import type { TechCategory } from '#lib/api.ts';
+	import { campaign } from '#lib/campaign.svelte.ts';
 	import { CATEGORIES, CATEGORY_ORDER } from '#lib/categories.ts';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as ToggleGroup from '#lib/components/ui/toggle-group/index.js';
+	import { settings } from '#lib/settings.svelte.ts';
 	import { app } from '#lib/state.svelte.ts';
 	import Pill, {
 		pillIcon,
@@ -112,6 +115,13 @@
 		const next = CATEGORY_ORDER.filter((c) => value.includes(c));
 		app.categories = next.length === CATEGORY_ORDER.length ? [] : next;
 	}
+
+	/** Completed research of the active campaign: shown, or hidden/dimmed per the filter mode. */
+	const completedTip = $derived(
+		settings.showCompleted
+			? `Completed research shown — click to ${settings.filterMode === 'hide' ? 'hide' : 'dim'} it`
+			: `Completed research ${settings.filterMode === 'hide' ? 'hidden' : 'dimmed'} — click to show`
+	);
 
 	function press(category: TechCategory, e: PointerEvent | KeyboardEvent) {
 		solo = e.shiftKey ? category : null;
@@ -244,4 +254,25 @@
 	<Pill aria-label="Effects filter">
 		<PropertyFilter />
 	</Pill>
+
+	{#if campaign.active}
+		<Pill aria-label="Campaign progress">
+			<ToggleGroup.Root
+				type="multiple"
+				size="sm"
+				class={segmented}
+				bind:value={
+					() => (settings.showCompleted ? ['completed'] : []),
+					(value: string[]) => (settings.showCompleted = value.includes('completed'))
+				}
+				aria-label="Campaign progress"
+			>
+				<Tip text={completedTip}>
+					<ToggleGroup.Item value="completed" aria-label="Show completed research" class={segment}>
+						<CircleCheck /> Completed
+					</ToggleGroup.Item>
+				</Tip>
+			</ToggleGroup.Root>
+		</Pill>
+	{/if}
 {/if}

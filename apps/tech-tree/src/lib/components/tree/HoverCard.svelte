@@ -3,7 +3,11 @@
 	// canvas leaves out. Zoomed in, the canvas card shows those, so the hover card expands with
 	// what it can't: flag labels, total cost, summary, requirements, effects and unlocks
 	// (fetched lazily). A pointer-only preview: the detail panel is the accessible path.
+	import CircleCheck from '@lucide/svelte/icons/circle-check';
+	import CircleDot from '@lucide/svelte/icons/circle-dot';
+	import Target from '@lucide/svelte/icons/target';
 	import type { EntityDetail, UnlockItem, UnlockKind } from '#lib/api.ts';
+	import { campaign } from '#lib/campaign.svelte.ts';
 	import { CATEGORIES } from '#lib/categories.ts';
 	import EntityIcon from '#lib/components/detail/EntityIcon.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
@@ -20,6 +24,7 @@
 	import { app } from '#lib/state.svelte.ts';
 	import CategoryIcon from './CategoryIcon.svelte';
 	import { cachedDetail, loadDetail } from './hover-detail';
+	import { statusLabels } from './plan-marks';
 	import type { SceneNode } from './scene';
 
 	let {
@@ -88,6 +93,19 @@
 	const showTotal = $derived(
 		detail?.totalCost != null && detail.totalCost !== (detail.researchCost ?? node.item.cost)
 	);
+	/** Where the research stands in the active campaign (empty without one). */
+	const status = $derived(campaign.status(node.key));
+	const StatusIcon = $derived(
+		status === 'done' ? CircleCheck : status === 'available' ? CircleDot : Target
+	);
+	const planStatus = $derived(
+		statusLabels(
+			status,
+			campaign.stepIndex.get(node.key),
+			campaign.isGoal(node.key),
+			campaign.completions(node.key)
+		).join(' · ')
+	);
 	const unlockGroups = $derived.by(() => {
 		const groups: Partial<Record<UnlockKind, UnlockItem[]>> = {};
 		for (const u of detail?.unlocks ?? []) (groups[u.kind] ??= []).push(u);
@@ -132,6 +150,15 @@
 					<Badge variant="outline" class="h-5">{formatCostFull(detail?.totalCost)} total</Badge>
 				{/if}
 			</div>
+			{#if planStatus}
+				<div
+					class="flex items-center gap-1.5 font-medium"
+					class:text-success={status === 'available'}
+				>
+					<StatusIcon class="size-3.5 shrink-0" />
+					{planStatus}
+				</div>
+			{/if}
 			{#each node.flags as flag (flag.key)}
 				<div
 					class="flex items-center gap-1.5"

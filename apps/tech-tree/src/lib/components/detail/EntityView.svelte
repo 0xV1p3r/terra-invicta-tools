@@ -37,6 +37,8 @@
 		requirementChoices,
 		UNLOCK_LABELS
 	} from '#lib/format.ts';
+	import { campaign } from '#lib/campaign.svelte.ts';
+	import ResearchPlanActions from '#lib/components/plan/ResearchPlanActions.svelte';
 	import { app } from '#lib/state.svelte.ts';
 	import EffectItem from './EffectItem.svelte';
 	import EntityIcon from './EntityIcon.svelte';
@@ -108,6 +110,30 @@
 	});
 
 	const ann = $derived(detail?.annotations);
+
+	// Repeatable projects and end-game techs can be completed more than once (planner counts).
+	const repeatable = $derived(
+		detail?.record.repeatable === true || detail?.record.endGameTech === true
+	);
+	/**
+	 * What is left to research for a goal, from the plan: its steps and those of earlier goals
+	 * (the plan works through goals in order). Other research has no chain of its own in the plan.
+	 */
+	const remaining = $derived.by(() => {
+		if (!entity || inWiki || !campaign.isGoal(entity.key)) return null;
+		if (campaign.status(entity.key) === 'done') return { cost: 0, withEarlier: false };
+		const index = campaign.stepIndex.get(entity.key);
+		const plan = campaign.plan;
+		if (index === undefined || !plan) return null;
+		const steps = plan.steps.slice(0, index + 1);
+		const goals = campaign.active?.goals ?? [];
+		return {
+			cost: steps.reduce((sum, s) => sum + s.cost, 0),
+			withEarlier: goals
+				.slice(0, goals.indexOf(entity.key))
+				.some((g) => campaign.status(g) === 'available' || campaign.status(g) === 'locked')
+		};
+	});
 
 	// Shown in Requirements, Unlocks, Unlocked by or Effects: References leave these out.
 	const shownElsewhere = $derived(
@@ -366,6 +392,9 @@
 				)}
 			</Card.Content>
 		{/if}
+		{#if research && !inWiki && campaign.active}
+			<ResearchPlanActions {entity} {repeatable} />
+		{/if}
 		{#if detail.researchCost != null || detail.totalCost != null}
 			<Card.Content class="mt-4 grid grid-cols-2 divide-x overflow-hidden rounded-lg border px-0">
 				<Card.Content class="px-3 py-2">
@@ -387,6 +416,19 @@
 					>
 						{formatCost(detail.totalCost)}
 					</Card.Content>
+					{#if remaining}
+						<Card.Content
+							class="px-0 text-xs text-muted-foreground"
+							title="{formatCostFull(
+								remaining.cost
+							)} research points left in the plan{remaining.withEarlier
+								? ', including earlier goals'
+								: ''}"
+							>{formatCost(remaining.cost)} left{remaining.withEarlier
+								? ' with earlier goals'
+								: ''}</Card.Content
+						>
+					{/if}
 				</Card.Content>
 			</Card.Content>
 		{/if}
