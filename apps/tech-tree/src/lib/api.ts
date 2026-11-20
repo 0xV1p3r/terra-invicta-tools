@@ -84,6 +84,17 @@ export type { ResourceRating } from './generated/ResourceRating';
 export type { SpaceBodyInfo } from './generated/SpaceBodyInfo';
 export type { OrbitElements } from './generated/OrbitElements';
 export type { LagrangePointInfo } from './generated/LagrangePointInfo';
+import type { Campaign } from './generated/Campaign';
+export type { Campaign } from './generated/Campaign';
+export type { Completion } from './generated/Completion';
+export type { PlanPick } from './generated/PlanPick';
+import type { PlanStatus } from './generated/PlanStatus';
+export type { PlanStatus } from './generated/PlanStatus';
+import type { PlanStep } from './generated/PlanStep';
+export type { PlanStep } from './generated/PlanStep';
+export type { PlanChoice } from './generated/PlanChoice';
+import type { PlanResult } from './generated/PlanResult';
+export type { PlanResult } from './generated/PlanResult';
 
 /** Text filter and page of `getWikiEntries`. */
 export interface WikiPageArgs {
@@ -172,7 +183,20 @@ const tauriApi = {
 	 */
 	search: (scope: ScopeArgs, query: string, limit = 30, all = false, kinds: EntityKind[] = []) =>
 		invoke<SearchHit[]>('search', { scope, query, limit, all, kinds }),
-	getSolarSystem: (scope: ScopeArgs) => invoke<SolarSystem>('get_solar_system', { scope })
+	getSolarSystem: (scope: ScopeArgs) => invoke<SolarSystem>('get_solar_system', { scope }),
+	/** Saved campaigns, most recently saved first. */
+	listCampaigns: () => invoke<Campaign[]>('list_campaigns'),
+	/** Save a campaign (`id: ''` creates one); resolves to it as saved (id, `updated`). */
+	saveCampaign: (campaign: Campaign) => invoke<Campaign>('save_campaign', { campaign }),
+	deleteCampaign: (id: string) => invoke<void>('delete_campaign', { id }),
+	/** Status of every tech/project and the goals' plan, in the campaign's scenario and faction. */
+	getPlan: (lang: string, campaign: Campaign) => invoke<PlanResult>('get_plan', { lang, campaign }),
+	/** Keys to mark completed for "researched up to here" (`key` last). */
+	planUpTo: (campaign: Campaign, key: EntityKey) =>
+		invoke<EntityKey[]>('plan_up_to', { campaign, key }),
+	/** Completed research that loses a requirement when `key` is un-marked (not `key`). */
+	planDependentsLost: (campaign: Campaign, key: EntityKey) =>
+		invoke<EntityKey[]>('plan_dependents_lost', { campaign, key })
 };
 
 // --- Browser mock mode -------------------------------------------------------
@@ -407,8 +431,152 @@ const mockApi: typeof tauriApi = {
 		const hits = await fixture<SearchHit[]>(`search-${name}`, `search-${name.toLowerCase()}`);
 		return hits.filter((h) => !kinds.length || kinds.includes(h.entity.kind)).slice(0, limit);
 	},
-	getSolarSystem: () => fixture<SolarSystem>('solar-system')
+	getSolarSystem: () => fixture<SolarSystem>('solar-system'),
+	listCampaigns: async () => mockCampaigns().sort((a, b) => b.updated - a.updated),
+	saveCampaign: async (campaign) => {
+		const saved = {
+			...campaign,
+			id: campaign.id || `mock-${Date.now().toString(36)}`,
+			name: campaign.name.trim(),
+			updated: Math.floor(Date.now() / 1000)
+		};
+		if (!saved.name) throw 'A campaign needs a name.';
+		storeMockCampaigns([...mockCampaigns().filter((c) => c.id !== saved.id), saved]);
+		return saved;
+	},
+	deleteCampaign: async (id) => storeMockCampaigns(mockCampaigns().filter((c) => c.id !== id)),
+	getPlan: async (_lang, campaign) => mockPlan(await fixture<TreeGraph>('tree'), campaign),
+	planUpTo: async (campaign, key) => {
+		const graph = await fixture<TreeGraph>('tree');
+		const done = new Set(campaign.completed.map((c) => c.key));
+		return mockChain(graph, [key], done);
+	},
+	planDependentsLost: async (campaign, key) => {
+		const graph = await fixture<TreeGraph>('tree');
+		const done = new Set(campaign.completed.map((c) => c.key));
+		done.delete(key);
+		const lost: EntityKey[] = [];
+		for (let changed = true; changed;) {
+			changed = false;
+			for (const k of done) {
+				if (mockRequires(graph, k).some((p) => !done.has(p))) {
+					done.delete(k);
+					lost.push(k);
+					changed = true;
+				}
+			}
+		}
+		return lost;
+	}
 };
+
+// Mock campaigns live in localStorage; plans approximate the backend from the tree fixture's
+// listed (non-alternative) edges: no "any of" choices, no repeat costs.
+const MOCK_CAMPAIGNS = 'ti-tech-tree:mock-campaigns';
+
+function mockCampaigns(): Campaign[] {
+	try {
+		return JSON.parse(localStorage.getItem(MOCK_CAMPAIGNS) ?? '[]') as Campaign[];
+	} catch {
+		return [];
+	}
+}
+
+function storeMockCampaigns(list: Campaign[]) {
+	try {
+		localStorage.setItem(MOCK_CAMPAIGNS, JSON.stringify(list));
+	} catch {
+		// Storage unavailable: mock campaigns are lost on reload.
+	}
+}
+
+const mockRequires = (graph: TreeGraph, key: EntityKey) =>
+	graph.edges.filter((e) => e.to === key && !e.alternative).map((e) => e.from);
+
+/** Missing listed prerequisites of `goals`, prerequisites first (goals included). */
+function mockChain(graph: TreeGraph, goals: EntityKey[], done: Set<EntityKey>): EntityKey[] {
+	const out: EntityKey[] = [];
+	const seen = new Set<EntityKey>();
+	const visit = (key: EntityKey) => {
+		if (done.has(key) || seen.has(key)) return;
+		seen.add(key);
+		for (const p of mockRequires(graph, key)) visit(p);
+		out.push(key);
+	};
+	for (const g of goals) visit(g);
+	return out;
+}
+
+function mockPlan(graph: TreeGraph, campaign: Campaign): PlanResult {
+	const byKey = new Map(graph.nodes.map((n) => [n.key, n]));
+	const done = new Set(campaign.completed.map((c) => c.key));
+	const statusOf = (key: EntityKey): PlanStatus =>
+		done.has(key)
+			? 'done'
+			: !byKey.get(key)?.flags.obtainable
+				? 'unobtainable'
+				: mockRequires(graph, key).every((p) => done.has(p))
+					? 'available'
+					: 'locked';
+	const status: Record<EntityKey, PlanStatus> = {};
+	for (const n of graph.nodes) status[n.key] = statusOf(n.key);
+	const goals = campaign.goals.filter((g) => byKey.has(g));
+	const keys = mockChain(graph, goals, done);
+	const inPlan = new Set(keys);
+	const neededBy = new Map<EntityKey, EntityKey[]>();
+	for (const k of keys)
+		for (const p of mockRequires(graph, k))
+			if (inPlan.has(p)) neededBy.set(p, [...(neededBy.get(p) ?? []), k]);
+	const unblocks = (key: EntityKey) => {
+		const seen = new Set<EntityKey>();
+		const stack = [key];
+		for (let k = stack.pop(); k !== undefined; k = stack.pop())
+			for (const d of neededBy.get(k) ?? [])
+				if (!seen.has(d)) {
+					seen.add(d);
+					stack.push(d);
+				}
+		return seen.size;
+	};
+	const steps: PlanStep[] = keys.map((key) => {
+		const n = byKey.get(key)!;
+		return {
+			entity: {
+				spoiler: false,
+				key,
+				template: key.slice(0, key.indexOf(':')),
+				dataName: n.dataName,
+				name: n.name,
+				kind: n.kind,
+				subtype: null,
+				category: n.category as PlanStep['entity']['category'],
+				icon: null
+			},
+			cost: n.cost,
+			status: status[key],
+			unblocks: unblocks(key),
+			goal: goals.includes(key)
+		} as PlanStep;
+	});
+	const cost = (kind: string) =>
+		steps.filter((s) => s.entity.kind === kind).reduce((sum, s) => sum + s.cost, 0);
+	return {
+		status,
+		steps,
+		next: steps
+			.map((s, i) => ({ s, i }))
+			.filter(({ s }) => s.status === 'available')
+			.sort((a, b) => b.s.unblocks - a.s.unblocks || a.i - b.i)
+			.map(({ s }) => s.entity.key),
+		choices: [],
+		techCost: cost('tech'),
+		projectCost: cost('project'),
+		unreachable: [],
+		unknown: [...campaign.completed.map((c) => c.key), ...campaign.goals].filter(
+			(k) => !byKey.has(k)
+		)
+	};
+}
 
 export const api = mockMode ? mockApi : tauriApi;
 
