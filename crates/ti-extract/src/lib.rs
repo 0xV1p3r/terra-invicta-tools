@@ -18,7 +18,7 @@ pub mod templates;
 mod extract;
 
 pub use extract::DataDirLock;
-pub use game::{GameInstall, Layer, discover, find_game_dir, resolve_game_dir};
+pub use game::{GameInstall, Layer, discover, find_game_dir, find_save_dir, resolve_game_dir};
 
 /// Bump on any incompatible change to the layout or content of an extracted build.
 pub const FORMAT_VERSION: u32 = 1;

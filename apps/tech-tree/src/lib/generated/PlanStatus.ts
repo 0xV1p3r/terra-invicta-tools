@@ -3,4 +3,4 @@
 /**
  * Where a tech or project stands in a campaign.
  */
-export type PlanStatus = "done" | "available" | "locked" | "unobtainable";
+export type PlanStatus = "done" | "available" | "notUnlocked" | "locked" | "unobtainable";

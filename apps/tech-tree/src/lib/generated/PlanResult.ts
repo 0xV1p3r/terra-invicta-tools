@@ -18,6 +18,10 @@ status: { [key in EntityKey]: PlanStatus }, steps: Array<PlanStep>,
  */
 next: Array<EntityKey>, choices: Array<PlanChoice>, techCost: number, projectCost: number, 
 /**
+ * Campaign research speed the costs are divided by (1 without an imported save).
+ */
+researchSpeed: number, 
+/**
  * Goals that can never be researched in this scope.
  */
 unreachable: Array<EntityRef>, 

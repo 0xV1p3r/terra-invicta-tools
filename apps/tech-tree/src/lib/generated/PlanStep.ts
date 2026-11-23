@@ -7,11 +7,20 @@ import type { PlanStatus } from "./PlanStatus";
  */
 export type PlanStep = { entity: EntityRef, 
 /**
- * Research cost of the next completion (repeat scaling applied).
+ * Research points still needed: the next completion's cost (repeat scaling and campaign
+ * speed applied) minus `progress`.
  */
 cost: number, 
 /**
- * `available` or `locked`.
+ * Points already put in (from an imported save).
+ */
+progress: number, 
+/**
+ * Being researched in the imported save.
+ */
+active: boolean, 
+/**
+ * `available`, `notUnlocked` or `locked`.
  */
 status: PlanStatus, 
 /**

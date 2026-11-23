@@ -895,10 +895,53 @@ pub struct Campaign {
     pub goals: Vec<String>,
     #[serde(default)]
     pub picks: Vec<PlanPick>,
+    /// The game save the research state was imported from, if any.
+    #[serde(default)]
+    pub save: Option<SaveLink>,
     /// Last save, Unix seconds (set by the backend).
     #[serde(default)]
     #[cfg_attr(test, ts(type = "number"))]
     pub updated: i64,
+}
+
+/// What an imported game save adds to a campaign beyond its completed research.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
+#[serde(rename_all = "camelCase")]
+pub struct SaveLink {
+    /// The save file, for updating the campaign from it again.
+    pub path: String,
+    /// In-game date of the save, `YYYY-MM-DD`.
+    pub game_date: String,
+    pub save_version: Option<String>,
+    /// Campaign research speed: costs are divided by it.
+    pub research_speed: f64,
+    /// The save predates the scenario field; the scenario is the game's fallback.
+    pub scenario_inferred: bool,
+    /// Mods were used in the campaign: costs and prerequisites may differ from the game data.
+    pub modded: bool,
+    /// Import time, Unix seconds.
+    #[cfg_attr(test, ts(type = "number"))]
+    pub imported: i64,
+    /// Research with points put in: tech slots, selected and paused projects.
+    pub progress: Vec<SaveProgress>,
+    /// Projects unlocked for the faction (the game's authority on project availability).
+    #[cfg_attr(test, ts(as = "Vec<EntityKey>"))]
+    pub available: Vec<String>,
+}
+
+/// Research points put into research that is not finished.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, ts(export, export_to = "../../src/lib/generated/"))]
+#[serde(rename_all = "camelCase")]
+pub struct SaveProgress {
+    #[cfg_attr(test, ts(as = "EntityKey"))]
+    pub key: String,
+    pub points: f64,
+    /// Being researched (a tech slot or an enabled project slot), not paused.
+    pub active: bool,
 }
 
 /// Completed research and how often (repeatable projects and end-game techs).
@@ -934,6 +977,9 @@ pub enum PlanStatus {
     Done,
     /// Prerequisites met (projects may still need their unlock roll).
     Available,
+    /// Prerequisites met, but the imported save has not unlocked the project (unlock roll,
+    /// objective, nation…).
+    NotUnlocked,
     Locked,
     /// Never researchable in the campaign's scenario and faction.
     Unobtainable,
@@ -946,9 +992,14 @@ pub enum PlanStatus {
 #[serde(rename_all = "camelCase")]
 pub struct PlanStep {
     pub entity: EntityRef,
-    /// Research cost of the next completion (repeat scaling applied).
+    /// Research points still needed: the next completion's cost (repeat scaling and campaign
+    /// speed applied) minus `progress`.
     pub cost: f64,
-    /// `available` or `locked`.
+    /// Points already put in (from an imported save).
+    pub progress: f64,
+    /// Being researched in the imported save.
+    pub active: bool,
+    /// `available`, `notUnlocked` or `locked`.
     pub status: PlanStatus,
     /// Later steps that need this one (transitively).
     pub unblocks: usize,
@@ -988,6 +1039,8 @@ pub struct PlanResult {
     pub choices: Vec<PlanChoice>,
     pub tech_cost: f64,
     pub project_cost: f64,
+    /// Campaign research speed the costs are divided by (1 without an imported save).
+    pub research_speed: f64,
     /// Goals that can never be researched in this scope.
     pub unreachable: Vec<EntityRef>,
     /// Campaign keys (completed, goals, picks) that are not research of this build and scope.

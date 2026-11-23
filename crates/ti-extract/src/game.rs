@@ -211,6 +211,19 @@ pub fn find_game_dir() -> Option<PathBuf> {
         .find(|candidate| candidate.join("TerraInvicta_Data").is_dir())
 }
 
+/// The game's save folder: `Documents/My Games/TerraInvicta/Saves` on Windows, or inside
+/// the Proton prefix of a Steam library elsewhere. `None` if none exists.
+pub fn find_save_dir() -> Option<PathBuf> {
+    const SAVES: &str = "My Games/TerraInvicta/Saves";
+    let home = home_dir();
+    let documents = home.iter().flat_map(|h| [h.join("Documents"), h.join("OneDrive/Documents")]);
+    let proton = steam_roots()
+        .into_iter()
+        .flat_map(|root| library_folders(&root))
+        .map(|lib| lib.join("steamapps/compatdata").join(APP_ID).join("pfx/drive_c/users/steamuser/Documents"));
+    documents.chain(proton).map(|d| d.join(SAVES)).find(|d| d.is_dir())
+}
+
 /// Top-level key/values of `appmanifest_<appid>.acf` next to the install.
 pub fn read_app_manifest(game_dir: &Path) -> Vec<(String, String)> {
     let Some(steamapps) = game_dir.parent().and_then(Path::parent) else {
