@@ -1,8 +1,8 @@
 <script lang="ts">
 	// Side panel of the research planner: the active campaign's goals, what to research next, the
 	// "any of" choices the plan made and the full research order. Steps are numbered like the
-	// badges on the tree (position + 1). Costs are base research points: the campaign's research
-	// speed (and bonuses) is not applied.
+	// badges on the tree (position + 1). Costs are research points; with an imported save they use
+	// the campaign's research speed and leave out points already put in.
 	import ArrowDown from '@lucide/svelte/icons/arrow-down';
 	import ArrowUp from '@lucide/svelte/icons/arrow-up';
 	import Check from '@lucide/svelte/icons/check';
@@ -17,6 +17,7 @@
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 	import Wrench from '@lucide/svelte/icons/wrench';
 	import X from '@lucide/svelte/icons/x';
+	import Hourglass from '@lucide/svelte/icons/hourglass';
 	import type { Component } from 'svelte';
 	import type { EntityKey, EntityRef, PlanChoice, PlanStatus } from '#lib/api.ts';
 	import { campaign } from '#lib/campaign.svelte.ts';
@@ -68,6 +69,11 @@
 	const STATUS: Record<PlanStatus, { label: string; icon: Component }> = {
 		done: { label: 'Researched', icon: CircleCheck },
 		available: { label: 'Available now', icon: Circle },
+		notUnlocked: {
+			label:
+				'Prerequisites met, but the save has not unlocked it yet (unlock roll or other condition)',
+			icon: Hourglass
+		},
 		locked: { label: 'Needs earlier steps', icon: Lock },
 		unobtainable: { label: "Can't be researched in this scenario and faction", icon: Ban }
 	};
@@ -144,7 +150,13 @@
 			</h2>
 			{#if active}<p class="truncate text-xs text-muted-foreground" title={active.name}>
 					{active.name}
-				</p>{/if}
+				</p>
+				{#if active.save}
+					{@const save = active.save}
+					<p class="truncate text-xs text-muted-foreground" title={save.path}>
+						From save · {save.gameDate}{save.saveVersion ? ` · v${save.saveVersion}` : ''}
+					</p>
+				{/if}{/if}
 		</div>
 		<Button
 			variant="ghost"
@@ -195,6 +207,28 @@
 								.join(', ')}.
 						</Alert.Description>
 					</Alert.Root>
+				{/if}
+				{#if active.save}
+					{@const save = active.save}
+					{@const notes = [
+						save.modded &&
+							'Mods were used in this campaign: costs and prerequisites may differ from the game data.',
+						save.saveVersion &&
+							app.meta?.gameVersion &&
+							save.saveVersion !== app.meta.gameVersion &&
+							`The save is from game version ${save.saveVersion}, the loaded data from ${app.meta.gameVersion}: costs and prerequisites may differ.`,
+						save.scenarioInferred &&
+							'The save is from an old game version without a scenario; the default scenario is assumed.'
+					].filter((n) => typeof n === 'string')}
+					{#if notes.length}
+						<Alert.Root class="mb-3 border-warning-border/60 bg-warning-subtle text-warning">
+							<TriangleAlert />
+							<Alert.Title>Imported save</Alert.Title>
+							<Alert.Description class="text-warning/90">
+								{#each notes as note (note)}<p>{note}</p>{/each}
+							</Alert.Description>
+						</Alert.Root>
+					{/if}
 				{/if}
 				{#if plan.unknown.length}
 					<Alert.Root class="mb-3 border-warning-border/60 bg-warning-subtle text-warning">
@@ -258,7 +292,12 @@
 						</div>
 					</div>
 					<p class="mt-1 text-xs text-muted-foreground">
-						Research points still needed, before research speed bonuses.
+						{#if active.save}
+							Research points still needed at the campaign's {plan.researchSpeed}× research speed,
+							less points already put in.
+						{:else}
+							Research points still needed, before research speed bonuses.
+						{/if}
 					</p>
 				{/if}
 
@@ -354,9 +393,15 @@
 										class="size-3.5 shrink-0 text-muted-foreground"
 										aria-label="Goal"
 									/>{/if}
+								{#if step.active}<LoaderCircle
+										class="size-3.5 shrink-0 text-muted-foreground"
+										aria-label="Being researched in the save"
+									/>{/if}
 								<span
 									class="shrink-0 text-xs text-muted-foreground tabular-nums"
-									title="{formatCostFull(step.cost)} research points">{formatCost(step.cost)}</span
+									title="{formatCostFull(step.cost)} research points still needed{step.progress
+										? ` (${formatCostFull(step.progress)} put in)`
+										: ''}">{formatCost(step.cost)}{step.progress ? ' left' : ''}</span
 								>
 							</li>
 						{/each}

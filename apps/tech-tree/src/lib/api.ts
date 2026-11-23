@@ -162,6 +162,19 @@ const tauriApi = {
 		const path = await open({ directory: true, title, defaultPath });
 		return typeof path === 'string' ? path : null;
 	},
+	/** Native file picker for a game save; null when dismissed. */
+	pickSaveFile: async (title: string, defaultPath?: string) => {
+		const { open } = await import('@tauri-apps/plugin-dialog');
+		const path = await open({
+			title,
+			defaultPath,
+			filters: [
+				{ name: 'Terra Invicta saves', extensions: ['gz'] },
+				{ name: 'All files', extensions: ['*'] }
+			]
+		});
+		return typeof path === 'string' ? path : null;
+	},
 	/** `mergeEdges`: long edges run as shared lines (more compact, not traceable one by one). */
 	getTree: (
 		scope: ScopeArgs,
@@ -196,7 +209,15 @@ const tauriApi = {
 		invoke<EntityKey[]>('plan_up_to', { campaign, key }),
 	/** Completed research that loses a requirement when `key` is un-marked (not `key`). */
 	planDependentsLost: (campaign: Campaign, key: EntityKey) =>
-		invoke<EntityKey[]>('plan_dependents_lost', { campaign, key })
+		invoke<EntityKey[]>('plan_dependents_lost', { campaign, key }),
+	/** The game's save folder, if found. */
+	defaultSaveDir: () => invoke<string | null>('default_save_dir'),
+	/**
+	 * The campaign as of the save at `path`: `into` updated from it (keeping its name, goals and
+	 * choices), or a new one. Not saved yet.
+	 */
+	importSave: (lang: string, path: string, into: Campaign | null = null) =>
+		invoke<Campaign>('import_save', { lang, path, into })
 };
 
 // --- Browser mock mode -------------------------------------------------------
@@ -387,6 +408,7 @@ const mockApi: typeof tauriApi = {
 	extractionStatus: async () => null,
 	// No native dialog in a browser.
 	pickFolder: async (title, defaultPath) => prompt(title, defaultPath ?? MOCK_GAME_ROOT),
+	pickSaveFile: async (title, defaultPath) => prompt(title, defaultPath ?? 'ExitSave.gz'),
 	getTree: async (_scope, filter, layout = 'layered') => {
 		const unfiltered = filter.categories.length === 0 && filter.properties.length === 0;
 		if (layout === 'bands') {
@@ -443,6 +465,10 @@ const mockApi: typeof tauriApi = {
 		if (!saved.name) throw 'A campaign needs a name.';
 		storeMockCampaigns([...mockCampaigns().filter((c) => c.id !== saved.id), saved]);
 		return saved;
+	},
+	defaultSaveDir: async () => null,
+	importSave: async () => {
+		throw 'Importing saves is not available in mock mode';
 	},
 	deleteCampaign: async (id) => storeMockCampaigns(mockCampaigns().filter((c) => c.id !== id)),
 	getPlan: async (_lang, campaign) => mockPlan(await fixture<TreeGraph>('tree'), campaign),
@@ -553,6 +579,8 @@ function mockPlan(graph: TreeGraph, campaign: Campaign): PlanResult {
 				icon: null
 			},
 			cost: n.cost,
+			progress: 0,
+			active: false,
 			status: status[key],
 			unblocks: unblocks(key),
 			goal: goals.includes(key)
@@ -571,6 +599,7 @@ function mockPlan(graph: TreeGraph, campaign: Campaign): PlanResult {
 		choices: [],
 		techCost: cost('tech'),
 		projectCost: cost('project'),
+		researchSpeed: 1,
 		unreachable: [],
 		unknown: [...campaign.completed.map((c) => c.key), ...campaign.goals].filter(
 			(k) => !byKey.has(k)
