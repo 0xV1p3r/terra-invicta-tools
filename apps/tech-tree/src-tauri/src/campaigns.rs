@@ -1,14 +1,14 @@
 //! Campaigns (research planning state): one JSON file per campaign in
 //! `<app data dir>/campaigns/`, apart from the extracted data, and the plan commands.
 
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use ti_data::{EntityId, Picks, Planner, Progress, Status, View, model};
 
-use crate::dto::{Campaign, PlanChoice, PlanResult, PlanStatus, PlanStep, ScopeArgs};
+use crate::dto::{Campaign, Completion, PlanChoice, PlanResult, PlanStatus, PlanStep, SaveLink, SaveProgress, ScopeArgs};
 use crate::error::{CmdError, CmdResult};
 use crate::refs::{self, entity_ref};
 use crate::scope;
@@ -120,6 +120,11 @@ struct Resolved {
     progress: Progress,
     goals: Vec<EntityId>,
     picks: Picks,
+    /// From an imported save: points put in (and whether being researched) by research.
+    points: HashMap<EntityId, (f64, bool)>,
+    /// From an imported save: the projects it has unlocked.
+    unlocked: Option<HashSet<EntityId>>,
+    research_speed: f64,
     unknown: Vec<String>,
 }
 
@@ -159,17 +164,30 @@ fn resolve(view: &View<'_>, campaign: &Campaign) -> Resolved {
             picks.insert((node, p.group), option);
         }
     }
+    let save = campaign.save.as_ref();
+    let points = save
+        .into_iter()
+        .flat_map(|s| &s.progress)
+        .filter_map(|p| Some((lookup(&p.key)?, (p.points, p.active))))
+        .collect();
+    // Unlocked projects the game data lacks are only noise: not reported.
+    let unlocked = save.map(|s| s.available.iter().filter_map(|k| research(view, k)).collect());
     Resolved {
         progress,
         goals,
         picks,
+        points,
+        unlocked,
+        research_speed: save.map_or(1.0, |s| s.research_speed).max(f64::MIN_POSITIVE),
         unknown,
     }
 }
 
-fn status_dto(s: Status) -> PlanStatus {
+/// The planner's status, with projects the imported save has not unlocked set apart.
+fn status_dto(view: &View<'_>, r: &Resolved, id: EntityId, s: Status) -> PlanStatus {
     match s {
         Status::Done => PlanStatus::Done,
+        Status::Available if view.kind(id) == model::Kind::Project && r.unlocked.as_ref().is_some_and(|u| !u.contains(&id)) => PlanStatus::NotUnlocked,
         Status::Available => PlanStatus::Available,
         Status::Locked => PlanStatus::Locked,
         Status::Unobtainable => PlanStatus::Unobtainable,
@@ -184,7 +202,11 @@ pub fn get_plan(b: &Backend, lang: &str, campaign: &Campaign) -> CmdResult<PlanR
     let r = resolve(&view, campaign);
     let planner = Planner::new(&view, &r.progress);
     let graph = view.research_graph();
-    let status: BTreeMap<String, PlanStatus> = graph.nodes().iter().map(|&id| (refs::key(&view, id), status_dto(planner.status(id)))).collect();
+    let status: BTreeMap<String, PlanStatus> = graph
+        .nodes()
+        .iter()
+        .map(|&id| (refs::key(&view, id), status_dto(&view, &r, id, planner.status(id))))
+        .collect();
     let plan = planner.plan(&r.goals, &r.picks);
     let goals: HashSet<EntityId> = r.goals.iter().copied().collect();
     let unblocks = plan.unblocks();
@@ -194,7 +216,8 @@ pub fn get_plan(b: &Backend, lang: &str, campaign: &Campaign) -> CmdResult<PlanR
         .iter()
         .zip(&unblocks)
         .map(|(&id, &unblocks)| {
-            let cost = planner.cost(id);
+            let (progress, active) = r.points.get(&id).copied().unwrap_or((0.0, false));
+            let cost = (planner.cost(id) / r.research_speed - progress).max(0.0);
             if view.kind(id) == model::Kind::Tech {
                 tech_cost += cost;
             } else {
@@ -203,7 +226,9 @@ pub fn get_plan(b: &Backend, lang: &str, campaign: &Campaign) -> CmdResult<PlanR
             PlanStep {
                 entity: entity_ref(&view, &texts, id, spoilers),
                 cost,
-                status: status_dto(planner.status(id)),
+                progress,
+                active,
+                status: status_dto(&view, &r, id, planner.status(id)),
                 unblocks,
                 goal: goals.contains(&id),
             }
@@ -239,6 +264,7 @@ pub fn get_plan(b: &Backend, lang: &str, campaign: &Campaign) -> CmdResult<PlanR
         choices,
         tech_cost,
         project_cost,
+        research_speed: r.research_speed,
         unreachable: plan.unreachable.iter().map(|&id| entity_ref(&view, &texts, id, spoilers)).collect(),
         unknown: r.unknown,
     })
@@ -260,6 +286,107 @@ pub fn plan_dependents_lost(b: &Backend, campaign: &Campaign, key: &str) -> CmdR
     let r = resolve(&view, campaign);
     let lost: BTreeSet<EntityId> = Planner::new(&view, &r.progress).dependents_lost(id);
     Ok(lost.into_iter().map(|id| refs::key(&view, id)).collect())
+}
+
+// ---- save import ---------------------------------------------------------------
+
+/// The game's save folder, if found (Windows Documents or a Steam Proton prefix).
+pub fn default_save_dir() -> Option<String> {
+    ti_extract::find_save_dir().map(|d| d.to_string_lossy().into_owned())
+}
+
+/// The campaign as of the save at `path`: `into` (when given) updated with the save's research
+/// state, keeping its name, goals and picks, or a new campaign named after the faction and date.
+/// The result is not saved yet.
+pub fn import_save(b: &Backend, lang: &str, path: &str, into: Option<Campaign>) -> CmdResult<Campaign> {
+    let save = ti_save::read(Path::new(path)).map_err(|e| CmdError::msg(e.to_string()))?;
+    if b.ds.scenario_by_name(&save.scenario).is_none() {
+        return Err(CmdError::msg(format!(
+            "The save's scenario {:?} is not in the loaded game data.",
+            save.scenario
+        )));
+    }
+    let faction =
+        b.ds.find(model::FACTION, &save.faction)
+            .ok_or_else(|| CmdError::msg(format!("The save's faction {:?} is not in the loaded game data.", save.faction)))?;
+    if let Some(c) = &into
+        && (c.scenario != save.scenario || c.faction != save.faction)
+    {
+        return Err(CmdError::msg(format!(
+            "This save is a {} campaign as {}, not the campaign's {} as {}.",
+            save.scenario, save.faction, c.scenario, c.faction
+        )));
+    }
+    let view = b.ds.view(scope::resolve(
+        &b.ds,
+        &ScopeArgs {
+            scenario: Some(save.scenario.clone()),
+            faction: Some(save.faction.clone()),
+            lang: lang.into(),
+        },
+    )?);
+    let tech = |name: &str| format!("{}:{name}", model::TECH);
+    let project = |name: &str| format!("{}:{name}", model::PROJECT);
+
+    let mut counts: BTreeMap<String, u32> = BTreeMap::new();
+    for name in &save.finished_techs {
+        let key = tech(name);
+        // End-game techs repeat; the save counts their completions per category.
+        let repeats = research(&view, &key)
+            .filter(|&id| view.record(id).and_then(|r| r.get("endGameTech")).and_then(serde_json::Value::as_bool) == Some(true))
+            .and_then(|id| refs::category(&view, id))
+            .and_then(|cat| save.end_game_completions.as_ref()?.get(&cat).copied())
+            .unwrap_or(1);
+        counts.insert(key, repeats.max(1));
+    }
+    // A repeatable project is listed once per completion; one-time projects someone else
+    // completed satisfy prerequisites too.
+    for name in save
+        .finished_projects
+        .iter()
+        .chain(save.finished_one_time_projects.iter().filter(|n| !save.finished_projects.contains(n)))
+    {
+        *counts.entry(project(name)).or_default() += 1;
+    }
+    let progress = save
+        .tech_slots
+        .iter()
+        .map(|t| SaveProgress {
+            key: tech(&t.tech),
+            points: t.accumulated,
+            active: true,
+        })
+        .chain(save.project_slots.iter().map(|p| SaveProgress {
+            key: project(&p.project),
+            points: p.accumulated,
+            active: p.active,
+        }))
+        .collect();
+    let d = save.game_date;
+    let link = SaveLink {
+        path: path.to_string(),
+        game_date: format!("{:04}-{:02}-{:02}", d.year, d.month, d.day),
+        save_version: save.save_version.clone(),
+        research_speed: save.research_speed.unwrap_or(1.0),
+        scenario_inferred: save.scenario_inferred,
+        modded: save.modded,
+        imported: now(),
+        progress,
+        available: save.available_projects.iter().map(|n| project(n)).collect(),
+    };
+    let mut campaign = into.unwrap_or_else(|| {
+        let texts = b.texts(lang).ok();
+        let faction_name = texts.map_or_else(|| save.faction.clone(), |t| view.name(&t, faction));
+        Campaign {
+            name: format!("{faction_name} {}", link.game_date),
+            scenario: save.scenario.clone(),
+            faction: save.faction.clone(),
+            ..Campaign::default()
+        }
+    });
+    campaign.completed = counts.into_iter().map(|(key, count)| Completion { key, count }).collect();
+    campaign.save = Some(link);
+    Ok(campaign)
 }
 
 #[cfg(test)]
@@ -349,5 +476,45 @@ mod tests {
             option: first.clone(),
         }];
         assert!(get_plan(&b, "en", &c).unwrap().unknown.iter().any(|k| k == "TITechTemplate:Gone"));
+    }
+
+    /// Imports the research notes' acceptance save when the developer's saves are present.
+    #[test]
+    fn import_local_save() {
+        let Some(b) = backend() else { return };
+        let Some(path) = std::env::var_os("HOME")
+            .map(|h| {
+                std::path::PathBuf::from(h)
+                    .join(".local/share/Steam/steamapps/compatdata/1176470/pfx/drive_c/users/steamuser/Documents/My Games/TerraInvicta/Saves/RE_ASIA_EU_1-3.gz")
+            })
+            .filter(|p| p.is_file())
+        else {
+            return;
+        };
+        let path = path.to_string_lossy();
+        let mut c = import_save(&b, "en", &path, None).unwrap();
+        assert_eq!((c.scenario.as_str(), c.faction.as_str()), ("2026Scenario", "ResistCouncil"));
+        let link = c.save.clone().unwrap();
+        assert_eq!(link.progress.len(), 8);
+        assert_eq!(link.available.len(), 113);
+        assert_eq!(c.completed.iter().filter(|x| x.key.starts_with(model::TECH)).count(), 58);
+
+        // the tech slot's points come off its cost
+        let fusion = "TITechTemplate:NuclearFusioninSpace";
+        c.goals = vec![fusion.into()];
+        let plan = get_plan(&b, "en", &c).unwrap();
+        let step = plan.steps.iter().find(|s| s.entity.key == fusion).unwrap();
+        assert!(step.active && (step.progress - 28349.14).abs() < 0.01);
+        assert!((step.cost - (50000.0 / link.research_speed - step.progress)).abs() < 0.01);
+        assert!(plan.status.values().any(|s| *s == PlanStatus::NotUnlocked));
+
+        // re-importing into the campaign keeps its goals; another faction's campaign is refused
+        let again = import_save(&b, "en", &path, Some(c.clone())).unwrap();
+        assert_eq!(again.goals, c.goals);
+        let other = Campaign {
+            faction: "HumanityFirstCouncil".into(),
+            ..c
+        };
+        assert!(import_save(&b, "en", &path, Some(other)).is_err());
     }
 }

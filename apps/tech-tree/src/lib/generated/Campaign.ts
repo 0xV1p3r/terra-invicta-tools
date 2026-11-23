@@ -2,6 +2,7 @@
 import type { Completion } from "./Completion";
 import type { EntityKey } from "./EntityKey";
 import type { PlanPick } from "./PlanPick";
+import type { SaveLink } from "./SaveLink";
 
 /**
  * A playthrough to plan for: what it has researched and what it aims for. Saved as
@@ -25,6 +26,10 @@ faction: string, completed: Array<Completion>,
  * Research to reach, in priority order.
  */
 goals: Array<EntityKey>, picks: Array<PlanPick>, 
+/**
+ * The game save the research state was imported from, if any.
+ */
+save: SaveLink | null, 
 /**
  * Last save, Unix seconds (set by the backend).
  */

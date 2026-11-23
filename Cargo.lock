@@ -4061,6 +4061,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ti-save"
+version = "0.1.0"
+dependencies = [
+ "flate2",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "ti-tech-tree"
 version = "0.1.0"
 dependencies = [
@@ -4075,6 +4085,7 @@ dependencies = [
  "thiserror 2.0.21",
  "ti-data",
  "ti-extract",
+ "ti-save",
  "ts-rs",
 ]
 

@@ -20,6 +20,7 @@ serde_json.workspace = true
 thiserror.workspace = true
 percent-encoding = "2"
 ti-data = { path = "../../../crates/ti-data" }
+ti-save = { path = "../../../crates/ti-save" }
 ti-extract = { path = "../../../crates/ti-extract" }
 tauri-plugin-dialog = "2"
 

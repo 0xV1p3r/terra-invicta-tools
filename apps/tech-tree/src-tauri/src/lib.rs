@@ -273,6 +273,18 @@ async fn plan_dependents_lost(state: State<'_, AppState>, campaign: Campaign, ke
     run_blocking(state, move |b| campaigns::plan_dependents_lost(b, &campaign, &key)).await
 }
 
+/// The game's save folder, if found (for the file picker).
+#[tauri::command]
+async fn default_save_dir() -> CmdResult<Option<String>> {
+    spawn(|| Ok(campaigns::default_save_dir())).await
+}
+
+/// The campaign as of a game save: `into` updated from it, or a new one. Not saved yet.
+#[tauri::command]
+async fn import_save(state: State<'_, AppState>, lang: String, path: String, into: Option<Campaign>) -> CmdResult<Campaign> {
+    run_blocking(state, move |b| campaigns::import_save(b, &lang, &path, into)).await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -322,7 +334,9 @@ pub fn run() {
             delete_campaign,
             get_plan,
             plan_up_to,
-            plan_dependents_lost
+            plan_dependents_lost,
+            default_save_dir,
+            import_save
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
