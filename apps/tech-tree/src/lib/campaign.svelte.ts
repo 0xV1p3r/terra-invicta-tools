@@ -103,10 +103,30 @@ class CampaignState {
 			completed: [],
 			goals: [],
 			picks: [],
+			save: null,
 			updated: 0
 		});
 		if (saved) this.activate(saved.id);
 		return saved;
+	}
+
+	/** A new campaign from the game save at `path` (activated). */
+	async importSave(path: string) {
+		const imported = await this.call(() => api.importSave(app.scope.lang, path));
+		const saved = imported && (await this.write(imported));
+		if (saved) this.activate(saved.id);
+		return saved;
+	}
+
+	/**
+	 * Replace the active campaign's research state with the save at `path` (default: the save
+	 * it was imported from); goals, choices and name stay.
+	 */
+	async updateFromSave(path = this.active?.save?.path) {
+		const c = this.snapshot();
+		if (!c || !path) return null;
+		const imported = await this.call(() => api.importSave(app.scope.lang, path, c));
+		return imported && this.write(imported);
 	}
 
 	async rename(id: string, name: string) {

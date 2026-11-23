@@ -39,6 +39,7 @@ export function statusLabels(
 	const out: string[] = [];
 	if (status === 'done') out.push(completions > 1 ? `Researched ×${completions}` : 'Researched');
 	else if (status === 'available') out.push('Can be researched now');
+	else if (status === 'notUnlocked') out.push('Prerequisites met, not unlocked in the save yet');
 	if (step !== undefined) out.push(`Plan step ${step + 1}`);
 	if (goal) out.push('Goal');
 	return out;

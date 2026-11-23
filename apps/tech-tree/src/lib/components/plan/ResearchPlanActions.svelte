@@ -13,6 +13,7 @@
 	import Target from '@lucide/svelte/icons/target';
 	import Undo2 from '@lucide/svelte/icons/undo-2';
 	import X from '@lucide/svelte/icons/x';
+	import Hourglass from '@lucide/svelte/icons/hourglass';
 	import type { Component } from 'svelte';
 	import type { EntityKey, EntityRef, PlanStatus } from '#lib/api.ts';
 	import { campaign } from '#lib/campaign.svelte.ts';
@@ -25,6 +26,11 @@
 	const STATUS: Record<PlanStatus, { label: string; icon: Component }> = {
 		done: { label: 'Researched', icon: CircleCheck },
 		available: { label: 'Available now', icon: Circle },
+		notUnlocked: {
+			label:
+				'Prerequisites met, but the save has not unlocked it yet (unlock roll or other condition)',
+			icon: Hourglass
+		},
 		locked: { label: 'Needs research not marked yet', icon: Lock },
 		unobtainable: { label: "Can't be researched in this scenario and faction", icon: Ban }
 	};

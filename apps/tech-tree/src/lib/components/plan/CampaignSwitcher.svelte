@@ -2,6 +2,8 @@
 	// Toolbar group of the research planner: the plan panel toggle and a menu to pick, create,
 	// rename and delete campaigns. Sits outermost left, on the plan panel's side.
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
+	import FileInput from '@lucide/svelte/icons/file-input';
+	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import CircleOff from '@lucide/svelte/icons/circle-off';
 	import PanelLeftClose from '@lucide/svelte/icons/panel-left-close';
 	import PanelLeftOpen from '@lucide/svelte/icons/panel-left-open';
@@ -9,7 +11,7 @@
 	import Plus from '@lucide/svelte/icons/plus';
 	import Route from '@lucide/svelte/icons/route';
 	import Trash2 from '@lucide/svelte/icons/trash-2';
-	import type { Campaign } from '#lib/api.ts';
+	import { api, type Campaign } from '#lib/api.ts';
 	import { campaign } from '#lib/campaign.svelte.ts';
 	import Pill, { pillIcon, pillItem } from '#lib/components/toolbar/Pill.svelte';
 	import Tip from '#lib/components/toolbar/Tip.svelte';
@@ -25,6 +27,13 @@
 	let deleting = $state.raw<Campaign | null>(null);
 
 	const label = $derived(campaign.active?.name ?? 'No campaign');
+
+	/** Pick a save file (starting in the game's save folder) and import it into a new campaign. */
+	async function importSave() {
+		const dir = await api.defaultSaveDir().catch(() => null);
+		const path = await api.pickSaveFile('Import a Terra Invicta save', dir ?? undefined);
+		if (path) await campaign.importSave(path);
+	}
 	const scopeLabel = (c: Campaign) =>
 		[
 			app.meta?.scenarios.find((s) => s.name === c.scenario)?.label ?? c.scenario,
@@ -93,8 +102,16 @@
 			<DropdownMenu.Item onSelect={() => (planUi.creating = true)}>
 				<Plus /> New campaign…
 			</DropdownMenu.Item>
+			<DropdownMenu.Item onSelect={importSave}>
+				<FileInput /> Import from save…
+			</DropdownMenu.Item>
 			{#if campaign.active}
 				{@const active = campaign.active}
+				{#if active.save}
+					<DropdownMenu.Item onSelect={() => campaign.updateFromSave()}>
+						<RefreshCw /> Update from save
+					</DropdownMenu.Item>
+				{/if}
 				<DropdownMenu.Item
 					onSelect={() => {
 						renaming = active;
