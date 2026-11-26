@@ -346,8 +346,7 @@
 					><Card.Content class="p-2">
 						{#if indexLoading}<Skeleton class="h-24 w-full" />{/if}
 						{#each groups as group (group)}
-							<Card.Description
-								class="px-2 pt-5 pb-2 text-[10px] font-semibold tracking-widest uppercase"
+							<Card.Description class="px-2 pt-5 pb-1.5 text-xs font-medium"
 								>{#if group === 'Spoilers'}<EyeOff
 										class="mr-1 inline size-3 text-warning"
 									/>{:else if group === 'Technical'}<Wrench

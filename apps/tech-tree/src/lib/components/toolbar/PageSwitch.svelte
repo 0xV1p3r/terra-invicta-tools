@@ -17,7 +17,7 @@
 			icon: Orbit
 		}
 	];
-	const toggle = `${pillToggle} w-[1.875rem] px-0 has-[>svg]:px-0`;
+	const toggle = `${pillToggle} w-[1.625rem] px-0 has-[>svg]:px-0`;
 </script>
 
 <ToggleGroup.Root

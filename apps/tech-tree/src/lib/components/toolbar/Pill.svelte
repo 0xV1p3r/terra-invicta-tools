@@ -1,22 +1,24 @@
 <script lang="ts" module>
-	/** A standalone toolbar control (button, select trigger): outlined, so it reads as a control. */
+	/**
+	 * A standalone toolbar control (button, select trigger): a faint fill, a translucent outline
+	 * and a hairline of light along the top, so it reads as a raised control.
+	 */
 	export const pillItem =
-		'h-8 rounded-md px-2.5 has-[>svg]:px-2 border border-input bg-input/30 shadow-xs hover:bg-input/60 hover:text-foreground';
+		'h-8 rounded-md px-2.5 has-[>svg]:px-2 border border-input bg-white/[0.035] font-medium shadow-[var(--highlight)] hover:bg-white/[0.07] hover:text-foreground';
 	/** Plain icon button for the utility cluster (search sits beside it in its own field). */
 	export const pillIcon = 'size-8 rounded-md text-muted-foreground hover:text-foreground';
 	/**
-	 * A set of toggles as one joined button group, the same height and outline as the selects. The
-	 * group clips its own corners and draws the dividers: each segment sits in a tooltip wrapper,
-	 * so per-item first/last rounding would round every segment. Goes on the ToggleGroup.Root.
+	 * A set of toggles as one recessed track, the same height as the selects; the active segment
+	 * is raised out of it. Goes on the ToggleGroup.Root.
 	 */
 	export const segmented =
-		'h-8 gap-0 overflow-hidden rounded-md border border-white/20 bg-background/40 shadow-xs divide-x divide-white/20';
+		'h-8 items-center gap-px rounded-lg border border-border bg-white/[0.035] p-0.5';
 	/**
-	 * A segment of a `segmented` group. On: a lighter fill with full-strength text; off: muted text.
-	 * aria-disabled segments look disabled but stay focusable, so their tooltip explains why.
+	 * A segment of a `segmented` group. On: raised, full-strength text; off: muted text on the
+	 * track. aria-disabled segments look disabled but stay focusable, so their tooltip explains why.
 	 */
 	export const pillToggle =
-		'h-[1.875rem] min-w-[1.875rem] rounded-none border-0 px-3 has-[>svg]:px-2.5 text-sm font-normal text-muted-foreground hover:bg-input/40 hover:text-foreground data-[state=on]:bg-white/10 data-[state=on]:font-medium data-[state=on]:text-foreground data-[state=on]:hover:bg-white/10 data-[state=on]:hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring focus-visible:ring-offset-0 aria-disabled:cursor-default aria-disabled:opacity-40 aria-disabled:hover:bg-transparent aria-disabled:hover:text-muted-foreground';
+		'h-[1.625rem] min-w-[1.625rem] rounded-md border-0 px-2.5 has-[>svg]:px-2 text-sm font-medium text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=on]:bg-raised data-[state=on]:text-foreground data-[state=on]:shadow-[inset_0_0_0_1px_rgb(255_255_255/0.08),0_1px_2px_rgb(0_0_0/0.3)] data-[state=on]:hover:bg-raised data-[state=on]:hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring focus-visible:ring-offset-0 aria-disabled:cursor-default aria-disabled:opacity-40 aria-disabled:hover:text-muted-foreground';
 </script>
 
 <script lang="ts">
