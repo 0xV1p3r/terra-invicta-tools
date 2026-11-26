@@ -23,7 +23,7 @@
 
 	{#each stats.groups as group (group.label)}
 		<section>
-			<h5 class="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+			<h5 class="mb-1 text-xs font-medium text-muted-foreground">
 				{group.label}
 			</h5>
 			<dl
@@ -31,10 +31,7 @@
 			>
 				{#each group.stats as stat (stat.field)}
 					{@const url = assetUrl(stat.icon)}
-					<div
-						class="min-w-0 rounded-md bg-muted/50 px-2 py-1.5"
-						title="{stat.label} · {stat.field}"
-					>
+					<div class="min-w-0 rounded-md border px-2 py-1.5" title="{stat.label} · {stat.field}">
 						<dt class="flex items-center gap-1 truncate text-xs text-muted-foreground">
 							{#if url}
 								<img
@@ -74,7 +71,7 @@
 
 	{#each stats.links as link (link.label)}
 		<div class="text-sm">
-			<h5 class="mb-0.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+			<h5 class="mb-0.5 text-xs font-medium text-muted-foreground">
 				{link.label}
 			</h5>
 			<div class="flex flex-wrap gap-x-1">

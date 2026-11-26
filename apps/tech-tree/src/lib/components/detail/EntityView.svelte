@@ -151,10 +151,10 @@
 
 {#snippet section(title: string, hint?: string)}
 	<Card.Content
-		class="mt-5 mb-2 flex items-baseline justify-between gap-2 px-0 text-xs font-semibold tracking-wider text-muted-foreground uppercase"
+		class="mt-5 mb-1.5 flex items-baseline justify-between gap-2 px-0 text-xs font-medium text-muted-foreground"
 	>
 		{title}
-		{#if hint}<span class="font-normal tracking-normal normal-case">{hint}</span>{/if}
+		{#if hint}<span class="font-normal text-faint">{hint}</span>{/if}
 	</Card.Content>
 {/snippet}
 
@@ -248,16 +248,16 @@
 					>{entity.name}</Card.Content
 				>
 				<Card.Content class="mt-2 flex flex-wrap gap-1 px-0">
-					<Badge>{KIND_LABELS[entity.kind] ?? entity.kind}</Badge>
+					<Badge variant="outline" class="text-muted-foreground"
+						>{KIND_LABELS[entity.kind] ?? entity.kind}</Badge
+					>
 					{#if inWiki}<Badge variant="outline">{wiki.label(entity.template)}</Badge>{/if}
 					{#if entity.subtype}
 						<Badge variant="secondary">{entity.subtype}</Badge>
 					{/if}
 					{#if category}
-						<Badge
-							variant="outline"
-							style="border-color: {category.cssVar}; color: {category.fgVar}"
-						>
+						<Badge variant="outline" class="gap-1.5 text-muted-foreground">
+							<span class="size-1.5 rounded-full" style="background: {category.cssVar}"></span>
 							{category.label}
 						</Badge>
 					{/if}
@@ -289,13 +289,13 @@
 
 		{#if ann?.variesByScenario && !app.scope.scenario}
 			<Card.Content
-				class="mt-3 flex w-fit items-center gap-1.5 rounded-md border border-warning-border/60 bg-warning-subtle py-0.5 pr-1 pl-2 text-xs font-medium text-warning"
+				class="mt-3 flex w-fit items-center gap-1.5 rounded-md border py-0.5 pr-1 pl-2 text-xs font-medium text-muted-foreground"
 			>
 				<Shuffle class="size-3.5 shrink-0" />
 				Varies by scenario
 				<Tooltip.Root>
 					<Tooltip.Trigger
-						class="grid size-6 place-items-center rounded-sm hover:bg-warning/10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background focus-visible:outline-none"
+						class="grid size-6 place-items-center rounded-sm hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background focus-visible:outline-none"
 						aria-label="Why this varies"
 					>
 						<Info class="size-3.5" />
@@ -321,7 +321,7 @@
 				><EffectItem line={detail.effect} /></Card.Content
 			>{/if}
 		{#if detail.summary}
-			<Card.Content class="mt-4 px-0 text-sm font-medium whitespace-pre-line"
+			<Card.Content class="mt-4 px-0 text-sm/relaxed whitespace-pre-line text-muted-foreground"
 				>{detail.summary}</Card.Content
 			>
 		{/if}
@@ -367,18 +367,24 @@
 			</Card.Content>
 		{/if}
 		{#if detail.researchCost != null || detail.totalCost != null}
-			<Card.Content class="mt-4 grid grid-cols-2 gap-2 px-0">
-				<Card.Content class="rounded-lg bg-muted/50 px-3 py-2">
+			<Card.Content class="mt-4 grid grid-cols-2 divide-x overflow-hidden rounded-lg border px-0">
+				<Card.Content class="px-3 py-2">
 					<Card.Content class="px-0 text-xs text-muted-foreground">Research cost</Card.Content>
-					<Card.Content class="px-0 font-semibold" title={formatCostFull(detail.researchCost)}>
+					<Card.Content
+						class="px-0 text-base font-semibold tracking-tight"
+						title={formatCostFull(detail.researchCost)}
+					>
 						{formatCost(detail.researchCost)}
 					</Card.Content>
 				</Card.Content>
-				<Card.Content class="rounded-lg bg-muted/50 px-3 py-2">
+				<Card.Content class="px-3 py-2">
 					<Card.Content class="px-0 text-xs text-muted-foreground"
 						>Total incl. requirements</Card.Content
 					>
-					<Card.Content class="px-0 font-semibold" title={formatCostFull(detail.totalCost)}>
+					<Card.Content
+						class="px-0 text-base font-semibold tracking-tight"
+						title={formatCostFull(detail.totalCost)}
+					>
 						{formatCost(detail.totalCost)}
 					</Card.Content>
 				</Card.Content>
@@ -503,7 +509,7 @@
 		{#if detail.quote || (detail.description && !detail.effect) || (!inWiki && imageUrl && !imageFailed)}
 			{#key entity.key}<Collapsible.Root class="mt-6" open={false}>
 					<Collapsible.Trigger
-						class="group flex items-center gap-1 rounded-sm py-1 text-xs font-semibold tracking-wider text-muted-foreground uppercase hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
+						class="group flex items-center gap-1 rounded-sm py-1 text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
 						><ChevronRight class="size-4 transition-transform group-data-[state=open]:rotate-90" /> Lore</Collapsible.Trigger
 					>
 					<Collapsible.Content class="flex flex-col gap-3 pt-3">
@@ -541,7 +547,7 @@
 		/>
 		{#key entity.key}<Collapsible.Root class="mt-6" open={false}>
 				<Collapsible.Trigger
-					class="group flex items-center gap-1 rounded-sm py-1 text-xs font-semibold tracking-wider text-muted-foreground uppercase hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
+					class="group flex items-center gap-1 rounded-sm py-1 text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
 					><ChevronRight class="size-4 transition-transform group-data-[state=open]:rotate-90" /> Technical
 					details</Collapsible.Trigger
 				>

@@ -25,8 +25,8 @@
 
 	const segment = `${pillToggle} focus-visible:outline-none`;
 	let techsButton = $state<HTMLButtonElement | null>(null);
-	/** Shown categories sit on a raised tile in full colour; hidden ones are dimmed and grey. */
-	const categoryToggle = `${pillToggle} group/category w-[1.875rem] px-0 has-[>svg]:px-0`;
+	/** Shown categories sit on a tile washed in their own colour; hidden ones are dimmed and grey. */
+	const categoryToggle = `${pillToggle} group/category w-[1.625rem] px-0 has-[>svg]:px-0 data-[state=on]:bg-[color-mix(in_oklab,var(--c)_14%,var(--raised))] data-[state=on]:hover:bg-[color-mix(in_oklab,var(--c)_14%,var(--raised))] data-[state=on]:shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--c)_32%,transparent)]`;
 
 	const componentId = $props.id();
 	const descriptionId = `${componentId}-filters-description`;
@@ -209,12 +209,13 @@
 						value={category}
 						aria-label={CATEGORIES[category].label}
 						class={categoryToggle}
+						style="--c: {CATEGORIES[category].cssVar}"
 						onpointerdown={(e: PointerEvent) => press(category, e)}
 						onkeydown={(e: KeyboardEvent) => press(category, e)}
 					>
 						<CategoryIcon
 							{category}
-							size={20}
+							size={18}
 							class={on
 								? 'transition'
 								: 'opacity-35 grayscale transition group-hover/category:opacity-80 group-hover/category:grayscale-0'}

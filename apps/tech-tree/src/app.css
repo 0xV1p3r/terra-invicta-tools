@@ -5,41 +5,51 @@
 @custom-variant dark (&:is(.dark *));
 
 /* Dark only. The `dark` class on <html> keeps shadcn's `dark:` variants active. */
-/* Codex palette: monochrome chrome so the eight research categories carry all the colour. */
+/*
+ * Codex palette, Linear finish: monochrome chrome so the eight research categories carry all
+ * the colour. Surfaces sit close together and separate by translucent hairlines, not contrast.
+ */
 :root {
 	color-scheme: dark;
-	--radius: 0.625rem;
-	--background: #101113; /* Graphite */
-	--foreground: #f3f3f4; /* Chalk */
-	--card: #191a1e; /* Slate */
-	--card-foreground: #f3f3f4;
-	--popover: #191a1e;
-	--popover-foreground: #f3f3f4;
-	--primary: #f3f3f4;
-	--primary-foreground: #101113;
-	--secondary: #2b2d33; /* Seam */
-	--secondary-foreground: #f3f3f4;
-	--muted: #2b2d33;
-	--muted-foreground: #8e919a; /* Pewter */
-	--accent: #2b2d33;
-	--accent-foreground: #f3f3f4;
+	--radius: 0.5rem;
+	--background: #0b0c0e; /* Canvas */
+	--foreground: #f7f8f8;
+	--card: #111215; /* Chrome: toolbar, panels, tree cards */
+	--card-foreground: #f7f8f8;
+	--popover: #17181b;
+	--popover-foreground: #f7f8f8;
+	--primary: #e6e6e8;
+	--primary-foreground: #0b0c0e;
+	--secondary: #1e1f23;
+	--secondary-foreground: #f7f8f8;
+	--muted: #1e1f23;
+	--muted-foreground: #8a8f98;
+	/* Third text level: hints, counts, units. */
+	--faint: #62666d;
+	--accent: #1e1f23;
+	--accent-foreground: #f7f8f8;
 	--destructive: oklch(0.704 0.191 22.216);
-	--border: #2b2d33;
-	--input: #3a3c43;
-	--ring: #8e919a;
+	/* Translucent, so one hairline works on every surface. */
+	--border: rgb(255 255 255 / 0.075);
+	--input: rgb(255 255 255 / 0.11);
+	--ring: #8a8f98;
+	/* Faint light along the top edge of raised controls. */
+	--highlight: inset 0 1px 0 rgb(255 255 255 / 0.04);
+	/* The active segment of a toggle group, raised out of its track. */
+	--raised: #24262b;
 	--chart-1: oklch(0.488 0.243 264.376);
 	--chart-2: oklch(0.696 0.17 162.48);
 	--chart-3: oklch(0.769 0.188 70.08);
 	--chart-4: oklch(0.627 0.265 303.9);
 	--chart-5: oklch(0.645 0.246 16.439);
-	--sidebar: #191a1e;
-	--sidebar-foreground: #f3f3f4;
-	--sidebar-primary: #f3f3f4;
-	--sidebar-primary-foreground: #101113;
-	--sidebar-accent: #2b2d33;
-	--sidebar-accent-foreground: #f3f3f4;
-	--sidebar-border: #2b2d33;
-	--sidebar-ring: #8e919a;
+	--sidebar: #111215;
+	--sidebar-foreground: #f7f8f8;
+	--sidebar-primary: #e6e6e8;
+	--sidebar-primary-foreground: #0b0c0e;
+	--sidebar-accent: #1e1f23;
+	--sidebar-accent-foreground: #f7f8f8;
+	--sidebar-border: rgb(255 255 255 / 0.075);
+	--sidebar-ring: #8a8f98;
 
 	--category-energy: #ff6c00;
 	--category-information: #e75a73;
@@ -72,10 +82,16 @@
 	--warning-border: #b45309;
 
 	/* Backdrop for the game's white icon sprites. */
-	--icon-bg: #2b2d33;
+	--icon-bg: #1e1f23;
 }
 
 @theme inline {
+	--font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+	/* Linear's 13px UI text. */
+	--text-sm: 0.8125rem;
+	--text-sm--line-height: 1.25rem;
+	--color-faint: var(--faint);
+	--color-raised: var(--raised);
 	--radius-sm: calc(var(--radius) - 4px);
 	--radius-md: calc(var(--radius) - 2px);
 	--radius-lg: var(--radius);
@@ -148,7 +164,9 @@
 	}
 
 	body {
-		@apply bg-background text-foreground;
+		@apply bg-background text-foreground antialiased;
+		/* Inter's alternate 1 and round quotes, as Linear sets it. */
+		font-feature-settings: 'cv01', 'ss03';
 	}
 }
 

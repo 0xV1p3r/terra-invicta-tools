@@ -32,7 +32,7 @@
 				<Button
 					variant="link"
 					type="button"
-					class="h-auto px-0 py-0.5 text-left leading-snug font-medium break-words text-link underline-offset-2 hover:underline"
+					class="h-auto px-0 py-0.5 text-left leading-snug font-medium break-words text-foreground underline-offset-2 hover:underline"
 					title="Open {entity.name}"
 					onclick={() => navigate(entity)}
 				>

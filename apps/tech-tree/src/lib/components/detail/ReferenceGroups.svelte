@@ -41,7 +41,8 @@
 {#if displayGroups.length}
 	<Card.Root class="mt-5 gap-2 border-0 bg-transparent py-0 shadow-none ring-0">
 		<Card.Header class="px-0"
-			><Card.Title class="text-xs text-muted-foreground uppercase">{title}</Card.Title></Card.Header
+			><Card.Title class="text-xs font-medium text-muted-foreground">{title}</Card.Title
+			></Card.Header
 		>
 		{#each displayGroups as group, i (`${i}:${group.template}:${group.field}`)}
 			<Card.Content class="px-0"

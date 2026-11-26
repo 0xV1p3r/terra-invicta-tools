@@ -171,9 +171,7 @@
 			<Collapsible.Content>
 				<div class="grid gap-4 pt-2 pb-2 text-sm">
 					<div class="grid gap-2">
-						<h3 class="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-							Types
-						</h3>
+						<h3 class="text-xs font-medium text-muted-foreground">Types</h3>
 						<div class="grid grid-cols-2 gap-x-3 gap-y-2">
 							{#each ITEM_TYPES as type (type)}
 								<Label class="flex items-center gap-2 font-normal">
@@ -194,9 +192,7 @@
 						<Switch id="map-hab-sites" bind:checked={mapState.habSitesOnly} />
 					</div>
 					<div class="grid gap-2">
-						<h3 class="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-							Minimum resources
-						</h3>
+						<h3 class="text-xs font-medium text-muted-foreground">Minimum resources</h3>
 						{#each RESOURCES as res (res)}
 							<div class="flex items-center justify-between gap-4">
 								<span class="capitalize">{res}</span>
@@ -246,9 +242,7 @@
 			{#each groups as group (group.center.key)}
 				<section class="pt-2" aria-label="{group.center.info.entity.name} system">
 					<div class="flex items-center justify-between gap-2 px-3 py-1">
-						<h3
-							class="truncate text-xs font-semibold tracking-wider text-muted-foreground uppercase"
-						>
+						<h3 class="truncate text-xs font-medium text-muted-foreground">
 							{group.center.info.entity.name} system
 						</h3>
 						{#if group.center.key !== (app.mapSystem ?? mapState.index?.root?.key)}

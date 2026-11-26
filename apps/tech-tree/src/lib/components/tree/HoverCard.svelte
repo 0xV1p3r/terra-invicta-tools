@@ -96,11 +96,9 @@
 </script>
 
 {#snippet section(title: string, hint?: string)}
-	<div
-		class="flex items-baseline justify-between gap-2 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase"
-	>
+	<div class="flex items-baseline justify-between gap-2 text-xs font-medium text-muted-foreground">
 		{title}
-		{#if hint}<span class="font-normal tracking-normal normal-case">{hint}</span>{/if}
+		{#if hint}<span class="font-normal text-faint">{hint}</span>{/if}
 	</div>
 {/snippet}
 

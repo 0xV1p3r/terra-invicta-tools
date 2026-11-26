@@ -25,6 +25,10 @@ export interface Theme {
 	secondary: string;
 	secondaryForeground: string;
 	destructive: string;
+	/** Backdrop of the category icon tiles. */
+	iconBg: string;
+	/** Third text level (kinds). */
+	faint: string;
 	/** Category colors for small marks and text. */
 	categories: Partial<Record<TechCategory, string>>;
 	font: string;
@@ -44,6 +48,8 @@ export function readTheme(el: Element): Theme {
 		secondary: v('--secondary'),
 		secondaryForeground: v('--secondary-foreground'),
 		destructive: v('--destructive'),
+		iconBg: v('--icon-bg'),
+		faint: v('--faint') || v('--muted-foreground'),
 		categories: Object.fromEntries(
 			Object.entries(CATEGORIES).map(([key, info]) => {
 				const name = info.cssVar.slice(4, -1); // var(--category-x) → --category-x
@@ -100,7 +106,7 @@ const LANDMARK_LINE = 14;
 /** Landmark candidates tried per frame, so dense views don't scan the whole ranking. */
 const LANDMARK_TRIES = 240;
 /**
- * Opacity of the fill, border and category bar of cards outside the selection's lineage
+ * Opacity of the fill, tint and border of cards outside the selection's lineage
  * or the filter matches. Their text switches to the muted color instead of fading, so it
  * stays legible.
  */
@@ -109,12 +115,21 @@ const DIM = 0.45;
 const DIM_BORDER = 1;
 /** Opacity of their icon and badge fills (badge text stays opaque). */
 const DIM_CONTENT = 0.6;
-/** Opacity of the category tint over filter matches' fill. */
-const MATCH_TINT = 0.16;
+/** Opacity of the category tint over filter matches' fill (on top of the card's own tint). */
+const MATCH_TINT = 0.12;
+/**
+ * Opacity of the category tint over every card's fill, by zoom: a faint wash up close, stronger
+ * as cards shrink, so the category still reads from afar.
+ */
+const tintAt = (z: number, detail: boolean) => (detail ? 0.08 : z >= NAME_ZOOM ? 0.16 : 0.26);
+/** Opacity of the category border, likewise. */
+const tintBorderAt = (detail: boolean) => (detail ? 0.26 : 0.4);
+/** Opacity of the category tint over the icon tile. */
+const ICON_TINT = 0.16;
 /** Width (screen px) of the category ring around filter matches. */
 const MATCH_RING = 2.5;
 
-const RADIUS = 14;
+const RADIUS = 12;
 const BIG_FONT_PX = 26;
 
 /** Recent lineages per scene (the selection's and the hovered node's). */
@@ -235,8 +250,7 @@ export function render(
 	}
 	ctx.globalAlpha = 1;
 
-	// --- card bodies, borders and category bars (batched per style) -----------
-	const bar = detail ? 4 : 12;
+	// --- card bodies with their category tint and border (batched per style) ---
 	for (const dashed of [false, true]) {
 		for (const outside of [false, true]) {
 			const group = visible.filter(
@@ -270,31 +284,38 @@ export function render(
 			}
 			ctx.fillStyle = theme.card;
 			ctx.fill(body);
-			if (z > 0.12) {
-				if (outside) ctx.globalAlpha = DIM_BORDER;
-				ctx.strokeStyle = dashed && !outside ? theme.muted : theme.border;
-				ctx.lineWidth = px;
-				ctx.setLineDash(dashed ? [6 * px, 4 * px] : []);
-				ctx.stroke(body);
-				ctx.setLineDash([]);
-				if (outside) ctx.globalAlpha = DIM;
-			}
-			// Bars are narrower than the corner radius, so draw them as plain rects clipped to
-			// the card shapes (a rounded bar can't follow the card's corners and sticks out).
-			const bars = new Map<string, Path2D>();
+			// Each card washed in its category colour, with a border of the same hue.
+			const tinted = new Map<string, Path2D>();
 			for (const n of group) {
 				const color = accent(theme, n);
-				let p = bars.get(color);
-				if (!p) bars.set(color, (p = new Path2D()));
-				p.rect(n.x, n.y, bar, h);
+				let p = tinted.get(color);
+				if (!p) tinted.set(color, (p = new Path2D()));
+				p.roundRect(n.x, n.y, w, h, RADIUS);
 			}
-			ctx.save();
-			ctx.clip(body);
-			for (const [color, p] of bars) {
+			const base = outside ? DIM : 1;
+			ctx.globalAlpha = base * tintAt(z, detail);
+			for (const [color, p] of tinted) {
 				ctx.fillStyle = color;
 				ctx.fill(p);
 			}
-			ctx.restore();
+			if (z > 0.12) {
+				ctx.lineWidth = px;
+				if (dashed) {
+					// Unobtainable: a dashed neutral border instead.
+					ctx.globalAlpha = outside ? DIM_BORDER : 1;
+					ctx.strokeStyle = outside ? theme.border : theme.muted;
+					ctx.setLineDash([6 * px, 4 * px]);
+					ctx.stroke(body);
+					ctx.setLineDash([]);
+				} else {
+					ctx.globalAlpha = (outside ? 0.6 : 1) * tintBorderAt(detail);
+					for (const [color, p] of tinted) {
+						ctx.strokeStyle = color;
+						ctx.stroke(p);
+					}
+				}
+			}
+			ctx.globalAlpha = base;
 			if (matches && !outside) {
 				// Filter matches: tinted in their category color so they read at any zoom.
 				const tints = new Map<string, Path2D>();
@@ -322,13 +343,13 @@ export function render(
 	} else if (z >= NAME_ZOOM && !overview) {
 		ctx.font = `600 ${BIG_FONT_PX}px ${theme.font}`;
 		ctx.textBaseline = 'middle';
-		const maxWidth = w - bar - 24;
+		const maxWidth = w - 32;
 		const lineHeight = BIG_FONT_PX * 1.15;
 		for (const n of visible) {
 			ctx.fillStyle = secondary(n) ? theme.muted : theme.cardForeground;
 			const lines = wrap(ctx, n, maxWidth, 2);
 			const top = n.y + h / 2 - ((lines.length - 1) * lineHeight) / 2;
-			lines.forEach((line, i) => ctx.fillText(line, n.x + bar + 12, top + i * lineHeight));
+			lines.forEach((line, i) => ctx.fillText(line, n.x + 16, top + i * lineHeight));
 		}
 	}
 	ctx.globalAlpha = 1;
@@ -676,46 +697,44 @@ function drawDetail(
 	const h = scene.height;
 	const text = secondary ? theme.muted : theme.cardForeground;
 	const marks = faded ? DIM_CONTENT : 1;
-	const icon = state.icons[n.item.category];
-	const iconX = n.x + 4 + 12;
+	// Icon on a tile washed in the category colour.
+	const tile = 48;
+	const tileX = n.x + 18;
+	const tileY = n.y + (h - tile) / 2;
 	ctx.globalAlpha = marks;
-	if (icon?.complete && icon.naturalWidth) ctx.drawImage(icon, iconX, n.y + h / 2 - 18, 36, 36);
+	ctx.beginPath();
+	ctx.roundRect(tileX, tileY, tile, tile, 10);
+	ctx.fillStyle = theme.iconBg;
+	ctx.fill();
+	ctx.globalAlpha = marks * ICON_TINT;
+	ctx.fillStyle = accent(theme, n);
+	ctx.fill();
+	ctx.globalAlpha = marks;
+	const icon = state.icons[n.item.category];
+	if (icon?.complete && icon.naturalWidth)
+		ctx.drawImage(icon, tileX + 6, tileY + 6, tile - 12, tile - 12);
 	ctx.globalAlpha = 1;
 
-	const textX = iconX + 36 + 12;
-	const maxWidth = n.x + scene.width - 12 - textX;
+	const textX = tileX + tile + 14;
+	const maxWidth = n.x + scene.width - 16 - textX;
 	const top = n.y + (h - 44) / 2;
-	ctx.font = `500 14px ${theme.font}`;
+	ctx.font = `500 16px ${theme.font}`;
 	ctx.textBaseline = 'middle';
 	ctx.fillStyle = text;
-	ctx.fillText(ellipsize(ctx, n, maxWidth), textX, top + 9);
+	ctx.fillText(ellipsize(ctx, n, maxWidth), textX, top + 10);
 
-	// Badges (h-5 = 20px), as shadcn's secondary/outline Badge.
-	ctx.font = `500 12px ${theme.font}`;
+	// Cost and kind as one quiet line, no pills. Both carry meaning, so they stay opaque.
+	ctx.font = `400 14px ${theme.font}`;
 	let bx = textX;
 	const by = top + 24;
-	const badge = (label: string, filled: boolean) => {
-		const width = ctx.measureText(label).width + 16;
-		ctx.beginPath();
-		ctx.roundRect(bx, by, width, 20, 10);
-		ctx.globalAlpha = marks;
-		if (filled) {
-			ctx.fillStyle = theme.secondary;
-			ctx.fill();
-		} else {
-			ctx.strokeStyle = theme.border;
-			ctx.lineWidth = 1;
-			ctx.stroke();
-		}
-		// The label carries meaning, so it stays opaque: the secondary foreground on fills
-		// (muted text falls just under 4.5:1 on the light secondary fill), muted on outlines.
-		ctx.globalAlpha = 1;
-		ctx.fillStyle = filled ? theme.secondaryForeground : text;
-		ctx.fillText(label, bx + 8, by + 10.5);
-		bx += width + 4;
+	const meta = (label: string, color: string) => {
+		ctx.fillStyle = color;
+		ctx.fillText(label, bx, by + 10.5);
+		bx += ctx.measureText(label).width + 8;
 	};
-	badge(n.cost, true);
-	badge(n.kind, false);
+	meta(n.cost, theme.muted);
+	meta(n.kind, theme.faint);
+	bx += 2;
 
 	// Flag glyphs: 14px lucide icons in 20px boxes; what doesn't fit becomes "+N".
 	ctx.lineWidth = 2;
@@ -726,7 +745,7 @@ function drawDetail(
 		const rest = n.flags.length - i;
 		if (bx + 20 > right || (rest > 1 && bx + 44 > right)) {
 			ctx.fillStyle = theme.muted;
-			ctx.fillText(`+${rest}`, bx + 2, by + 10.5);
+			ctx.fillText(`+${rest}`, bx, by + 10.5);
 			break;
 		}
 		const glyph = state.glyphs.get(f.key);
