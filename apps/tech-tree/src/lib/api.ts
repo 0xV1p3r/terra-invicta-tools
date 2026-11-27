@@ -204,6 +204,9 @@ const tauriApi = {
 	deleteCampaign: (id: string) => invoke<void>('delete_campaign', { id }),
 	/** Status of every tech/project and the goals' plan, in the campaign's scenario and faction. */
 	getPlan: (lang: string, campaign: Campaign) => invoke<PlanResult>('get_plan', { lang, campaign }),
+	/** The plan's path (the research still needed for the goals) laid out as a tree. */
+	getPlanGraph: (lang: string, campaign: Campaign, mergeEdges = true) =>
+		invoke<TreeGraph>('get_plan_graph', { lang, campaign, mergeEdges }),
 	/** Keys to mark completed for "researched up to here" (`key` last). */
 	planUpTo: (campaign: Campaign, key: EntityKey) =>
 		invoke<EntityKey[]>('plan_up_to', { campaign, key }),
@@ -472,6 +475,8 @@ const mockApi: typeof tauriApi = {
 	},
 	deleteCampaign: async (id) => storeMockCampaigns(mockCampaigns().filter((c) => c.id !== id)),
 	getPlan: async (_lang, campaign) => mockPlan(await fixture<TreeGraph>('tree'), campaign),
+	getPlanGraph: async (_lang, campaign) =>
+		mockPlanGraph(await fixture<TreeGraph>('tree'), campaign),
 	planUpTo: async (campaign, key) => {
 		const graph = await fixture<TreeGraph>('tree');
 		const done = new Set(campaign.completed.map((c) => c.key));
@@ -604,6 +609,39 @@ function mockPlan(graph: TreeGraph, campaign: Campaign): PlanResult {
 		unknown: [...campaign.completed.map((c) => c.key), ...campaign.goals].filter(
 			(k) => !byKey.has(k)
 		)
+	};
+}
+
+/** The plan's steps in columns by prerequisite depth (direct edges, no routing). */
+function mockPlanGraph(graph: TreeGraph, campaign: Campaign): TreeGraph {
+	const plan = mockPlan(graph, campaign);
+	const keys = new Set(plan.steps.map((s) => s.entity.key));
+	const edges = graph.edges
+		.filter((e) => keys.has(e.from) && keys.has(e.to))
+		.map((e) => ({ ...e, redundant: false, points: [] }));
+	const depth = new Map<EntityKey, number>();
+	// Steps come prerequisites first, so each one's depth is known when it is reached.
+	for (const s of plan.steps) {
+		const parents = edges.filter((e) => e.to === s.entity.key).map((e) => depth.get(e.from) ?? 0);
+		depth.set(s.entity.key, parents.length ? Math.max(...parents) + 1 : 0);
+	}
+	const rows = new Map<number, number>();
+	const nodes = graph.nodes
+		.filter((n) => keys.has(n.key))
+		.map((n) => {
+			const column = depth.get(n.key) ?? 0;
+			const row = rows.get(column) ?? 0;
+			rows.set(column, row + 1);
+			return { ...n, column, x: column * graph.nodeWidth * 1.6, y: row * graph.nodeHeight * 1.5 };
+		});
+	return {
+		...graph,
+		nodes,
+		edges,
+		root: null,
+		bands: [],
+		anyOf: [],
+		totalCost: plan.steps.reduce((sum, s) => sum + s.cost, 0)
 	};
 }
 

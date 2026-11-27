@@ -1,23 +1,24 @@
 <script lang="ts">
-	// Toolbar group of the research planner: the plan panel toggle and a menu to pick, create,
-	// rename and delete campaigns. Sits outermost left, on the plan panel's side.
+	// Toolbar groups of the plan page: the campaign menu (pick, create, import, rename, delete),
+	// "Update from save" for imported campaigns, and the "Completed" filter of the full tree.
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
+	import CircleCheck from '@lucide/svelte/icons/circle-check';
 	import FileInput from '@lucide/svelte/icons/file-input';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import CircleOff from '@lucide/svelte/icons/circle-off';
-	import PanelLeftClose from '@lucide/svelte/icons/panel-left-close';
-	import PanelLeftOpen from '@lucide/svelte/icons/panel-left-open';
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Route from '@lucide/svelte/icons/route';
 	import Trash2 from '@lucide/svelte/icons/trash-2';
-	import { api, type Campaign } from '#lib/api.ts';
+	import type { Campaign } from '#lib/api.ts';
 	import { campaign } from '#lib/campaign.svelte.ts';
-	import Pill, { pillIcon, pillItem } from '#lib/components/toolbar/Pill.svelte';
+	import Pill, { pillItem, pillToggle, segmented } from '#lib/components/toolbar/Pill.svelte';
 	import Tip from '#lib/components/toolbar/Tip.svelte';
 	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	import * as ToggleGroup from '#lib/components/ui/toggle-group/index.js';
+	import { settings } from '#lib/settings.svelte.ts';
 	import { app } from '#lib/state.svelte.ts';
 	import CampaignDialog from './CampaignDialog.svelte';
 	import { planUi } from './plan-ui.svelte.ts';
@@ -25,35 +26,34 @@
 	let renameOpen = $state(false);
 	let renaming = $state.raw<Campaign | null>(null);
 	let deleting = $state.raw<Campaign | null>(null);
+	let updating = $state(false);
 
 	const label = $derived(campaign.active?.name ?? 'No campaign');
-
-	/** Pick a save file (starting in the game's save folder) and import it into a new campaign. */
-	async function importSave() {
-		const dir = await api.defaultSaveDir().catch(() => null);
-		const path = await api.pickSaveFile('Import a Terra Invicta save', dir ?? undefined);
-		if (path) await campaign.importSave(path);
-	}
 	const scopeLabel = (c: Campaign) =>
 		[
 			app.meta?.scenarios.find((s) => s.name === c.scenario)?.label ?? c.scenario,
 			app.meta?.factions.find((f) => f.name === c.faction)?.label ?? c.faction
 		].join(' · ');
+	const fileName = (path: string) => path.split(/[\\/]/).pop() ?? path;
+
+	async function updateFromSave() {
+		updating = true;
+		try {
+			await campaign.updateFromSave();
+		} finally {
+			updating = false;
+		}
+	}
+
+	/** Completed research of the active campaign: shown, or hidden/dimmed per the filter mode. */
+	const completedTip = $derived(
+		settings.showCompleted
+			? `Completed research shown — click to ${settings.filterMode === 'hide' ? 'hide' : 'dim'} it`
+			: `Completed research ${settings.filterMode === 'hide' ? 'hidden' : 'dimmed'} — click to show`
+	);
 </script>
 
-<Pill aria-label="Research plan">
-	<Tip text={planUi.panelOpen ? 'Hide plan panel' : 'Show plan panel'}>
-		<Button
-			variant="ghost"
-			size="icon"
-			class={pillIcon}
-			aria-label="Plan panel"
-			aria-pressed={planUi.panelOpen}
-			onclick={() => planUi.togglePanel()}
-		>
-			{#if planUi.panelOpen}<PanelLeftClose />{:else}<PanelLeftOpen />{/if}
-		</Button>
-	</Tip>
+<Pill aria-label="Campaign">
 	<DropdownMenu.Root>
 		<Tip
 			text={campaign.active
@@ -66,13 +66,19 @@
 						{...props}
 						variant="ghost"
 						size="sm"
-						class="{pillItem} w-44 justify-between gap-2 pr-2 font-normal {campaign.active
+						class="{pillItem} w-64 justify-between gap-2 pr-2 font-normal {campaign.active
 							? ''
 							: 'text-muted-foreground'}"
 						aria-label="Campaign: {label}"
 					>
 						<span class="flex min-w-0 items-center gap-1.5"
-							><Route class="shrink-0" /><span class="truncate">{label}</span></span
+							><Route class="shrink-0" /><span class="truncate"
+								><span class="font-medium">{label}</span>{#if campaign.active}<span
+										class="text-muted-foreground"
+									>
+										{` · ${scopeLabel(campaign.active)}`}</span
+									>{/if}</span
+							></span
 						>
 						<ChevronDown class="shrink-0 opacity-50" />
 					</Button>
@@ -102,16 +108,11 @@
 			<DropdownMenu.Item onSelect={() => (planUi.creating = true)}>
 				<Plus /> New campaign…
 			</DropdownMenu.Item>
-			<DropdownMenu.Item onSelect={importSave}>
+			<DropdownMenu.Item onSelect={() => campaign.importSaveFile()}>
 				<FileInput /> Import from save…
 			</DropdownMenu.Item>
 			{#if campaign.active}
 				{@const active = campaign.active}
-				{#if active.save}
-					<DropdownMenu.Item onSelect={() => campaign.updateFromSave()}>
-						<RefreshCw /> Update from save
-					</DropdownMenu.Item>
-				{/if}
 				<DropdownMenu.Item
 					onSelect={() => {
 						renaming = active;
@@ -125,12 +126,55 @@
 				</DropdownMenu.Item>
 				<DropdownMenu.Separator />
 				<DropdownMenu.Item onSelect={() => campaign.activate(null)}>
-					<CircleOff /> Stop planning
+					<CircleOff /> Close campaign
 				</DropdownMenu.Item>
 			{/if}
 		</DropdownMenu.Content>
 	</DropdownMenu.Root>
+	{#if campaign.active?.save}
+		{@const save = campaign.active.save}
+		<Tip
+			text="Update from save: reload completed research from {fileName(
+				save.path
+			)} (saved {save.gameDate})"
+		>
+			<Button
+				variant="ghost"
+				size="sm"
+				class="{pillItem} gap-1.5 font-normal"
+				disabled={updating}
+				onclick={updateFromSave}
+			>
+				<RefreshCw class={updating ? 'animate-spin' : ''} /> Update from save
+			</Button>
+		</Tip>
+	{/if}
 </Pill>
+
+{#if campaign.active && app.planView === 'full'}
+	<Pill aria-label="Campaign progress">
+		<ToggleGroup.Root
+			type="multiple"
+			size="sm"
+			class={segmented}
+			bind:value={
+				() => (settings.showCompleted ? ['completed'] : []),
+				(value: string[]) => (settings.showCompleted = value.includes('completed'))
+			}
+			aria-label="Campaign progress"
+		>
+			<Tip text={completedTip}>
+				<ToggleGroup.Item
+					value="completed"
+					aria-label="Show completed research"
+					class="{pillToggle} focus-visible:outline-none"
+				>
+					<CircleCheck /> Completed
+				</ToggleGroup.Item>
+			</Tip>
+		</ToggleGroup.Root>
+	</Pill>
+{/if}
 
 <CampaignDialog bind:open={planUi.creating} />
 <CampaignDialog bind:open={renameOpen} {renaming} />

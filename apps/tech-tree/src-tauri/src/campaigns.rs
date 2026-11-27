@@ -8,7 +8,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use ti_data::{EntityId, Picks, Planner, Progress, Status, View, model};
 
-use crate::dto::{Campaign, Completion, PlanChoice, PlanResult, PlanStatus, PlanStep, SaveLink, SaveProgress, ScopeArgs};
+use crate::commands::{GraphLayout, build_graph};
+use crate::dto::{Campaign, Completion, PlanChoice, PlanResult, PlanStatus, PlanStep, SaveLink, SaveProgress, ScopeArgs, TreeGraph};
 use crate::error::{CmdError, CmdResult};
 use crate::refs::{self, entity_ref};
 use crate::scope;
@@ -270,6 +271,28 @@ pub fn get_plan(b: &Backend, lang: &str, campaign: &Campaign) -> CmdResult<PlanR
     })
 }
 
+/// The plan's path as a tree of its own: the research still needed for the goals (the plan's
+/// steps) and the requirements between them, laid out left to right. `total_cost` is the
+/// plan's remaining cost.
+pub fn get_plan_graph(b: &Backend, lang: &str, campaign: &Campaign, merge_edges: bool) -> CmdResult<TreeGraph> {
+    let texts = b.texts(lang)?;
+    let view = b.ds.view(scope::resolve(&b.ds, &campaign_scope(campaign, lang))?);
+    let r = resolve(&view, campaign);
+    let planner = Planner::new(&view, &r.progress);
+    let plan = planner.plan(&r.goals, &r.picks);
+    let nodes: BTreeSet<EntityId> = plan.steps.iter().copied().collect();
+    let edges: BTreeSet<_> = view
+        .research_graph()
+        .full()
+        .edges
+        .into_iter()
+        .filter(|e| nodes.contains(&e.from) && nodes.contains(&e.to))
+        .collect();
+    let mut tree = build_graph(&view, &texts, &nodes, &edges, None, GraphLayout { bands: false, merge_edges }, false);
+    tree.total_cost = plan.steps.iter().map(|&id| planner.cost(id)).sum();
+    Ok(tree)
+}
+
 /// Keys to mark completed for "researched up to here": `key` and what it still needs.
 pub fn plan_up_to(b: &Backend, campaign: &Campaign, key: &str) -> CmdResult<Vec<String>> {
     let view = b.ds.view(scope::resolve(&b.ds, &campaign_scope(campaign, "en"))?);
@@ -459,6 +482,18 @@ mod tests {
         assert!(plan.steps.last().unwrap().goal);
         assert!(!plan.next.is_empty());
         assert!(plan.tech_cost > 0.0);
+
+        // the path holds exactly the plan's steps, linked by their requirements
+        let path = get_plan_graph(&b, "en", &c, true).unwrap();
+        let mut path_keys: Vec<&str> = path.nodes.iter().map(|n| n.key.as_str()).collect();
+        let mut step_keys = keys.clone();
+        path_keys.sort_unstable();
+        step_keys.sort_unstable();
+        assert_eq!(path_keys, step_keys);
+        assert!(!path.edges.is_empty());
+        assert!(path.edges.iter().all(|e| keys.contains(&e.from.as_str()) && keys.contains(&e.to.as_str())));
+        let goal_node = path.nodes.iter().find(|n| n.key == goal).unwrap();
+        assert!(path.nodes.iter().all(|n| n.column <= goal_node.column));
 
         // marking everything up to the goal empties the plan
         c.completed = up_to.iter().map(|k| Completion { key: k.clone(), count: 1 }).collect();

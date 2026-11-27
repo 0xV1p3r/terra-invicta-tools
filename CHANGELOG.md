@@ -4,7 +4,7 @@
 
 ### Added
 
-- **Research planner**: create a campaign for a scenario and faction, mark what you have researched (right-click a card, or use the detail panel) and pick goals. The plan panel lists the missing research in an order you can research it, what to research next, the research points still needed and the "any of" requirements it chose (you can switch them). The tree shows completed research, research you can start now, plan step numbers and goals, and can hide or dim completed research.
+- **Research planner**: a Plan page next to the tech tree and the solar system map. Create a campaign for a scenario and faction, mark what you have researched (right-click a card, or use the details panel) and pick goals. The plan panel lists the missing research in an order you can research it, what to research next, the research points still needed and the "any of" requirements it chose (you can switch them). The page shows either the path to your goals on its own or the full tree with the campaign's progress: completed research, research you can start now, plan step numbers and goals. The full tree can hide or dim completed research. The tech tree page keeps its own scenario and faction and shows no campaign.
 - **Import from a save**: start a campaign from a Terra Invicta save, or update one from it. The import marks the research you have completed, counts research points already put in, uses the campaign's research speed for costs, and marks projects whose prerequisites are met but that the game has not unlocked yet. Saves are only read, never changed.
 
 ## [0.1.0] - 2026-11-16

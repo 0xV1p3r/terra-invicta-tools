@@ -1,8 +1,10 @@
 <script lang="ts">
-	// Switches between the research tree and the solar system map (icon toggles in the view pill).
+	// Switches between the research tree, the research plan and the solar system map (icon toggles
+	// in the view pill).
 	import type { Component } from 'svelte';
 	import Network from '@lucide/svelte/icons/network';
 	import Orbit from '@lucide/svelte/icons/orbit';
+	import Route from '@lucide/svelte/icons/route';
 	import * as ToggleGroup from '#lib/components/ui/toggle-group/index.js';
 	import { app, type Page } from '#lib/state.svelte.ts';
 	import { pillToggle, segmented } from './Pill.svelte';
@@ -10,6 +12,12 @@
 
 	const PAGES: { value: Page; label: string; title: string; icon: Component }[] = [
 		{ value: 'tree', label: 'Tech tree', title: 'Tech tree: techs and projects', icon: Network },
+		{
+			value: 'plan',
+			label: 'Research plan',
+			title: 'Research plan: goals and the research they need, for a campaign',
+			icon: Route
+		},
 		{
 			value: 'map',
 			label: 'Solar system',

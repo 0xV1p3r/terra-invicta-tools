@@ -329,15 +329,15 @@ fn record_flag(view: &View<'_>, id: EntityId, key: &str) -> bool {
 }
 
 /// How [`build_graph`] lays out its graph.
-struct GraphLayout {
+pub(crate) struct GraphLayout {
     /// One band per category.
-    bands: bool,
+    pub bands: bool,
     /// Long edges merged into shared lines.
-    merge_edges: bool,
+    pub merge_edges: bool,
 }
 
 /// Lay out a node/edge set and fill in node data. `total_cost` is left at 0.
-fn build_graph(
+pub(crate) fn build_graph(
     view: &View<'_>,
     texts: &ti_data::Texts,
     nodes: &BTreeSet<EntityId>,

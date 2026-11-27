@@ -57,7 +57,7 @@
 
 	$effect(() => {
 		const selectedKey = entityKey;
-		const scope = $state.snapshot(app.scope);
+		const scope = $state.snapshot(app.dataScope);
 		void attempt;
 		const id = ++latest;
 		error = null;
@@ -135,7 +135,7 @@
 	 * (the plan works through goals in order). Other research has no chain of its own in the plan.
 	 */
 	const remaining = $derived.by(() => {
-		if (!entity || inWiki || !campaign.isGoal(entity.key)) return null;
+		if (!entity || inWiki || !app.planning || !campaign.isGoal(entity.key)) return null;
 		if (campaign.status(entity.key) === 'done') return { cost: 0, withEarlier: false };
 		const index = campaign.stepIndex.get(entity.key);
 		const plan = campaign.plan;
@@ -320,7 +320,7 @@
 			</div>
 		</div>
 
-		{#if ann?.variesByScenario && !app.scope.scenario}
+		{#if ann?.variesByScenario && !app.dataScope.scenario}
 			<div
 				class="mt-3 flex w-fit items-center gap-1.5 rounded-md border py-0.5 pr-1 pl-2 text-xs font-medium text-muted-foreground"
 			>
@@ -395,7 +395,7 @@
 				)}
 			</div>
 		{/if}
-		{#if research && !inWiki && campaign.active}
+		{#if research && !inWiki && app.planning}
 			<ResearchPlanActions {entity} {repeatable} />
 		{/if}
 		{#if detail.researchCost != null || detail.totalCost != null}

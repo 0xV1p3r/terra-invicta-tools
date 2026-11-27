@@ -314,7 +314,7 @@
 					</ol>
 				{:else}
 					<p class="text-muted-foreground">
-						Right-click research in the tree or use the detail panel to add goals.
+						Right-click research in the full tree, or use the details panel, to add goals.
 					</p>
 				{/if}
 

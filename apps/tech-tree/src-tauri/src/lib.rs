@@ -261,6 +261,15 @@ async fn get_plan(state: State<'_, AppState>, lang: String, campaign: Campaign) 
     run_in_language(state, lang.clone(), move |b| campaigns::get_plan(b, &lang, &campaign)).await
 }
 
+/// The plan's path (the research still needed for the goals) laid out as a tree.
+#[tauri::command]
+async fn get_plan_graph(state: State<'_, AppState>, lang: String, campaign: Campaign, merge_edges: Option<bool>) -> CmdResult<TreeGraph> {
+    run_in_language(state, lang.clone(), move |b| {
+        campaigns::get_plan_graph(b, &lang, &campaign, merge_edges.unwrap_or(true))
+    })
+    .await
+}
+
 /// Keys to mark completed for "researched up to here".
 #[tauri::command]
 async fn plan_up_to(state: State<'_, AppState>, campaign: Campaign, key: String) -> CmdResult<Vec<String>> {
@@ -333,6 +342,7 @@ pub fn run() {
             save_campaign,
             delete_campaign,
             get_plan,
+            get_plan_graph,
             plan_up_to,
             plan_dependents_lost,
             default_save_dir,
