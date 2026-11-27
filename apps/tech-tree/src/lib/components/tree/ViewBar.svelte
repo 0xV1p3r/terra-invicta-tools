@@ -6,7 +6,7 @@
 	import { Switch } from '#lib/components/ui/switch/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import * as ToggleGroup from '#lib/components/ui/toggle-group/index.js';
-	import { app, type FullLayout, type ViewKind } from '#lib/state.svelte.ts';
+	import { app, type FullLayout, type PlanView, type ViewKind } from '#lib/state.svelte.ts';
 	import Pill, { pillIcon, pillToggle, segmented } from '#lib/components/toolbar/Pill.svelte';
 	import PillDivider from '#lib/components/toolbar/PillDivider.svelte';
 	import PageSwitch from '#lib/components/toolbar/PageSwitch.svelte';
@@ -66,6 +66,19 @@
 		{ value: 'up', label: 'Requirements', title: 'Everything needed to research the root' },
 		{ value: 'down', label: 'Unlocks', title: 'Everything the root unlocks, all the way down' },
 		{ value: 'both', label: 'Both', title: 'Requirements and unlocks' }
+	];
+
+	const PLAN_VIEWS: { value: PlanView; label: string; title: string }[] = [
+		{
+			value: 'path',
+			label: 'Path',
+			title: 'Path: only the research the goals still need, in research order'
+		},
+		{
+			value: 'full',
+			label: 'Full tree',
+			title: 'Full tree: every tech and project, with the campaign’s progress'
+		}
 	];
 
 	function setKind(kind: ViewKind) {
@@ -164,6 +177,22 @@
 				</Tip>
 			</div>
 		{/if}
+	{:else if app.planning}
+		<ToggleGroup.Root
+			type="single"
+			size="sm"
+			spacing={0.5}
+			class={segmented}
+			value={app.planView}
+			onValueChange={(v) => v && app.setPlanView(v as PlanView)}
+			aria-label="Plan view: what is shown"
+		>
+			{#each PLAN_VIEWS as p (p.value)}
+				<Tip text={p.title}>
+					<ToggleGroup.Item value={p.value} class={pillToggle}>{p.label}</ToggleGroup.Item>
+				</Tip>
+			{/each}
+		</ToggleGroup.Root>
 	{/if}
 </Pill>
 {#if app.page === 'tree' && view.kind === 'subtree'}

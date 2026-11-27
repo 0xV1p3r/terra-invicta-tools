@@ -66,7 +66,7 @@
 
 	$effect(() => {
 		const key = node.key;
-		const scope = $state.snapshot(app.scope);
+		const scope = $state.snapshot(app.dataScope);
 		const id = ++latest;
 		failed = false;
 		if (!expanded) {
@@ -93,18 +93,20 @@
 	const showTotal = $derived(
 		detail?.totalCost != null && detail.totalCost !== (detail.researchCost ?? node.item.cost)
 	);
-	/** Where the research stands in the active campaign (empty without one). */
-	const status = $derived(campaign.status(node.key));
+	/** Where the research stands in the active campaign (plan page only). */
+	const status = $derived(app.planning ? campaign.status(node.key) : undefined);
 	const StatusIcon = $derived(
 		status === 'done' ? CircleCheck : status === 'available' ? CircleDot : Target
 	);
 	const planStatus = $derived(
-		statusLabels(
-			status,
-			campaign.stepIndex.get(node.key),
-			campaign.isGoal(node.key),
-			campaign.completions(node.key)
-		).join(' · ')
+		app.planning
+			? statusLabels(
+					status,
+					campaign.stepIndex.get(node.key),
+					campaign.isGoal(node.key),
+					campaign.completions(node.key)
+				).join(' · ')
+			: ''
 	);
 	const unlockGroups = $derived.by(() => {
 		const groups: Partial<Record<UnlockKind, UnlockItem[]>> = {};

@@ -1,4 +1,4 @@
-// UI state of the research planner shared by the toolbar switcher, the plan panel and the
+// UI state of the research planner shared by the plan toolbar, the plan panel and the
 // detail panel (Svelte 5 runes). Campaign data itself lives in `#lib/campaign.svelte.ts`.
 import type { EntityKey, EntityKind } from '#lib/api.ts';
 
@@ -6,14 +6,14 @@ const PANEL_KEY = 'ti-tech-tree:plan-panel';
 
 function loadPanel(): boolean {
 	try {
-		return typeof localStorage !== 'undefined' && localStorage.getItem(PANEL_KEY) === '1';
+		return typeof localStorage === 'undefined' || localStorage.getItem(PANEL_KEY) !== '0';
 	} catch {
-		return false;
+		return true;
 	}
 }
 
 class PlanUi {
-	/** Plan panel beside the tree (left; the detail panel stays on the right). */
+	/** Plan panel on the plan page (left; the detail panel stays on the right). Open by default. */
 	panelOpen = $state(loadPanel());
 	/** "New campaign" dialog (opened from the switcher and the plan panel's empty state). */
 	creating = $state(false);

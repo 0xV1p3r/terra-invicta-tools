@@ -63,7 +63,7 @@
 	$effect(() => {
 		void retry;
 		const text = query.trim();
-		const scope = { ...app.scope };
+		const scope = { ...app.dataScope };
 		const kinds = filterKinds[typeFilter];
 		const enabled = open && !!app.meta;
 		let stale = false;

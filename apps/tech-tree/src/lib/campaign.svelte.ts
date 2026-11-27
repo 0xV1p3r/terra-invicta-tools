@@ -1,6 +1,7 @@
 // Research planning state: saved campaigns, the active one and its plan (Svelte 5 runes).
 // The backend computes statuses and plans (src-tauri/src/campaigns.rs); this keeps the
 // campaign being edited, saves every change and refetches the plan.
+import { untrack } from 'svelte';
 import {
 	api,
 	type Campaign,
@@ -76,14 +77,13 @@ class CampaignState {
 		try {
 			this.list = await api.listCampaigns();
 			if (this.activeId && !this.active) this.activate(null);
-			else if (this.active) this.applyScope(this.active);
 		} catch (e) {
 			this.list = [];
 			this.error = message(e);
 		}
 	}
 
-	/** Plan for `id` (null = stop planning). Switches the app to the campaign's scope. */
+	/** Plan for `id` (null = stop planning). The plan page shows the campaign's scope. */
 	activate(id: string | null) {
 		this.activeId = id;
 		this.plan = null;
@@ -93,13 +93,6 @@ class CampaignState {
 		} catch {
 			// Storage unavailable: the choice lasts for the session.
 		}
-		const c = this.active;
-		if (c) this.applyScope(c);
-	}
-
-	private applyScope(c: Campaign) {
-		app.scope.scenario = c.scenario;
-		app.scope.faction = c.faction;
 	}
 
 	async create(name: string, scenario: string, faction: string) {
@@ -116,6 +109,15 @@ class CampaignState {
 		});
 		if (saved) this.activate(saved.id);
 		return saved;
+	}
+
+	/** Pick a save file (starting in the game's save folder) and import it into a new campaign. */
+	async importSaveFile() {
+		const dir = await api.defaultSaveDir().catch(() => null);
+		const path = await this.call(() =>
+			api.pickSaveFile('Import a Terra Invicta save', dir ?? undefined)
+		);
+		return path ? this.importSave(path) : null;
 	}
 
 	/** A new campaign from the game save at `path` (activated). */
@@ -281,6 +283,15 @@ export const campaign = new CampaignState();
 // The plan depends on the research state and language, not the name or save time.
 let planInput = '';
 $effect.root(() => {
+	// The plan page shows the data in the active campaign's scenario and faction.
+	$effect(() => {
+		const c = campaign.active;
+		const scenario = c?.scenario;
+		const faction = c?.faction;
+		const current = untrack(() => app.planScope);
+		if (current?.scenario === scenario && current?.faction === faction) return;
+		app.planScope = scenario && faction ? { scenario, faction } : null;
+	});
 	$effect(() => {
 		const c = campaign.active;
 		const snapshot = c ? $state.snapshot(c) : null;

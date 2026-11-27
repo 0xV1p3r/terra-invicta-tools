@@ -8,8 +8,9 @@
 	import PanelRightOpen from '@lucide/svelte/icons/panel-right-open';
 	import { api, mockMode, type ExtractArgs, type TreeGraph } from '#lib/api.ts';
 	import { campaign } from '#lib/campaign.svelte.ts';
-	import CampaignSwitcher from '#lib/components/plan/CampaignSwitcher.svelte';
+	import PlanEmpty from '#lib/components/plan/PlanEmpty.svelte';
 	import PlanPanel from '#lib/components/plan/PlanPanel.svelte';
+	import PlanToolbar from '#lib/components/plan/PlanToolbar.svelte';
 	import { planUi } from '#lib/components/plan/plan-ui.svelte.ts';
 	import DetailPanel from '#lib/components/detail/DetailPanel.svelte';
 	import Onboarding from '#lib/components/onboarding/Onboarding.svelte';
@@ -257,12 +258,29 @@
 				<div
 					class="@container relative z-10 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-b bg-card px-3 py-1.5 shadow-sm"
 					role="region"
-					aria-label={app.page === 'map' ? 'Map toolbar' : 'Tree toolbar'}
+					aria-label={app.page === 'map'
+						? 'Map toolbar'
+						: app.page === 'plan'
+							? 'Plan toolbar'
+							: 'Tree toolbar'}
 					{@attach pinUtilities}
 				>
 					<!-- Side panel toggles sit outermost, on their panel's side. -->
-					{#if app.page === 'tree'}
-						<CampaignSwitcher />
+					{#if app.planning}
+						<Pill aria-label="Plan panel">
+							<Tip text={planUi.panelOpen ? 'Hide plan panel' : 'Show plan panel'}>
+								<Button
+									variant="ghost"
+									size="icon"
+									class={pillIcon}
+									aria-label="Plan panel"
+									aria-pressed={planUi.panelOpen}
+									onclick={() => planUi.togglePanel()}
+								>
+									{#if planUi.panelOpen}<PanelLeftClose />{:else}<PanelLeftOpen />{/if}
+								</Button>
+							</Tip>
+						</Pill>
 					{/if}
 					{#if app.page === 'map'}
 						<Pill aria-label="Bodies pane">
@@ -281,11 +299,18 @@
 						</Pill>
 					{/if}
 					<ViewBar graph={treeGraph} />
-					<!-- Scope and the filter pills are toolbar items of their own, so each wraps on its own. -->
-					<ScopeBar />
+					<!--
+						Scope and the filter pills are toolbar items of their own, so each wraps on its own.
+						The plan page shows the campaign's scenario and faction instead of a scope.
+					-->
+					{#if app.page === 'plan'}
+						<PlanToolbar />
+					{:else}
+						<ScopeBar />
+					{/if}
 					{#if app.page === 'tree'}
 						<TreeFilters />
-					{:else}
+					{:else if app.page === 'map'}
 						<MapToolbar />
 					{/if}
 					<Pill class="ml-auto gap-0.5" aria-label="Search and settings" data-utilities>
@@ -300,7 +325,9 @@
 									: 'Show details panel'
 								: app.page === 'map'
 									? 'Select a body to see its details'
-									: 'Select a tech or project to see its details'}
+									: app.page === 'plan' && !app.planning
+										? 'Open a campaign to plan its research'
+										: 'Select a tech or project to see its details'}
 						>
 							<!-- aria-disabled rather than disabled, so keyboard users can reach the explanation. -->
 							<Button
@@ -322,7 +349,7 @@
 				<AppUpdateNotice />
 				<UpdateNotice {extract} />
 				<div class="flex min-h-0 flex-1">
-					{#if app.page === 'tree' && planUi.panelOpen}
+					{#if app.planning && planUi.panelOpen}
 						<div class="w-80 shrink-0">
 							<PlanPanel />
 						</div>
@@ -332,9 +359,15 @@
 							<MapPane />
 						</div>
 					{/if}
-					<main class="min-w-0 flex-1" class:hidden={app.page !== 'tree'}>
+					<!-- One canvas for the tree page and the plan page: it shows what the page asks for. -->
+					<main class="min-w-0 flex-1" class:hidden={app.page !== 'tree' && !app.planning}>
 						<TreeCanvas bind:graph={treeGraph} />
 					</main>
+					{#if app.page === 'plan' && !app.planning}
+						<main class="min-w-0 flex-1">
+							<PlanEmpty />
+						</main>
+					{/if}
 					{#if mapMounted}
 						<main class="min-w-0 flex-1" class:hidden={app.page !== 'map'}>
 							<SolarMap />

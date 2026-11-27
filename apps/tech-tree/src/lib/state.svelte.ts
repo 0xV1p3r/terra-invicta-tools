@@ -21,8 +21,20 @@ export type ViewSpec =
 
 export type ViewKind = ViewSpec['kind'];
 
-/** Top-level page: the research tree or the solar system map. */
-export type Page = 'tree' | 'map';
+/** What the tree canvas shows: the tree page's view, or the plan page's path. */
+export type CanvasView = ViewSpec | { kind: 'path' };
+
+/** Top-level page: the research tree, the research plan or the solar system map. */
+export type Page = 'tree' | 'plan' | 'map';
+
+/** The plan page's canvas: only the research the plan still needs, or the whole tree. */
+export type PlanView = 'path' | 'full';
+
+/** A campaign's scenario and faction, which the plan page shows the data in. */
+export interface PlanScope {
+	scenario: string;
+	faction: string;
+}
 
 /** Templates the solar system map shows (navigating to one opens the map). */
 const MAP_TEMPLATES = ['TISpaceBodyTemplate:', 'TINavigableTemplate:'];
@@ -32,6 +44,7 @@ export const isMapKey = (key: EntityKey) => MAP_TEMPLATES.some((t) => key.starts
 interface HistoryEntry {
 	page: Page;
 	view: ViewSpec;
+	planView: PlanView;
 	selected: EntityKey | null;
 	/** The selection was a node of the tree, so restoring it centers on it again. */
 	inTree: boolean;
@@ -41,6 +54,17 @@ const sameView = (a: ViewSpec, b: ViewSpec) => JSON.stringify(a) === JSON.string
 const HISTORY_LIMIT = 100;
 
 const STORAGE_KEY = 'ti-tech-tree:scope';
+const PLAN_VIEW_KEY = 'ti-tech-tree:plan-view';
+
+function loadPlanView(): PlanView {
+	try {
+		return typeof localStorage !== 'undefined' && localStorage.getItem(PLAN_VIEW_KEY) === 'full'
+			? 'full'
+			: 'path';
+	} catch {
+		return 'path';
+	}
+}
 
 function loadScope(): ScopeArgs {
 	const defaults: ScopeArgs = { scenario: null, faction: null, lang: 'en' };
@@ -81,8 +105,43 @@ class AppState {
 
 	page = $state<Page>('tree');
 
-	/** Data scope: overview by default (all scenarios, no faction). */
+	/** Data scope of the tree and map pages: overview by default (all scenarios, no faction). */
 	scope = $state<ScopeArgs>(loadScope());
+
+	/** The active campaign's scenario and faction (set by the campaign store); null without one. */
+	planScope = $state.raw<PlanScope | null>(null);
+	/** The plan page's canvas (remembered). */
+	planView = $state<PlanView>(loadPlanView());
+
+	/** The plan page with a campaign to show. */
+	get planning(): boolean {
+		return this.page === 'plan' && this.planScope !== null;
+	}
+
+	/**
+	 * The scope the current page shows its data in: the campaign's on the plan page, else the
+	 * scope bar's. The language is always the one from the settings.
+	 */
+	get dataScope(): ScopeArgs {
+		const plan = this.planning ? this.planScope : null;
+		return plan ? { ...plan, lang: this.scope.lang } : this.scope;
+	}
+
+	/** What the tree canvas shows on the current page. */
+	get canvasView(): CanvasView {
+		if (this.page !== 'plan') return this.view;
+		return this.planView === 'path' ? { kind: 'path' } : { kind: 'full', layout: this.fullLayout };
+	}
+
+	/** Switch the plan page's canvas (not a history step). */
+	setPlanView(view: PlanView) {
+		this.planView = view;
+		try {
+			localStorage.setItem(PLAN_VIEW_KEY, view);
+		} catch {
+			// Storage unavailable: the choice lasts for the session.
+		}
+	}
 
 	/** Full tree filters. */
 	showTechs = $state(true);
@@ -130,9 +189,10 @@ class AppState {
 		return this.view.kind;
 	}
 
-	/** Root of the sub-tree/focus view, null in the full tree. */
+	/** Root of the canvas's sub-tree/focus view, null in the full tree and on the plan page. */
 	get root(): EntityKey | null {
-		return this.view.kind === 'full' ? null : this.view.root;
+		const view = this.canvasView;
+		return view.kind === 'subtree' || view.kind === 'focus' ? view.root : null;
 	}
 
 	/** Show `next` on the tree page, recording where we came from (page included) in the history. */
@@ -169,6 +229,7 @@ class AppState {
 		return {
 			page: this.page,
 			view: $state.snapshot(this.view),
+			planView: this.planView,
 			selected,
 			inTree: selected !== null && this.treeKeys.has(selected)
 		};
@@ -190,12 +251,14 @@ class AppState {
 	 * History navigation: back to the page, select the entity again and center on it (the tree on
 	 * the view's root when it wasn't a node).
 	 */
-	private restore({ page, view, selected, inTree }: HistoryEntry) {
+	private restore({ page, view, planView, selected, inTree }: HistoryEntry) {
 		this.page = page;
 		this.setView(view);
+		if (page === 'plan') this.setPlanView(planView);
 		this.selected = selected;
 		if (selected) this.panelOpen = true;
-		this.focus = inTree ? selected : view.kind === 'full' ? null : view.root;
+		const shown = this.canvasView;
+		this.focus = inTree ? selected : 'root' in shown ? shown.root : null;
 		if (selected && isMapKey(selected)) this.mapFocus = selected;
 	}
 
@@ -227,6 +290,14 @@ class AppState {
 			this.page = 'map';
 			this.selected = ref.key;
 			this.mapFocus = ref.key;
+			return;
+		}
+		// The plan page keeps research on its own canvas: the whole tree when it isn't on the path.
+		if (research && this.planning) {
+			if (ref.key !== this.selected) this.record();
+			if (this.planView === 'path' && !this.treeKeys.has(ref.key)) this.setPlanView('full');
+			this.selected = ref.key;
+			this.focus = ref.key;
 			return;
 		}
 		// Record before switching pages, so Back returns to the page we came from.

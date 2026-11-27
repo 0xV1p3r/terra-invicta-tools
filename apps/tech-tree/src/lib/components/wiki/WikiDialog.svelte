@@ -91,7 +91,7 @@
 	const matchCount = $derived(global ? matching.length : total);
 	const remaining = $derived(global ? 0 : total - entries.length);
 	$effect(() => {
-		const scope = $state.snapshot(app.scope);
+		const scope = $state.snapshot(app.dataScope);
 		const spoilers = settings.wikiSpoilers;
 		void indexRetry;
 		if (!wiki.open) return;
@@ -143,7 +143,7 @@
 		return () => clearTimeout(timer);
 	});
 	$effect(() => {
-		const scope = $state.snapshot(app.scope);
+		const scope = $state.snapshot(app.dataScope);
 		void entriesRetry;
 		const template = wiki.template;
 		const spoiler = wiki.section?.spoiler ?? false;
@@ -190,7 +190,7 @@
 		const id = generation;
 		loadingMore = true;
 		api
-			.getWikiEntries($state.snapshot(app.scope), template, wiki.section?.spoiler ?? false, {
+			.getWikiEntries($state.snapshot(app.dataScope), template, wiki.section?.spoiler ?? false, {
 				filter: appliedFilter,
 				offset: entries.length,
 				limit: PAGE
@@ -211,7 +211,7 @@
 			});
 	}
 	$effect(() => {
-		const scope = $state.snapshot(app.scope);
+		const scope = $state.snapshot(app.dataScope);
 		void searchRetry;
 		const text = query.trim();
 		hits = [];

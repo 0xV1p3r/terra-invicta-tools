@@ -15,7 +15,6 @@
 		api,
 		matchesFilter,
 		type EntityKey,
-		type FullLayout,
 		type TechCategory,
 		type TreeFilter,
 		type TreeGraph
@@ -27,7 +26,7 @@
 	import { canvasControl } from '#lib/components/styles.ts';
 	import { settings } from '#lib/settings.svelte.ts';
 	import { app } from '#lib/state.svelte.ts';
-	import { Camera } from './camera';
+	import { Camera, type View as CameraView } from './camera';
 	import { FLAGS } from './flags';
 	import HoverCard from './HoverCard.svelte';
 	import MiniMap from './MiniMap.svelte';
@@ -42,45 +41,69 @@
 
 	const NO_FILTER: TreeFilter = { techs: true, projects: true, categories: [], properties: [] };
 
+	/** What the canvas shows: the tree page's view, or the plan page's path or full tree. */
+	const view = $derived(app.canvasView);
+	/** The tree page's filters apply (the plan page has none of its own besides "Completed"). */
+	const filtered = $derived(app.page === 'tree' && view.kind === 'full');
+
+	/** The active campaign as the path depends on it (its research state, not its name). */
+	const pathCampaign = $derived.by(() => {
+		const c = campaign.active;
+		if (!c) return null;
+		const { completed, goals, picks, scenario, faction, id } = $state.snapshot(c);
+		// The name and the save's points and unlocks don't change the path: left out of the key.
+		return { completed, goals, picks, scenario, faction, id, name: '', updated: 0, save: null };
+	});
+
 	/** Everything the current view depends on; a loaded graph is only "current" for its key. */
 	const request = $derived(
-		app.view.kind === 'subtree'
+		view.kind === 'path'
 			? {
-					kind: 'subtree' as const,
-					scope: $state.snapshot(app.scope),
-					args: {
-						root: app.view.root,
-						direction: app.view.direction,
-						alternatives: app.view.alternatives,
-						maxDepth: null
-					},
+					kind: 'path' as const,
+					lang: app.scope.lang,
+					campaign: pathCampaign,
 					mergeEdges: settings.mergeLinks
 				}
-			: app.view.kind === 'focus'
-				? { kind: 'focus' as const, scope: $state.snapshot(app.scope), root: app.view.root }
-				: {
-						kind: 'full' as const,
-						layout: app.view.layout,
-						mergeEdges: settings.mergeLinks,
-						scope: $state.snapshot(app.scope),
-						// Highlight mode loads everything and dims non-matches (layout stays put).
-						filter: settings.filterMode === 'highlight' ? NO_FILTER : app.filter
+			: view.kind === 'subtree'
+				? {
+						kind: 'subtree' as const,
+						scope: $state.snapshot(app.dataScope),
+						args: {
+							root: view.root,
+							direction: view.direction,
+							alternatives: view.alternatives,
+							maxDepth: null
+						},
+						mergeEdges: settings.mergeLinks
 					}
+				: view.kind === 'focus'
+					? { kind: 'focus' as const, scope: $state.snapshot(app.dataScope), root: view.root }
+					: {
+							kind: 'full' as const,
+							layout: view.layout,
+							mergeEdges: settings.mergeLinks,
+							scope: $state.snapshot(app.dataScope),
+							// Highlight mode loads everything and dims non-matches (layout stays put).
+							filter: settings.filterMode === 'highlight' || !filtered ? NO_FILTER : app.filter
+						}
 	);
 	const requestKey = $derived(JSON.stringify(request));
 
-	/** The active campaign's statuses, steps and goals for the renderer (null without one). */
+	/** The active campaign's statuses, steps and goals for the renderer (plan page only). */
 	const marks = $derived(
-		campaign.active && campaign.plan ? planMarks(campaign.plan, campaign.active.goals) : null
+		app.planning && campaign.active && campaign.plan
+			? planMarks(campaign.plan, campaign.active.goals)
+			: null
 	);
 	/** The "Completed" filter is off: completed research is hidden or dimmed like non-matches. */
-	const completedOut = $derived(marks !== null && !settings.showCompleted && app.mode === 'full');
+	const completedOut = $derived(marks !== null && !settings.showCompleted && view.kind === 'full');
+	const filtersOn = $derived(filtered && app.filtersActive);
 
 	/** Highlight mode with active filters: keys of the matching nodes (others are dimmed). */
 	const matches = $derived.by(() => {
-		if (settings.filterMode !== 'highlight' || app.mode !== 'full') return null;
-		if (!app.filtersActive && !completedOut) return null;
-		const filter = app.filter;
+		if (settings.filterMode !== 'highlight' || view.kind !== 'full') return null;
+		if (!filtersOn && !completedOut) return null;
+		const filter = filtersOn ? app.filter : NO_FILTER;
 		const done = completedOut ? marks!.done : null;
 		return new Set(
 			(graph?.nodes ?? [])
@@ -124,11 +147,38 @@
 		);
 	});
 
-	// The full tree is large; keep the last one per layout to make going back instant.
-	const fullCache: Partial<Record<FullLayout, { key: string; graph: TreeGraph }>> = {};
+	/**
+	 * The full tree is large; keep the last few (per layout, page and scope) to make going back,
+	 * and switching between the tree and plan pages, instant.
+	 */
+	// Plain caches, not state: nothing renders from them directly.
+	// eslint-disable-next-line svelte/prefer-svelte-reactivity
+	const fullCache = new Map<string, TreeGraph>();
+	const FULL_CACHE_SIZE = 4;
 	let latest = 0;
 
+	/**
+	 * Where the camera was, per view the canvas showed: switching between the tree and plan
+	 * pages returns to the same spot. A campaign's path keeps one entry across edits, so marking
+	 * research doesn't refit it.
+	 */
+	// eslint-disable-next-line svelte/prefer-svelte-reactivity
+	const cameras = new Map<string, CameraView>();
+	const CAMERAS_SIZE = 8;
+	const cameraKey = (key: string) => {
+		const req = JSON.parse(key) as typeof request;
+		return req.kind === 'path' ? `path:${req.campaign?.id}` : key;
+	};
+
 	function show(key: string, g: TreeGraph) {
+		// Called from the loading effect: reading `loaded` there must not make it a dependency.
+		const current = untrack(() => loaded);
+		if (current && fitted === current.graph) {
+			const previous = cameraKey(current.key);
+			cameras.delete(previous);
+			cameras.set(previous, { x: camera.x, y: camera.y, zoom: camera.zoom });
+			if (cameras.size > CAMERAS_SIZE) cameras.delete(cameras.keys().next().value!);
+		}
 		app.treeKeys = new Set(g.nodes.map((n) => n.key));
 		loaded = { key, graph: g };
 	}
@@ -137,27 +187,39 @@
 		const key = requestKey;
 		const req = request;
 		void attempt;
-		const cached = req.kind === 'full' ? fullCache[req.layout] : undefined;
-		if (cached?.key === key) {
+		const cached = req.kind === 'full' ? fullCache.get(key) : undefined;
+		if (cached) {
 			latest++;
 			loading = false;
 			error = null;
-			show(key, cached.graph);
+			show(key, cached);
 			return;
 		}
 		const id = ++latest;
 		loading = true;
 		error = null;
+		if (req.kind === 'path' && !req.campaign) {
+			// No campaign yet (the plan page shows its empty state instead).
+			latest++;
+			loading = false;
+			return;
+		}
 		const promise =
-			req.kind === 'full'
-				? api.getTree(req.scope, req.filter, req.layout, req.mergeEdges)
-				: req.kind === 'focus'
-					? api.getFocus(req.scope, req.root)
-					: api.getSubtree(req.scope, req.args, req.mergeEdges);
+			req.kind === 'path'
+				? api.getPlanGraph(req.lang, req.campaign!, req.mergeEdges)
+				: req.kind === 'full'
+					? api.getTree(req.scope, req.filter, req.layout, req.mergeEdges)
+					: req.kind === 'focus'
+						? api.getFocus(req.scope, req.root)
+						: api.getSubtree(req.scope, req.args, req.mergeEdges);
 		promise.then(
 			(g) => {
 				if (id !== latest) return;
-				if (req.kind === 'full') fullCache[req.layout] = { key, graph: g };
+				if (req.kind === 'full') {
+					fullCache.delete(key);
+					fullCache.set(key, g);
+					if (fullCache.size > FULL_CACHE_SIZE) fullCache.delete(fullCache.keys().next().value!);
+				}
 				show(key, g);
 				loading = false;
 			},
@@ -313,7 +375,7 @@
 
 	// Overlays move with the minimap corner, the view and the window size.
 	$effect(() => {
-		void [settings.minimapCorner, app.view, scene, width, height];
+		void [settings.minimapCorner, view, scene, width, height];
 		tick().then(measureOverlays);
 	});
 
@@ -322,7 +384,7 @@
 		void [
 			scene,
 			app.selected,
-			app.view,
+			view,
 			hovered,
 			theme,
 			dpr,
@@ -372,7 +434,11 @@
 		untrack(() => {
 			measureOverlays();
 			const target = focus ? s.byKey.get(focus) : undefined;
-			if (g !== fitted && (!target || focus === s.graph.root)) {
+			const remembered = g !== fitted ? cameras.get(cameraKey(requestKey)) : undefined;
+			if (remembered) {
+				fitted = g;
+				camera.set(remembered);
+			} else if (g !== fitted && (!target || focus === s.graph.root)) {
 				const first = fitted === null;
 				fitted = g;
 				if (s.nodes.length) camera.animateTo(camera.fitted(s.bounds), first ? 0 : 300);
@@ -390,9 +456,12 @@
 			} else if (hiddenKey && hiddenKey.split('\n').includes(focus)) {
 				// Hidden as completed: show completed research, focus once the scene has it.
 				settings.showCompleted = true;
-			} else if (app.mode === 'full' && app.filtersActive) {
+			} else if (filtersOn) {
 				// Hidden by the filters: show everything, focus once the full tree is loaded.
 				app.clearFilters();
+			} else if (view.kind === 'path' && campaign.status(focus)) {
+				// Not on the plan's path: show the whole tree, focus once it is loaded.
+				app.setPlanView('full');
 			} else {
 				app.focus = null;
 			}
@@ -504,14 +573,15 @@
 		dragging = false;
 		if (!clicked) return;
 		const n = hit(e);
-		if (n && app.view.kind === 'focus' && n.key !== app.view.root) app.openFocus(n.key);
+		if (n && view.kind === 'focus' && n.key !== view.root) app.openFocus(n.key);
 		else if (n) select(n.key);
 		else app.selected = null;
 	}
 
 	function ondblclick(e: MouseEvent) {
 		const n = hit(e);
-		if (n && app.view.kind !== 'focus') app.openSubtree(n.key, 'up');
+		// Sub-trees belong to the tree page.
+		if (n && app.page === 'tree' && view.kind !== 'focus') app.openSubtree(n.key, 'up');
 	}
 
 	function onwheel(e: WheelEvent) {
@@ -612,8 +682,9 @@
 			}
 		} else if ((e.key === 'Enter' || e.key === ' ') && current) {
 			e.preventDefault();
-			if (e.key === 'Enter' && app.view.kind === 'focus') app.openFocus(current.key);
-			else if (e.key === 'Enter' && e.shiftKey) app.openSubtree(current.key, 'up');
+			if (e.key === 'Enter' && view.kind === 'focus') app.openFocus(current.key);
+			else if (e.key === 'Enter' && e.shiftKey && app.page === 'tree')
+				app.openSubtree(current.key, 'up');
 			else select(current.key);
 		} else if (e.key === 'Escape') {
 			app.selected = null;
@@ -682,7 +753,8 @@
 
 	function oncontextmenu(e: MouseEvent) {
 		e.preventDefault();
-		if (performance.now() - keyboardMenu < 500) return;
+		// The plan menu belongs to the plan page.
+		if (!app.planning || performance.now() - keyboardMenu < 500) return;
 		const n = hit(e);
 		if (!n) return;
 		camera.stop();
@@ -691,7 +763,7 @@
 
 	/** Open the menu below a card's bottom-left corner (keyboard). */
 	function openMenuAt(n: SceneNode) {
-		if (!canvas || !scene) return;
+		if (!canvas || !scene || !app.planning) return;
 		const r = canvas.getBoundingClientRect();
 		const x = Math.min(Math.max(r.left + camera.x + n.x * camera.zoom, r.left), r.right);
 		const y = Math.min(
@@ -868,7 +940,7 @@
 		<div
 			class="pointer-events-none absolute top-3 left-1/2 flex -translate-x-1/2 flex-col items-center gap-2"
 		>
-			{#if ready && graph && app.view.kind !== 'full'}
+			{#if ready && graph && (view.kind === 'subtree' || view.kind === 'focus')}
 				<ViewStats {graph} />
 			{/if}
 			{#if matches}
@@ -919,8 +991,24 @@
 			<div
 				class="pointer-events-none absolute inset-0 grid place-content-center justify-items-center gap-3 text-muted-foreground"
 			>
-				No research matches the current filters.
-				{#if app.mode === 'full' && app.filtersActive}
+				{#if view.kind === 'path'}
+					{#if campaign.active?.goals.length}
+						All goals are researched.
+					{:else}
+						No goals yet. Add goals from the full tree (right-click research) or the details panel.
+					{/if}
+					<Button
+						variant="outline"
+						size="sm"
+						class="pointer-events-auto"
+						onclick={() => app.setPlanView('full')}
+					>
+						Show the full tree
+					</Button>
+				{:else}
+					No research matches the current filters.
+				{/if}
+				{#if filtersOn}
 					<Button
 						variant="outline"
 						size="sm"
