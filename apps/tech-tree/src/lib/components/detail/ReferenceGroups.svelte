@@ -3,7 +3,7 @@
 	import type { EntityKey, RefGroup } from '#lib/api.ts';
 	import { templateLabel } from '#lib/format.ts';
 	import { wiki } from '#lib/wiki.svelte.ts';
-	import * as Card from '#lib/components/ui/card/index.ts';
+	import { sectionHeading, subHeading } from '#lib/components/styles.ts';
 	import { Button } from '#lib/components/ui/button/index.ts';
 	import EntityLink from './EntityLink.svelte';
 	let {
@@ -39,20 +39,17 @@
 </script>
 
 {#if displayGroups.length}
-	<Card.Root class="mt-5 gap-2 border-0 bg-transparent py-0 shadow-none ring-0">
-		<Card.Header class="px-0"
-			><Card.Title class="text-xs font-medium text-muted-foreground">{title}</Card.Title
-			></Card.Header
-		>
+	<section class="mt-5 grid gap-2">
+		<h3 class={sectionHeading}>{title}</h3>
 		{#each displayGroups as group, i (`${i}:${group.template}:${group.field}`)}
-			<Card.Content class="px-0"
-				><Card.Description
-					>{templateLabel(
+			<div>
+				<h4 class={subHeading}>
+					{templateLabel(
 						group.template,
 						wiki.sections.find((s) => s.template === group.template)?.label
 					)}{#if technical}
-						· {group.field} ({group.entities.length}){/if}</Card.Description
-				>
+						· {group.field} ({group.entities.length}){/if}
+				</h4>
 				{#each expanded[i] ? group.entities : group.entities.slice(0, 25) as entity, j (`${j}:${entity.key}`)}<EntityLink
 						{entity}
 					/>{/each}
@@ -62,6 +59,6 @@
 						onclick={() => (expanded[i] = !expanded[i])}
 						>{expanded[i] ? 'Show less' : `Show all ${group.entities.length}`}</Button
 					>{/if}
-			</Card.Content>{/each}</Card.Root
-	>
+			</div>{/each}
+	</section>
 {/if}

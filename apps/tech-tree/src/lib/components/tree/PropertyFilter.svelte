@@ -130,14 +130,11 @@
 						: ''}"
 				>
 					<SlidersHorizontal /> Effects
-					<Badge
-						class="h-4 w-6 justify-center px-1 tabular-nums {app.properties.length
-							? ''
-							: 'invisible'}"
-						aria-hidden={app.properties.length === 0}
-					>
-						{app.properties.length}
-					</Badge>
+					{#if app.properties.length}
+						<Badge aria-hidden="true" class="h-4 min-w-4 justify-center px-1 tabular-nums">
+							{app.properties.length}
+						</Badge>
+					{/if}
 				</Button>
 			{/snippet}
 		</Popover.Trigger>

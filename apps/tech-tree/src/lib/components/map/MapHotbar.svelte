@@ -21,12 +21,12 @@
 							{...props}
 							variant="ghost"
 							size="icon"
-							class="size-9 aria-[current]:bg-accent aria-[current]:ring-1 aria-[current]:ring-ring"
+							class="size-8 aria-[current]:bg-accent aria-[current]:ring-1 aria-[current]:ring-ring"
 							aria-label="Focus {body.info.entity.name}"
 							aria-current={majors.focused === body.key ? 'true' : undefined}
 							onclick={() => majors.focus(body.key)}
 						>
-							<BodyIcon info={body.info} size={24} />
+							<BodyIcon info={body.info} size={22} />
 						</Button>
 					{/snippet}
 				</Tooltip.Trigger>

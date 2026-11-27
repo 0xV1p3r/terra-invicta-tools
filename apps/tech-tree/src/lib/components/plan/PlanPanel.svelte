@@ -29,6 +29,16 @@
 	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
 	import { formatCost, formatCostFull, readableKey } from '#lib/format.ts';
 	import { app } from '#lib/state.svelte.ts';
+	import {
+		panelHeader,
+		panelPadding,
+		panelTitle,
+		sectionHeading,
+		statLabel,
+		statTile,
+		statValue,
+		subHeading
+	} from '#lib/components/styles.ts';
 	import { planUi, researchKind } from './plan-ui.svelte.ts';
 
 	const AUTO = '__auto__';
@@ -89,11 +99,9 @@
 </script>
 
 {#snippet section(title: string, hint?: string)}
-	<h3
-		class="mt-5 mb-2 flex items-baseline justify-between gap-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase first:mt-0"
-	>
+	<h3 class="mt-5 mb-2 flex items-baseline justify-between gap-2 first:mt-0 {sectionHeading}">
 		{title}
-		{#if hint}<span class="font-normal tracking-normal normal-case">{hint}</span>{/if}
+		{#if hint}<span class="font-normal text-faint">{hint}</span>{/if}
 	</h3>
 {/snippet}
 
@@ -135,28 +143,62 @@
 			<info.icon class="size-3.5 {status === 'available' ? 'fill-current text-foreground' : ''}" />
 			<span class="sr-only">{info.label}</span>
 		</span>
+	{:else}
+		<span class="size-4 shrink-0" aria-hidden="true"></span>
 	{/if}
 {/snippet}
 
+<!-- Every list row (goals, research next, steps) starts the same way: step number, status icon. -->
+{#snippet rowStart(number: number | undefined, status: PlanStatus | undefined)}
+	<span class="w-7 shrink-0 text-right text-xs text-muted-foreground tabular-nums"
+		>{number ?? ''}</span
+	>
+	{@render statusIcon(status)}
+{/snippet}
+
+<!-- …and ends the same way: markers, then the cost (right-aligned), then one row action slot
+     (`noAction` keeps it empty), so costs line up in one column across sections. -->
+{#snippet markers(goal: boolean, active = false)}
+	{#if goal}<Target class="size-3.5 shrink-0 text-muted-foreground" aria-label="Goal" />{/if}
+	{#if active}<LoaderCircle
+			class="size-3.5 shrink-0 text-muted-foreground"
+			aria-label="Being researched in the save"
+		/>{/if}
+{/snippet}
+
+{#snippet noAction()}
+	<span class="size-7 shrink-0" aria-hidden="true"></span>
+{/snippet}
+
+{#snippet cost(text: string, title: string)}
+	<span class="min-w-10 shrink-0 text-right text-xs text-muted-foreground tabular-nums" {title}
+		>{text}</span
+	>
+{/snippet}
+
 <aside class="flex h-full min-h-0 flex-col border-r bg-card" aria-label="Research plan">
-	<div class="flex items-center justify-between gap-2 border-b px-3 py-2">
+	<div class={panelHeader}>
 		<div class="min-w-0">
-			<h2 class="flex items-center gap-2 font-semibold">
+			<h2 class="flex items-center gap-2 {panelTitle}">
 				Plan
 				{#if campaign.loading}<LoaderCircle
 						class="size-3.5 animate-spin text-muted-foreground"
 						aria-label="Updating plan"
 					/>{/if}
 			</h2>
-			{#if active}<p class="truncate text-xs text-muted-foreground" title={active.name}>
-					{active.name}
+			<!-- One subtitle line at most, so the header keeps the height of the other side panels. -->
+			{#if active}
+				{@const save = active.save}
+				{@const from = save
+					? `From save · ${save.gameDate}${save.saveVersion ? ` · v${save.saveVersion}` : ''}`
+					: ''}
+				<p
+					class="truncate text-xs text-muted-foreground"
+					title={save ? `${active.name}\n${from}\n${save.path}` : active.name}
+				>
+					{active.name}{#if save}<span> · {from}</span>{/if}
 				</p>
-				{#if active.save}
-					{@const save = active.save}
-					<p class="truncate text-xs text-muted-foreground" title={save.path}>
-						From save · {save.gameDate}{save.saveVersion ? ` · v${save.saveVersion}` : ''}
-					</p>
-				{/if}{/if}
+			{/if}
 		</div>
 		<Button
 			variant="ghost"
@@ -167,7 +209,10 @@
 		>
 	</div>
 	{#if campaign.error}
-		<div class="flex items-start gap-2 border-b px-3 py-1.5 text-xs text-destructive" role="alert">
+		<div
+			class="flex items-start gap-2 border-b {panelPadding} py-1.5 text-xs text-destructive"
+			role="alert"
+		>
 			<TriangleAlert class="mt-px size-3.5 shrink-0" />
 			<span class="min-w-0 flex-1 break-words">{campaign.error}</span>
 			<button
@@ -179,7 +224,7 @@
 		</div>
 	{/if}
 	<ScrollArea class="min-h-0 flex-1">
-		<div class="p-3 text-sm">
+		<div class="{panelPadding} py-3 text-sm">
 			{#if !active}
 				<div class="grid gap-3 py-6 text-center text-muted-foreground">
 					<p>
@@ -246,11 +291,8 @@
 					<ol class="grid gap-0.5">
 						{#each goals as key, i (key)}
 							{@const status = campaign.status(key)}
-							<li class="flex items-center gap-1">
-								<span class="w-5 shrink-0 text-right text-xs text-muted-foreground tabular-nums"
-									>{i + 1}.</span
-								>
-								{@render statusIcon(status)}
+							<li class="flex min-w-0 items-center gap-1">
+								{@render rowStart(i + 1, status)}
 								<span class="flex min-w-0 flex-1 {status === 'done' ? 'opacity-60' : ''}"
 									>{@render entityName(key)}</span
 								>
@@ -277,20 +319,20 @@
 				{/if}
 
 				{#if plan.steps.length}
-					<div class="mt-4 grid grid-cols-3 gap-2">
+					<dl class="mt-4 grid grid-cols-3 gap-2">
 						{#each [{ label: 'Techs', value: plan.techCost }, { label: 'Projects', value: plan.projectCost }] as total (total.label)}
-							<div class="rounded-lg bg-muted/50 px-2.5 py-1.5">
-								<div class="text-xs text-muted-foreground">{total.label}</div>
-								<div class="font-semibold" title="{formatCostFull(total.value)} research points">
+							<div class={statTile}>
+								<dt class={statLabel}>{total.label}</dt>
+								<dd class={statValue} title="{formatCostFull(total.value)} research points">
 									{formatCost(total.value)}
-								</div>
+								</dd>
 							</div>
 						{/each}
-						<div class="rounded-lg bg-muted/50 px-2.5 py-1.5">
-							<div class="text-xs text-muted-foreground">Steps</div>
-							<div class="font-semibold">{plan.steps.length}</div>
+						<div class={statTile}>
+							<dt class={statLabel}>Steps</dt>
+							<dd class={statValue}>{plan.steps.length}</dd>
 						</div>
-					</div>
+					</dl>
 					<p class="mt-1 text-xs text-muted-foreground">
 						{#if active.save}
 							Research points still needed at the campaign's {plan.researchSpeed}× research speed,
@@ -307,24 +349,22 @@
 						{@const rows = next[group.kind]}
 						{#if rows.length}
 							<div class="mb-2">
-								<div class="mb-1 flex items-center gap-1.5 text-xs font-medium">
+								<h4 class="mb-1 flex items-center gap-1.5 {subHeading}">
 									<group.icon class="size-3.5 text-muted-foreground" />
 									{group.label}
 									<span class="font-normal text-muted-foreground">· {group.hint}</span>
-								</div>
+								</h4>
 								<ul class="grid gap-0.5">
 									{#each showAll[group.kind] ? rows : rows.slice(0, NEXT_PREVIEW) as step (step.entity.key)}
-										<li class="flex items-center gap-1">
+										{@const index = campaign.stepIndex.get(step.entity.key)}
+										<li class="flex min-w-0 items-center gap-1">
+											{@render rowStart(index === undefined ? undefined : index + 1, step.status)}
 											<span class="flex min-w-0 flex-1">{@render entityName(step.entity.key)}</span>
-											{#if step.goal}<Target
-													class="size-3.5 shrink-0 text-muted-foreground"
-													aria-label="Goal"
-												/>{/if}
-											<span
-												class="shrink-0 text-xs text-muted-foreground tabular-nums"
-												title="{formatCostFull(step.cost)} research points"
-												>{formatCost(step.cost)}</span
-											>
+											{@render markers(step.goal, step.active)}
+											{@render cost(
+												`${formatCost(step.cost)}${step.progress ? ' left' : ''}`,
+												`${formatCostFull(step.cost)} research points still needed${step.progress ? ` (${formatCostFull(step.progress)} put in)` : ''}`
+											)}
 											{@render tipButton(
 												'Mark researched',
 												() => campaign.markDone(step.entity.key),
@@ -383,26 +423,15 @@
 					{@render section('Steps', 'In research order')}
 					<ol class="grid gap-0.5">
 						{#each plan.steps as step, i (step.entity.key)}
-							<li class="flex items-center gap-1">
-								<span class="w-7 shrink-0 text-right text-xs text-muted-foreground tabular-nums"
-									>{i + 1}</span
-								>
-								{@render statusIcon(step.status)}
+							<li class="flex min-w-0 items-center gap-1">
+								{@render rowStart(i + 1, step.status)}
 								<span class="flex min-w-0 flex-1">{@render entityName(step.entity.key)}</span>
-								{#if step.goal}<Target
-										class="size-3.5 shrink-0 text-muted-foreground"
-										aria-label="Goal"
-									/>{/if}
-								{#if step.active}<LoaderCircle
-										class="size-3.5 shrink-0 text-muted-foreground"
-										aria-label="Being researched in the save"
-									/>{/if}
-								<span
-									class="shrink-0 text-xs text-muted-foreground tabular-nums"
-									title="{formatCostFull(step.cost)} research points still needed{step.progress
-										? ` (${formatCostFull(step.progress)} put in)`
-										: ''}">{formatCost(step.cost)}{step.progress ? ' left' : ''}</span
-								>
+								{@render markers(step.goal, step.active)}
+								{@render cost(
+									`${formatCost(step.cost)}${step.progress ? ' left' : ''}`,
+									`${formatCostFull(step.cost)} research points still needed${step.progress ? ` (${formatCostFull(step.progress)} put in)` : ''}`
+								)}
+								{@render noAction()}
 							</li>
 						{/each}
 					</ol>

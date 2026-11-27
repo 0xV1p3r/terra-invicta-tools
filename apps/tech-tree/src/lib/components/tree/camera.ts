@@ -69,6 +69,11 @@ export class Camera {
 		this.apply(view.x, view.y, this.clampZoom(view.zoom));
 	}
 
+	/** Whether an `animateTo` is running. */
+	get animating() {
+		return this.animation !== 0;
+	}
+
 	stop() {
 		cancelAnimationFrame(this.animation);
 		this.animation = 0;

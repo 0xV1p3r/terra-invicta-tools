@@ -2,6 +2,7 @@
 	import { assetUrl, type EntityStats } from '#lib/api.ts';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { SENTIMENT } from '#lib/effect-style.ts';
+	import { statLabel, statTile, statValue, subHeading } from '#lib/components/styles.ts';
 	import EntityLink from './EntityLink.svelte';
 
 	// `tags` is off where the caller already shows them (unlock card headers).
@@ -23,16 +24,14 @@
 
 	{#each stats.groups as group (group.label)}
 		<section>
-			<h5 class="mb-1 text-xs font-medium text-muted-foreground">
-				{group.label}
-			</h5>
+			<h4 class="mb-1 {subHeading}">{group.label}</h4>
 			<dl
 				class="grid gap-2 {wide ? 'grid-cols-[repeat(auto-fill,minmax(9rem,1fr))]' : 'grid-cols-2'}"
 			>
 				{#each group.stats as stat (stat.field)}
 					{@const url = assetUrl(stat.icon)}
-					<div class="min-w-0 rounded-md border px-2 py-1.5" title="{stat.label} · {stat.field}">
-						<dt class="flex items-center gap-1 truncate text-xs text-muted-foreground">
+					<div class={statTile} title="{stat.label} · {stat.field}">
+						<dt class="flex items-center gap-1 {statLabel}">
 							{#if url}
 								<img
 									src={url}
@@ -44,14 +43,14 @@
 							<span class="truncate">{stat.label}</span>
 						</dt>
 						<dd
-							class="truncate text-sm font-semibold tabular-nums {stat.sentiment === 'neutral'
+							class="{statValue} {stat.sentiment === 'neutral'
 								? ''
 								: SENTIMENT[stat.sentiment].text}"
 						>
 							{stat.value}
 						</dd>
 						{#if stat.detail}
-							<dd class="truncate text-xs text-muted-foreground" title={stat.detail}>
+							<dd class={statLabel} title={stat.detail}>
 								{stat.detail}
 							</dd>
 						{/if}
@@ -71,9 +70,7 @@
 
 	{#each stats.links as link (link.label)}
 		<div class="text-sm">
-			<h5 class="mb-0.5 text-xs font-medium text-muted-foreground">
-				{link.label}
-			</h5>
+			<h4 class="mb-0.5 {subHeading}">{link.label}</h4>
 			<div class="flex flex-wrap gap-x-1">
 				{#each link.entities as entity (entity.key)}
 					<EntityLink {entity} />

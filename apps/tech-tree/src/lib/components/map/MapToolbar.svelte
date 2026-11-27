@@ -43,7 +43,13 @@
 			queueMicrotask(() => (choice = ''));
 		}}
 	>
-		<Select.Trigger size="sm" class={trigger} aria-label="Focus on a major body">
+		<!-- The value is always reset, so the trigger is always a "placeholder": show the focused
+		     body at full strength and keep the muted look for the "Focus…" fallback only. -->
+		<Select.Trigger
+			size="sm"
+			class={focusedBody ? `${trigger} data-placeholder:text-foreground` : trigger}
+			aria-label="Focus on a major body"
+		>
 			<span class="flex min-w-0 flex-1 items-center gap-2 text-left">
 				{#if focusedBody}<BodyIcon info={focusedBody.info} size={16} />{:else}<Crosshair />{/if}
 				<span class="truncate">{focusedBody?.info.entity.name ?? 'Focus…'}</span>

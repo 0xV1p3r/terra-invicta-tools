@@ -42,6 +42,14 @@ class CampaignState {
 		return out;
 	});
 
+	/**
+	 * The plan matches the campaign as it is now: shown plans stay up while a newer one loads, so
+	 * their statuses may predate the latest edit (e.g. a requirement just un-marked).
+	 */
+	get planCurrent(): boolean {
+		return this.plan !== null && !this.loading;
+	}
+
 	get active(): Campaign | null {
 		return this.list?.find((c) => c.id === this.activeId) ?? null;
 	}

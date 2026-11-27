@@ -4,6 +4,7 @@
 	import { Button } from '#lib/components/ui/button/index.ts';
 	import { ScrollArea } from '#lib/components/ui/scroll-area/index.ts';
 	import * as Card from '#lib/components/ui/card/index.ts';
+	import { panelHeader, panelPadding, panelTitle } from '#lib/components/styles.ts';
 	import { app } from '#lib/state.svelte.ts';
 	import { wiki } from '#lib/wiki.svelte.ts';
 	import EntityIcon from './EntityIcon.svelte';
@@ -33,16 +34,16 @@
 </script>
 
 <Card.Root class="h-full min-h-0 gap-0 rounded-none border-0 border-l py-0">
-	<Card.Header class="flex flex-row items-center justify-between gap-2 border-b px-4 py-2">
+	<div class={panelHeader}>
 		{#if titleHidden && shown}
-			<Card.Title class="flex min-w-0 items-center gap-2">
+			<h2 class="flex min-w-0 items-center gap-2 {panelTitle}">
 				<EntityIcon entity={shown} size={20} />
 				<span class="truncate" title={shown.name}>{shown.name}</span>
-			</Card.Title>
+			</h2>
 		{:else}
-			<Card.Title>Details</Card.Title>
+			<h2 class={panelTitle}>Details</h2>
 		{/if}
-		<div class="flex shrink-0 items-center">
+		<div class="flex shrink-0 items-center gap-1">
 			{#if app.selected}<Button
 					variant="ghost"
 					size="sm"
@@ -53,13 +54,15 @@
 			<Button
 				variant="ghost"
 				size="icon"
+				class="size-8"
 				aria-label="Close details"
 				onclick={() => (app.panelOpen = false)}><X /></Button
 			>
 		</div>
-	</Card.Header>
+	</div>
 	<ScrollArea class="min-h-0 flex-1" bind:viewportRef={viewport}
-		><Card.Content class="p-4"><EntityView entityKey={app.selected} bind:shown /></Card.Content
-		></ScrollArea
+		><div class="{panelPadding} py-4">
+			<EntityView entityKey={app.selected} bind:shown />
+		</div></ScrollArea
 	>
 </Card.Root>

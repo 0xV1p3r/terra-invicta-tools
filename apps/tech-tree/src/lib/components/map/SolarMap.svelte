@@ -32,6 +32,7 @@
 		type MapItem,
 		type SystemScene
 	} from './scene';
+	import { canvasControl } from '#lib/components/styles.ts';
 	import MapHotbar from './MapHotbar.svelte';
 	import TimeBar from './TimeBar.svelte';
 
@@ -750,8 +751,8 @@
 		style:top="{12 + topLeftDrop}px"
 	>
 		{#if crumbs.length}
-			<div class="rounded-lg border bg-card px-3 py-1.5 shadow">
-				<Breadcrumb.Root>
+			<div class="rounded-xl border bg-card px-3 py-1 shadow">
+				<Breadcrumb.Root class="flex h-8 items-center">
 					<Breadcrumb.List>
 						{#each crumbs as body, i (body.key)}
 							{#if i > 0}<Breadcrumb.Separator />{/if}
@@ -867,36 +868,74 @@
 		/>
 	{/if}
 
+	<!-- Same order as the tree canvas: zoom in, zoom out, fit, then help at the bottom. -->
 	<div bind:this={bottomLeft} class="absolute bottom-3 left-3 flex flex-col gap-1">
+		<div class="flex flex-col gap-1" role="group" aria-label="Zoom">
+			<Button
+				variant="outline"
+				size="icon"
+				class={canvasControl}
+				aria-label="Zoom in"
+				onclick={() => zoomBy(1.25)}
+			>
+				<Plus />
+			</Button>
+			<Button
+				variant="outline"
+				size="icon"
+				class={canvasControl}
+				aria-label="Zoom out"
+				onclick={() => zoomBy(0.8)}
+			>
+				<Minus />
+			</Button>
+			<Button
+				variant="outline"
+				size="icon"
+				class={canvasControl}
+				aria-label="Fit system"
+				onclick={() => fitAll()}
+			>
+				<Maximize />
+			</Button>
+		</div>
 		<Popover.Root>
 			<Popover.Trigger>
 				{#snippet child({ props })}
-					<Button {...props} variant="outline" size="icon" aria-label="Map controls help">
+					<Button
+						{...props}
+						variant="outline"
+						size="icon"
+						class={canvasControl}
+						aria-label="Map controls help"
+					>
 						<CircleQuestionMark />
 					</Button>
 				{/snippet}
 			</Popover.Trigger>
-			<Popover.Content class="w-80 text-sm" side="right" align="end">
-				<h2 class="mb-2 font-semibold">Map controls</h2>
-				<dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+			<Popover.Content
+				class="w-80 text-sm"
+				side="right"
+				align="end"
+				aria-labelledby="map-help-title"
+			>
+				<Popover.Header>
+					<!-- Popover.Title is a div: a real heading, styled the same. -->
+					<h2 id="map-help-title" data-slot="popover-title" class="font-medium">Map controls</h2>
+				</Popover.Header>
+				<dl class="mt-3 grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-1.5">
 					{#each HELP as [keys, action] (keys)}
-						<dt><kbd class="rounded border bg-muted px-1 font-mono text-xs">{keys}</kbd></dt>
-						<dd class="text-muted-foreground">{action}</dd>
+						<dt>
+							<kbd
+								class="rounded border bg-muted px-1.5 py-0.5 font-sans text-xs whitespace-nowrap text-muted-foreground"
+								>{keys}</kbd
+							>
+						</dt>
+						<dd>{action}</dd>
 					{/each}
 				</dl>
 			</Popover.Content>
 		</Popover.Root>
-		<div class="flex flex-col gap-1" role="group" aria-label="Zoom">
-			<Button variant="outline" size="icon" aria-label="Zoom in" onclick={() => zoomBy(1.25)}>
-				<Plus />
-			</Button>
-			<Button variant="outline" size="icon" aria-label="Zoom out" onclick={() => zoomBy(0.8)}>
-				<Minus />
-			</Button>
-			<Button variant="outline" size="icon" aria-label="Fit system" onclick={() => fitAll()}>
-				<Maximize />
-			</Button>
-		</div>
 	</div>
 
 	{#if data}

@@ -199,7 +199,7 @@
 		</ToggleGroup.Root>
 	</Pill>
 
-	<Pill aria-label="Categories" class="gap-0.5">
+	<Pill aria-label="Categories">
 		<ToggleGroup.Root
 			type="multiple"
 			size="sm"

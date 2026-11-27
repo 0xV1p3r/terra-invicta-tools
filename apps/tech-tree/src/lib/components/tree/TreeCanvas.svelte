@@ -24,6 +24,7 @@
 	import { CATEGORIES, CATEGORY_ORDER } from '#lib/categories.ts';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Popover from '#lib/components/ui/popover/index.js';
+	import { canvasControl } from '#lib/components/styles.ts';
 	import { settings } from '#lib/settings.svelte.ts';
 	import { app } from '#lib/state.svelte.ts';
 	import { Camera } from './camera';
@@ -251,7 +252,20 @@
 	});
 
 	$effect(() => {
-		camera.resize(width, height);
+		const [w, h] = [width, height];
+		untrack(() => {
+			// Hidden (the map page) reports 0 × 0: keep the last real size, so the camera doesn't
+			// re-center the selection on an empty viewport and land it in a corner on return.
+			if (w === 0 || h === 0 || (camera.width === w && camera.height === h)) return;
+			// A running animation follows the new size by itself (`animateTo` projects onto the
+			// current viewport each frame). Otherwise keep the selection in view when the canvas
+			// shrinks under it (e.g. the details panel opening) — but only if it was in view, so a
+			// node the user panned away from stays where they left it.
+			const n = !camera.animating && app.selected ? scene?.byKey.get(app.selected) : undefined;
+			const wasInView = n !== undefined && inView(n);
+			camera.resize(w, h);
+			if (n && wasInView) ensureVisible(n);
+		});
 	});
 
 	// --- overlays ---------------------------------------------------------------------
@@ -385,8 +399,23 @@
 		});
 	});
 
+	/**
+	 * The size bindings follow layout a frame late (ResizeObserver): a panel opened along with a
+	 * selection has already narrowed the canvas, so measure it now.
+	 */
+	function measure() {
+		if (!container || container.clientWidth === 0 || container.clientHeight === 0) return;
+		if (container.clientWidth === width && container.clientHeight === height) return;
+		width = container.clientWidth;
+		height = container.clientHeight;
+		camera.resize(width, height);
+	}
+
 	function centerOn(n: SceneNode, zoom = camera.zoom, duration = 400) {
 		if (!scene) return;
+		measure();
+		// A later resize (another panel settling) doesn't restart this: the animation lands the
+		// node at the center of the viewport as it is on each frame.
 		camera.animateTo(
 			camera.centered(n.x + scene.width / 2, n.y + scene.height / 2, zoom),
 			duration
@@ -537,16 +566,22 @@
 		return best;
 	}
 
-	function ensureVisible(n: SceneNode) {
-		if (!scene) return;
+	/** Whether `n` is fully on screen, clear of the edges, at the camera's current size. */
+	function inView(n: SceneNode) {
+		if (!scene) return false;
 		const v = camera.visible();
 		const margin = 40 / camera.zoom;
-		const inside =
+		return (
 			n.x >= v.x + margin &&
 			n.y >= v.y + margin &&
 			n.x + scene.width <= v.x + v.width - margin &&
-			n.y + scene.height <= v.y + v.height - margin;
-		if (!inside) centerOn(n, Math.max(camera.zoom, 0.6), 250);
+			n.y + scene.height <= v.y + v.height - margin
+		);
+	}
+
+	function ensureVisible(n: SceneNode) {
+		measure();
+		if (!inView(n)) centerOn(n, Math.max(camera.zoom, 0.6), 250);
 	}
 
 	const ARROWS: Record<string, [number, number]> = {
@@ -569,7 +604,11 @@
 			const next = current ? neighbour(current, ...arrow) : nearestToCenter();
 			if (next) {
 				app.selected = next.key;
-				ensureVisible(next);
+				// Check against the layout the selection brings (the details panel may open with
+				// it and narrow the canvas).
+				void tick().then(() => {
+					if (app.selected === next.key) ensureVisible(next);
+				});
 			}
 		} else if ((e.key === 'Enter' || e.key === ' ') && current) {
 			e.preventDefault();
@@ -755,19 +794,43 @@
 			role="group"
 			aria-label="Zoom"
 		>
-			<Button variant="outline" size="icon" aria-label="Zoom in" onclick={() => zoomBy(1.25)}>
+			<Button
+				variant="outline"
+				size="icon"
+				class={canvasControl}
+				aria-label="Zoom in"
+				onclick={() => zoomBy(1.25)}
+			>
 				<Plus />
 			</Button>
-			<Button variant="outline" size="icon" aria-label="Zoom out" onclick={() => zoomBy(0.8)}>
+			<Button
+				variant="outline"
+				size="icon"
+				class={canvasControl}
+				aria-label="Zoom out"
+				onclick={() => zoomBy(0.8)}
+			>
 				<Minus />
 			</Button>
-			<Button variant="outline" size="icon" aria-label="Fit tree" onclick={fitAll}>
+			<Button
+				variant="outline"
+				size="icon"
+				class={canvasControl}
+				aria-label="Fit tree"
+				onclick={fitAll}
+			>
 				<Maximize />
 			</Button>
 			<Popover.Root>
 				<Popover.Trigger>
 					{#snippet child({ props })}
-						<Button {...props} variant="outline" size="icon" aria-label="Keyboard shortcuts">
+						<Button
+							{...props}
+							variant="outline"
+							size="icon"
+							class={canvasControl}
+							aria-label="Keyboard shortcuts"
+						>
 							<Keyboard />
 						</Button>
 					{/snippet}
@@ -776,9 +839,13 @@
 					class="w-72"
 					side={settings.minimapCorner === 'bottom-left' ? 'left' : 'right'}
 					align="end"
+					aria-labelledby="tree-shortcuts-title"
 				>
 					<Popover.Header>
-						<Popover.Title>Keyboard shortcuts</Popover.Title>
+						<!-- Popover.Title is a div: a real heading, styled the same. -->
+						<h2 id="tree-shortcuts-title" data-slot="popover-title" class="font-medium">
+							Keyboard shortcuts
+						</h2>
 					</Popover.Header>
 					<dl class="mt-3 grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-1.5 text-sm">
 						{#each SHORTCUTS as [keys, action] (keys)}

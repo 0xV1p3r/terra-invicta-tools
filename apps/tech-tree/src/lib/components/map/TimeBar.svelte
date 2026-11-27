@@ -13,6 +13,10 @@
 	/** Span after the start date. */
 	const YEARS = 120;
 
+	// One height (32px), radius and font (sans, tabular figures) for every control in the row.
+	const field = 'h-8 rounded-md px-2 text-center text-sm tabular-nums';
+	const select = 'h-8 rounded-md';
+
 	const SPEEDS = [
 		{ value: '1', label: '1 day/s' },
 		{ value: '7', label: '1 week/s' },
@@ -112,11 +116,11 @@
 </script>
 
 <div
-	class="grid gap-1.5 rounded-xl border bg-card px-2 py-1.5 shadow"
+	class="grid gap-1.5 rounded-xl border bg-card p-1 pb-1.5 shadow"
 	role="group"
 	aria-label="Map date"
 >
-	<div class="flex items-center gap-1.5">
+	<div class="flex items-center gap-1.5 text-sm tabular-nums">
 		<Button
 			variant="outline"
 			size="icon"
@@ -130,7 +134,7 @@
 		<Input
 			type="number"
 			data-field="day"
-			class="h-8 w-16 px-2 text-center font-mono tabular-nums"
+			class="{field} w-16"
 			aria-label="Day"
 			title="Day"
 			min={0}
@@ -150,7 +154,7 @@
 			value={String(month)}
 			onValueChange={(v) => v && setMonth(year, Number(v))}
 		>
-			<Select.Trigger size="sm" aria-label="Month" title="Month" class="w-20">
+			<Select.Trigger aria-label="Month" title="Month" class="{select} w-20">
 				{MONTHS[month]?.short}
 			</Select.Trigger>
 			<Select.Content>
@@ -162,7 +166,7 @@
 		<Input
 			type="number"
 			data-field="year"
-			class="h-8 w-20 px-2 text-center font-mono tabular-nums"
+			class="{field} w-20"
 			aria-label="Year, {startYear} to {endYear}"
 			title="Year"
 			min={startYear}
@@ -182,7 +186,7 @@
 			value={String(mapState.speed)}
 			onValueChange={(v) => v && (mapState.speed = Number(v))}
 		>
-			<Select.Trigger size="sm" aria-label="Playback speed" class="ml-auto w-28 shrink-0">
+			<Select.Trigger aria-label="Playback speed" class="{select} ml-auto w-28 shrink-0">
 				{SPEEDS.find((s) => s.value === String(mapState.speed))?.label ?? `${mapState.speed} d/s`}
 			</Select.Trigger>
 			<Select.Content>
@@ -192,7 +196,7 @@
 			</Select.Content>
 		</Select.Root>
 		<Button
-			variant="ghost"
+			variant="outline"
 			size="icon"
 			class="size-8"
 			aria-label="Back to the start date"
@@ -206,7 +210,7 @@
 			<RotateCcw />
 		</Button>
 	</div>
-	<div class="grid gap-1">
+	<div class="grid gap-1 px-1">
 		<div class="flex justify-between text-[10px] text-muted-foreground" aria-hidden="true">
 			<span>{startYear}</span>
 			<span>{endYear}</span>
