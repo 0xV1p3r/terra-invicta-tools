@@ -41,7 +41,7 @@
 		].join(' · ');
 </script>
 
-<Pill aria-label="Research plan" class="gap-1">
+<Pill aria-label="Research plan">
 	<Tip text={planUi.panelOpen ? 'Hide plan panel' : 'Show plan panel'}>
 		<Button
 			variant="ghost"

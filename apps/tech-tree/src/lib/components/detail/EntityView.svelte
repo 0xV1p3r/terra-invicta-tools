@@ -19,7 +19,7 @@
 		type UnlockItem,
 		type UnlockKind
 	} from '#lib/api.ts';
-	import * as Card from '#lib/components/ui/card/index.ts';
+	import { sectionHeading, statLabel, statValue, subHeading } from '#lib/components/styles.ts';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Collapsible from '#lib/components/ui/collapsible/index.js';
@@ -94,6 +94,21 @@
 	const entity = $derived(detail?.entity ?? null);
 	const research = $derived(entity ? isResearch(entity.kind) : false);
 	const category = $derived(categoryInfo(entity?.category));
+	/**
+	 * What kind of entity this is (quiet badges; the category badge carries the colour). The wiki
+	 * also names the section, unless it just restates the kind ("Tech" + "Technologies"); for
+	 * uncategorised kinds ("Other") the section says more and replaces it.
+	 */
+	const typeLabels = $derived.by(() => {
+		if (!entity) return [];
+		const kind = KIND_LABELS[entity.kind] ?? entity.kind;
+		if (!inWiki) return [kind];
+		const section = wiki.label(entity.template);
+		if (entity.kind === 'other') return [section];
+		return section.toLowerCase().startsWith(kind.toLowerCase()) ? [kind] : [kind, section];
+	});
+	/** Spacing of every vertical list of entity links (requirements, unlocks, unlocked by). */
+	const linkList = 'flex flex-col gap-1';
 
 	// Some projects unlock well over a thousand items (e.g. territorial claims).
 	const UNLOCK_PREVIEW = 25;
@@ -176,16 +191,14 @@
 </script>
 
 {#snippet section(title: string, hint?: string)}
-	<Card.Content
-		class="mt-5 mb-1.5 flex items-baseline justify-between gap-2 px-0 text-xs font-medium text-muted-foreground"
-	>
+	<h3 class="mt-5 mb-2 flex items-baseline justify-between gap-2 {sectionHeading}">
 		{title}
 		{#if hint}<span class="font-normal text-faint">{hint}</span>{/if}
-	</Card.Content>
+	</h3>
 {/snippet}
 
 {#snippet or(show: boolean)}
-	{#if show}<Card.Content class="inline px-0 text-xs text-muted-foreground">or</Card.Content>{/if}
+	{#if show}<span class="text-xs text-muted-foreground">or</span>{/if}
 {/snippet}
 
 {#snippet iconAction(label: string, tip: string, onclick: () => void, Icon: typeof Focus)}
@@ -210,7 +223,7 @@
 {/snippet}
 
 {#if !entityKey}
-	<Card.Content class="px-0 text-sm text-muted-foreground">
+	<p class="text-sm text-muted-foreground">
 		{#if app.page === 'map'}
 			Click a body or Lagrange point to see its stats. Double-click a body, or use “Enter system”,
 			to open its system of moons; the breadcrumb or Backspace goes back up. Search with Ctrl+K.
@@ -218,43 +231,41 @@
 			Select a node in the tree or search (Ctrl+K) to see its details. Double-click a node to show
 			its requirements tree.
 		{/if}
-	</Card.Content>
+	</p>
 {:else if error}
-	<Card.Content class="flex items-start gap-3 px-0" role="alert">
+	<div class="flex items-start gap-3" role="alert">
 		<TriangleAlert class="mt-0.5 size-5 shrink-0 text-destructive" />
-		<Card.Content class="min-w-0 px-0 text-sm">
-			<Card.Content class="px-0 font-medium"
-				>Could not load {names[entityKey] ?? readableKey(entityKey)}</Card.Content
-			>
-			<Card.Content class="mt-1 px-0 break-words text-muted-foreground">{error}</Card.Content>
+		<div class="min-w-0 text-sm">
+			<p class="font-medium">Could not load {names[entityKey] ?? readableKey(entityKey)}</p>
+			<p class="mt-1 break-words text-muted-foreground">{error}</p>
 			<Button variant="outline" size="sm" class="mt-3" onclick={() => attempt++}>
 				<RotateCw /> Retry
 			</Button>
-		</Card.Content>
-	</Card.Content>
+		</div>
+	</div>
 {:else if loading && !detail}
-	<Card.Content class="space-y-3 px-0" aria-busy="true" aria-label="Loading details">
-		<Card.Content class="flex items-center gap-3 px-0">
+	<div class="space-y-3" aria-busy="true" aria-label="Loading details">
+		<div class="flex items-center gap-3">
 			<Skeleton class="size-14 rounded-lg" />
-			<Card.Content class="flex-1 space-y-2 px-0">
+			<div class="flex-1 space-y-2">
 				<Skeleton class="h-5 w-3/4" />
 				<Skeleton class="h-4 w-1/2" />
-			</Card.Content>
-		</Card.Content>
+			</div>
+		</div>
 		<Skeleton class="h-16 w-full" />
 		<Skeleton class="h-4 w-full" />
 		<Skeleton class="h-4 w-5/6" />
 		<Skeleton class="h-4 w-2/3" />
-	</Card.Content>
+	</div>
 {:else if detail && entity && inWiki && entity.spoiler && !settings.wikiSpoilers}
 	<SpoilerChip /><Button class="mt-4" onclick={() => (settings.wikiSpoilers = true)}
 		>Enable spoilers</Button
 	>
 {:else if detail && entity}
-	<Card.Content class={loading ? 'px-0 opacity-60 transition-opacity' : 'px-0 transition-opacity'}>
-		<Card.Content class="flex items-start gap-3 px-0">
-			<Card.Content
-				class="grid size-14 shrink-0 place-items-center rounded-lg border bg-muted/50 px-0"
+	<div class={loading ? 'opacity-60 transition-opacity' : 'transition-opacity'}>
+		<div class="flex items-start gap-3">
+			<div
+				class="grid size-14 shrink-0 place-items-center rounded-lg border bg-muted/50"
 				style={category ? `border-color: ${category.cssVar}` : undefined}
 			>
 				<EntityIcon
@@ -267,17 +278,13 @@
 							)
 						: undefined}
 				/>
-			</Card.Content>
-			<Card.Content class="min-w-0 flex-1 px-0">
-				<Card.Content
-					class="px-0 leading-tight font-semibold break-words {inWiki ? 'text-2xl' : 'text-lg'}"
-					>{entity.name}</Card.Content
-				>
-				<Card.Content class="mt-2 flex flex-wrap gap-1 px-0">
-					<Badge variant="outline" class="text-muted-foreground"
-						>{KIND_LABELS[entity.kind] ?? entity.kind}</Badge
-					>
-					{#if inWiki}<Badge variant="outline">{wiki.label(entity.template)}</Badge>{/if}
+			</div>
+			<div class="min-w-0 flex-1">
+				<h2 class="leading-tight font-semibold break-words {inWiki ? 'text-2xl' : 'text-lg'}">
+					{entity.name}
+				</h2>
+				<div class="mt-2 flex flex-wrap gap-1">
+					{#each typeLabels as label (label)}<Badge variant="secondary">{label}</Badge>{/each}
 					{#if entity.subtype}
 						<Badge variant="secondary">{entity.subtype}</Badge>
 					{/if}
@@ -309,12 +316,12 @@
 					{#if ann?.requiresNation}
 						<Badge variant="outline">Requires nation: {ann.requiresNation}</Badge>
 					{/if}
-				</Card.Content>
-			</Card.Content>
-		</Card.Content>
+				</div>
+			</div>
+		</div>
 
 		{#if ann?.variesByScenario && !app.scope.scenario}
-			<Card.Content
+			<div
 				class="mt-3 flex w-fit items-center gap-1.5 rounded-md border py-0.5 pr-1 pl-2 text-xs font-medium text-muted-foreground"
 			>
 				<Shuffle class="size-3.5 shrink-0" />
@@ -331,28 +338,24 @@
 						overview. Pick a scenario in the toolbar for exact values.
 					</Tooltip.Content>
 				</Tooltip.Root>
-			</Card.Content>
+			</div>
 		{/if}
 		{#if inWiki && imageUrl && !imageFailed}
-			<Card.Content class="mt-4 overflow-hidden rounded-lg border bg-muted/20 p-2">
+			<div class="mt-4 overflow-hidden rounded-lg border bg-muted/20 p-2">
 				<img
 					src={imageUrl}
 					alt={entity.name}
 					class="max-h-60 w-full rounded-md object-contain"
 					onerror={() => (imageFailed = true)}
 				/>
-			</Card.Content>
+			</div>
 		{/if}
-		{#if detail.effect}<Card.Content class="mt-4 p-0"
-				><EffectItem line={detail.effect} /></Card.Content
-			>{/if}
+		{#if detail.effect}<div class="mt-4"><EffectItem line={detail.effect} /></div>{/if}
 		{#if detail.summary}
-			<Card.Content class="mt-4 px-0 text-sm/relaxed whitespace-pre-line text-muted-foreground"
-				>{detail.summary}</Card.Content
-			>
+			<p class="mt-4 text-sm/relaxed whitespace-pre-line text-muted-foreground">{detail.summary}</p>
 		{/if}
 		{#if research}
-			<Card.Content class="mt-4 grid grid-cols-2 gap-2 px-0">
+			<div class="mt-4 grid grid-cols-2 gap-2">
 				<Button
 					variant="outline"
 					size="sm"
@@ -368,7 +371,7 @@
 								{...props}
 								variant="outline"
 								size="sm"
-								class="flex-1"
+								class="w-full"
 								aria-label="Unlocks tree: Everything this unlocks, all the way down"
 								onclick={() => treeAction(() => app.openSubtree(entity.key, 'down'))}
 							>
@@ -390,130 +393,112 @@
 					() => treeAction(() => app.navigate(entity)),
 					Crosshair
 				)}
-			</Card.Content>
+			</div>
 		{/if}
 		{#if research && !inWiki && campaign.active}
 			<ResearchPlanActions {entity} {repeatable} />
 		{/if}
 		{#if detail.researchCost != null || detail.totalCost != null}
-			<Card.Content class="mt-4 grid grid-cols-2 divide-x overflow-hidden rounded-lg border px-0">
-				<Card.Content class="px-3 py-2">
-					<Card.Content class="px-0 text-xs text-muted-foreground">Research cost</Card.Content>
-					<Card.Content
-						class="px-0 text-base font-semibold tracking-tight"
+			<dl class="mt-4 grid grid-cols-2 divide-x overflow-hidden rounded-lg border">
+				<div class="min-w-0 px-3 py-2">
+					<dt class={statLabel}>Research cost</dt>
+					<dd
+						class="{statValue} text-base tracking-tight"
 						title={formatCostFull(detail.researchCost)}
 					>
 						{formatCost(detail.researchCost)}
-					</Card.Content>
-				</Card.Content>
-				<Card.Content class="px-3 py-2">
-					<Card.Content class="px-0 text-xs text-muted-foreground"
-						>Total incl. requirements</Card.Content
-					>
-					<Card.Content
-						class="px-0 text-base font-semibold tracking-tight"
-						title={formatCostFull(detail.totalCost)}
-					>
+					</dd>
+				</div>
+				<div class="min-w-0 px-3 py-2">
+					<dt class={statLabel}>Total incl. requirements</dt>
+					<dd class="{statValue} text-base tracking-tight" title={formatCostFull(detail.totalCost)}>
 						{formatCost(detail.totalCost)}
-					</Card.Content>
+					</dd>
 					{#if remaining}
-						<Card.Content
-							class="px-0 text-xs text-muted-foreground"
+						<dd
+							class={statLabel}
 							title="{formatCostFull(
 								remaining.cost
 							)} research points left in the plan{remaining.withEarlier
 								? ', including earlier goals'
 								: ''}"
-							>{formatCost(remaining.cost)} left{remaining.withEarlier
-								? ' with earlier goals'
-								: ''}</Card.Content
 						>
+							{formatCost(remaining.cost)} left{remaining.withEarlier ? ' with earlier goals' : ''}
+						</dd>
 					{/if}
-				</Card.Content>
-			</Card.Content>
+				</div>
+			</dl>
 		{/if}
 		{#if detail.requirements.length || detail.droppedPrereqs.length}
 			{@render section(
 				'Requirements',
 				detail.requirements.length > 1 ? REQUIREMENT_LABELS.all : undefined
 			)}
-			<Card.Content class="space-y-1 px-0 text-sm">
+			<div class="{linkList} text-sm">
 				{#each detail.requirements as group, i (i)}
 					{@const choice = requirementChoices(group) > 1}
-					<Card.Content
-						class="flex flex-wrap items-center gap-x-1 px-0 {choice
+					<div
+						class="flex flex-wrap items-center gap-x-1 {choice
 							? 'rounded-md border border-dashed px-2 py-1'
 							: ''}"
 					>
-						{#if choice}<Card.Content class="w-full px-0 text-xs text-muted-foreground"
-								>{REQUIREMENT_LABELS.any}</Card.Content
-							>{/if}
+						{#if choice}<p class="w-full text-xs text-muted-foreground">
+								{REQUIREMENT_LABELS.any}
+							</p>{/if}
 						{#each group.options as option, j (j)}
 							{@render or(j > 0)}
 							<EntityLink entity={option} />
 						{/each}
 						{#if !group.options.length}
-							<Card.Content class="inline px-0 text-xs font-medium text-destructive"
-								>Not available in this scope:</Card.Content
-							>
+							<span class="text-xs font-medium text-destructive">Not available in this scope:</span>
 						{/if}
 						{#each group.hidden as hidden, j (j)}
 							{@render or(j > 0 || group.options.length > 0)}
-							<Card.Content
-								class="inline px-0"
+							<span
 								title="Exists, but can't be researched in this scope (restricted to other factions)"
 							>
 								<EntityLink entity={hidden} />
-								<Card.Content class="inline px-0 text-xs text-muted-foreground"
-									>(not in this scope)</Card.Content
-								>
-							</Card.Content>
+								<span class="text-xs text-muted-foreground">(not in this scope)</span>
+							</span>
 						{/each}
 						{#each group.unresolved as name, j (j)}
 							{@render or(j > 0 || group.options.length + group.hidden.length > 0)}
-							<Card.Content
-								class="inline px-0 font-mono text-xs text-muted-foreground"
-								title="Unresolved reference"
-							>
+							<span class="font-mono text-xs text-muted-foreground" title="Unresolved reference">
 								{name}
-							</Card.Content>
+							</span>
 						{/each}
-					</Card.Content>
+					</div>
 				{/each}
 				{#each detail.droppedPrereqs as name, i (i)}
-					<Card.Content
-						class="px-0 font-mono text-xs text-muted-foreground line-through"
+					<p
+						class="font-mono text-xs text-muted-foreground line-through"
 						title="Listed prerequisite that doesn't exist in this scope; the game ignores it"
 					>
 						{name}
-					</Card.Content>
+					</p>
 				{/each}
-			</Card.Content>
+			</div>
 		{/if}
 		{#if unlockGroups.length}
 			{@render section('Unlocks')}
-			<Card.Content class="space-y-3 px-0">
+			<div class="space-y-3">
 				{#each unlockGroups as [kind, items] (kind)}
-					<Card.Content class="px-0">
-						<Card.Content class="mb-1 flex items-center gap-1.5 px-0 text-sm font-medium">
+					<div>
+						<h4 class="mb-1 flex items-center gap-1.5 {subHeading}">
 							{UNLOCK_LABELS[kind] ?? kind}
-							<Card.Content class="inline px-0 text-xs text-muted-foreground"
-								>({items.length})</Card.Content
-							>
-						</Card.Content>
-						<Card.Content
-							class="flex flex-col px-0 text-sm {items.some((u) => u.stats) ? 'gap-2' : ''}"
-						>
+							<span class="font-normal text-muted-foreground">({items.length})</span>
+						</h4>
+						<div class="text-sm {items.some((u) => u.stats) ? 'grid gap-2' : linkList}">
 							{#each expanded[kind] ? items : items.slice(0, UNLOCK_PREVIEW) as item, i (`${i}:${item.entity.key}`)}
-								<Card.Content class="px-0">
+								<div>
 									{#if item.stats}
 										<UnlockCard entity={item.entity} stats={item.stats} />
 									{:else}
 										<EntityLink entity={item.entity} />
 									{/if}
-								</Card.Content>
+								</div>
 							{/each}
-						</Card.Content>
+						</div>
 						{#if items.length > UNLOCK_PREVIEW}
 							<Button
 								variant="link"
@@ -524,17 +509,17 @@
 								{expanded[kind] ? 'Show less' : `Show all ${items.length}`}
 							</Button>
 						{/if}
-					</Card.Content>
+					</div>
 				{/each}
-			</Card.Content>
+			</div>
 		{/if}
 		{#if detail.unlockedBy.length}
 			{@render section('Unlocked by')}
-			<Card.Content class="flex flex-col px-0 text-sm">
+			<div class="{linkList} text-sm">
 				{#each detail.unlockedBy as ref, i (i)}
-					<Card.Content class="px-0"><EntityLink entity={ref} /></Card.Content>
+					<div><EntityLink entity={ref} /></div>
 				{/each}
-			</Card.Content>
+			</div>
 		{/if}
 		{#if detail.stats}
 			{@render section('Stats')}
@@ -542,40 +527,40 @@
 		{/if}
 		{#if detail.effects.length}
 			{@render section('Effects')}
-			<Card.Content class="space-y-2 px-0 text-sm">
+			<div class="space-y-2 text-sm">
 				{#each detail.effects as effect, i (i)}
-					<Card.Content class="px-0"><EffectItem line={effect} /></Card.Content>
+					<div><EffectItem line={effect} /></div>
 				{/each}
-			</Card.Content>
+			</div>
 		{/if}
 		{#if detail.quote || (detail.description && !detail.effect) || (!inWiki && imageUrl && !imageFailed)}
 			{#key entity.key}<Collapsible.Root class="mt-6" open={false}>
 					<Collapsible.Trigger
-						class="group flex items-center gap-1 rounded-sm py-1 text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
+						class="group flex items-center gap-1 rounded-sm py-1 {sectionHeading} hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
 						><ChevronRight class="size-4 transition-transform group-data-[state=open]:rotate-90" /> Lore</Collapsible.Trigger
 					>
 					<Collapsible.Content class="flex flex-col gap-3 pt-3">
 						{#if !inWiki && imageUrl && !imageFailed}
-							<Card.Content class="overflow-hidden rounded-lg border bg-muted/20 p-2">
+							<div class="overflow-hidden rounded-lg border bg-muted/20 p-2">
 								<img
 									src={imageUrl}
 									alt={entity.name}
 									class="max-h-32 w-full rounded-md object-contain"
 									onerror={() => (imageFailed = true)}
 								/>
-							</Card.Content>
+							</div>
 						{/if}
 						{#if detail.quote}
-							<Card.Content
-								class="border-l-2 px-0 pl-3 text-sm whitespace-pre-line text-muted-foreground italic"
+							<blockquote
+								class="border-l-2 pl-3 text-sm whitespace-pre-line text-muted-foreground italic"
 							>
 								{detail.quote}
-							</Card.Content>
+							</blockquote>
 						{/if}
 						{#if detail.description && !detail.effect}
-							<Card.Content class="px-0 text-sm whitespace-pre-line text-muted-foreground">
+							<p class="text-sm whitespace-pre-line text-muted-foreground">
 								{detail.description}
-							</Card.Content>
+							</p>
 						{/if}
 					</Collapsible.Content>
 				</Collapsible.Root>{/key}
@@ -589,7 +574,7 @@
 		/>
 		{#key entity.key}<Collapsible.Root class="mt-6" open={false}>
 				<Collapsible.Trigger
-					class="group flex items-center gap-1 rounded-sm py-1 text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
+					class="group flex items-center gap-1 rounded-sm py-1 {sectionHeading} hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
 					><ChevronRight class="size-4 transition-transform group-data-[state=open]:rotate-90" /> Technical
 					details</Collapsible.Trigger
 				>
@@ -613,5 +598,5 @@
 					<DataTree value={detail.record} /></Collapsible.Content
 				>
 			</Collapsible.Root>{/key}
-	</Card.Content>
+	</div>
 {/if}

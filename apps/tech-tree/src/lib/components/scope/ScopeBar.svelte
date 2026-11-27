@@ -21,7 +21,7 @@
 	// A campaign plans in its own scenario and faction (the language stays free, in the settings).
 	// Shown as aria-disabled buttons, so keyboard users can reach the tooltip saying why.
 	let locked = $derived(campaign.active);
-	const fixed = `${pillItem} inline-flex w-44 cursor-default items-center justify-between gap-2 pr-2 hover:bg-input/30 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none`;
+	const fixed = `${pillItem} inline-flex w-44 cursor-default items-center justify-between gap-2 pr-2 hover:bg-white/[0.035] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none`;
 </script>
 
 {#snippet factionName()}
@@ -34,7 +34,7 @@
 	>
 {/snippet}
 
-<Pill aria-label="Data scope" class="gap-2">
+<Pill aria-label="Data scope">
 	{#if locked}
 		<Tip text="Scenario: {scenarioLabel}. Set by campaign {locked.name}">
 			<button

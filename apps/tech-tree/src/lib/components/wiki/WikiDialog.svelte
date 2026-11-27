@@ -32,6 +32,8 @@
 	$effect(() => {
 		if (!settings.wikiSpoilers) untrack(() => wiki.hideSpoilers());
 	});
+	/** Header bar of each column: one height and border, so the three line up. */
+	const columnHeader = 'flex h-14 shrink-0 items-center justify-between gap-2 border-b px-3';
 	/** Entries fetched per request ("Show more" fetches the next page). */
 	const PAGE = 200;
 	let sectionFilter = $state('');
@@ -288,7 +290,7 @@
 
 {#snippet spoilerToggle(id: string)}<Label for={id} class="grid gap-1 text-xs"
 		>Show spoilers in wiki<span class="font-normal text-muted-foreground"
-			>alien and story content</span
+			>Alien and story content.</span
 		></Label
 	><Switch {id} bind:checked={settings.wikiSpoilers} />{/snippet}
 <svelte:window onkeydown={shortcut} />
@@ -305,8 +307,11 @@
 	>
 </Tip>
 <Dialog.Root bind:open={wiki.open}>
+	<!-- No backdrop blur, unlike the other dialogs: this one covers ~90% of the window, so the blur
+	     would only show in a thin margin yet still cost a full-window backdrop-filter pass (slow on
+	     WebKitGTK, see .wiki-dialog in app.css). A slightly stronger dim stands in for it. -->
 	<Dialog.Content
-		overlayClass="bg-black/50 supports-backdrop-filter:backdrop-blur-none"
+		overlayClass="bg-black/30 supports-backdrop-filter:backdrop-blur-none"
 		class="wiki-dialog top-[5vh] right-[2vw] bottom-[5vh] left-[2vw] flex w-auto max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-none"
 	>
 		<Dialog.Header class="shrink-0 border-b p-4 pr-14">
@@ -335,13 +340,13 @@
 			<Card.Root
 				class="hidden w-[240px] shrink-0 gap-0 rounded-none border-0 border-r py-0 shadow-none ring-0 lg:flex"
 			>
-				<Card.Header class="p-3"
-					><Input
+				<div class={columnHeader}>
+					<Input
 						bind:value={sectionFilter}
 						placeholder="Filter sections…"
 						aria-label="Filter wiki sections"
-					/></Card.Header
-				>
+					/>
+				</div>
 				<ScrollArea class="min-h-0 flex-1"
 					><Card.Content class="p-2">
 						{#if indexLoading}<Skeleton class="h-24 w-full" />{/if}
@@ -392,8 +397,20 @@
 					: ''}"
 				onkeydown={listKey}
 			>
-				<Card.Header class="gap-2 p-3"
-					><div class="flex items-center justify-between gap-2 lg:hidden">
+				<div class={columnHeader}>
+					<div class="grid min-w-0 flex-1 gap-1">
+						<Card.Title class="truncate leading-tight"
+							>{global ? 'Search results' : (section?.label ?? 'Entries')}</Card.Title
+						>{#if browsing}<Card.Description class="text-xs"
+								>{matchCount.toLocaleString()} entries</Card.Description
+							>{/if}{#if global && hiddenHits}<Card.Description class="text-xs"
+								>{hiddenHits} spoiler results hidden</Card.Description
+							>{/if}
+					</div>
+				</div>
+				<!-- Narrow windows only: the sidebar's spoiler switch and sections; always: the filter. -->
+				<div class="grid shrink-0 gap-2 p-2 {!global && wiki.template ? '' : 'lg:hidden'}">
+					<div class="flex items-center justify-between gap-2 px-1 lg:hidden">
 						{@render spoilerToggle('wiki-spoilers-mobile')}
 					</div>
 					<!-- Narrow windows: the section list is collapsed into this select. -->
@@ -406,7 +423,7 @@
 							query = '';
 						}}
 					>
-						<Select.Trigger size="sm" class="w-full lg:hidden" aria-label="Section"
+						<Select.Trigger class="w-full lg:hidden" aria-label="Section"
 							>{section?.label ?? 'Choose a section'}</Select.Trigger
 						>
 						<Select.Content>
@@ -424,18 +441,13 @@
 								</Select.Group>
 							{/each}
 						</Select.Content>
-					</Select.Root><Card.Title
-						>{global ? 'Search results' : (section?.label ?? 'Entries')}</Card.Title
-					>{#if browsing}<Card.Description>{matchCount.toLocaleString()} entries</Card.Description
-						>{/if}{#if global && hiddenHits}<Card.Description
-							>{hiddenHits} spoiler results hidden</Card.Description
-						>{/if}
+					</Select.Root>
 					{#if !global && wiki.template}<Input
 							bind:value={filter}
 							placeholder="Filter name or data name…"
 							aria-label="Filter entries"
-						/>{/if}</Card.Header
-				>
+						/>{/if}
+				</div>
 				<ScrollArea class="min-h-0 flex-1"
 					><Card.Content class="flex flex-col gap-1 p-2">
 						{#if global ? searching : loading && !entries.length}<Skeleton
@@ -460,13 +472,15 @@
 						{#each matching as entry, i (entry.entity.key)}
 							{@const entity = entry.entity}
 							{@const tone = SENTIMENT[entry.effect?.sentiment ?? 'neutral']}
+							<!-- Keyboard cursor (the row Enter opens): the hover fill, or the selected row's own
+							     fill, plus an inset ring. -->
 							<Button
 								title={entity.dataName}
 								id={`wiki-entry-${i}`}
 								variant={wiki.selected === entity.key ? 'secondary' : 'ghost'}
 								class="h-auto min-h-10 w-full justify-start gap-2 px-3 py-1.5 text-left whitespace-normal {cursor ===
-									i && wiki.selected !== entity.key
-									? 'outline outline-1 -outline-offset-1 outline-ring'
+								i
+									? `ring-1 ring-ring ring-inset ${wiki.selected === entity.key ? '' : 'bg-accent dark:bg-accent/50'}`
 									: ''}"
 								aria-current={wiki.selected === entity.key ? 'page' : undefined}
 								onclick={() => {
@@ -483,7 +497,8 @@
 										)}
 									/>{/if}<Card.Content class="min-w-0 flex-1 p-0"
 									><Card.Content class="flex items-start justify-between gap-2 p-0"
-										><Card.Title class="text-sm leading-snug {entry.effect ? tone.text : ''}"
+										><Card.Title
+											class="text-sm leading-snug font-medium {entry.effect ? tone.text : ''}"
 											>{entry.effect?.label ?? entity.name}</Card.Title
 										>
 										{#if entry.effect?.modifier}<Badge
@@ -518,8 +533,8 @@
 					? ''
 					: 'max-md:hidden'}"
 			>
-				<Card.Header class="flex flex-row items-center gap-2 border-b p-2"
-					><Button variant="ghost" size="sm" class="md:hidden" onclick={() => wiki.closeEntity()}
+				<div class="{columnHeader} justify-start px-2">
+					<Button variant="ghost" size="sm" class="md:hidden" onclick={() => wiki.closeEntity()}
 						><ArrowLeft /> List</Button
 					><Button
 						variant="ghost"
@@ -538,17 +553,20 @@
 							variant="outline"
 							size="sm"
 							onclick={inTree}>In tech tree</Button
-						>{/if}</Card.Header
-				>
+						>{/if}
+				</div>
 				<ScrollArea class="min-h-0 flex-1"
 					><Card.Content class="p-5"
-						>{#if wiki.selected}<EntityView entityKey={wiki.selected} inWiki />{:else}<Card.Title
-								>{section?.label ?? 'Explore the wiki'}</Card.Title
-							><Card.Description class="mt-3">
-								{#if browsing}Select an entry to read its details and follow its references.
-									{#if section && !global}{section.count.toLocaleString()} entries in this section.{/if}
-								{:else}Choose a section or search all entries.{/if}</Card.Description
-							>{/if}</Card.Content
+						>{#if wiki.selected}<EntityView entityKey={wiki.selected} inWiki />{:else}<div
+								class="flex flex-col items-center gap-3 py-16 text-center text-sm text-muted-foreground"
+							>
+								<BookOpen class="size-8 opacity-50" aria-hidden="true" />
+								<p class="max-w-xs leading-relaxed">
+									{browsing
+										? 'Select an entry to read its details and follow its references.'
+										: 'Choose a section or search all entries.'}
+								</p>
+							</div>{/if}</Card.Content
 					></ScrollArea
 				>
 			</Card.Root>

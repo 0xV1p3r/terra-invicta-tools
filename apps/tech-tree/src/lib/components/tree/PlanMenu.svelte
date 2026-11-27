@@ -15,7 +15,8 @@
 	// mark research completed in the active campaign, or make it a goal. Un-marking research
 	// other completed research depends on asks first, as those lose a requirement too.
 	import Check from '@lucide/svelte/icons/check';
-	import ListChecks from '@lucide/svelte/icons/list-checks';
+	import CheckCheck from '@lucide/svelte/icons/check-check';
+	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import Target from '@lucide/svelte/icons/target';
 	import Undo2 from '@lucide/svelte/icons/undo-2';
 	import X from '@lucide/svelte/icons/x';
@@ -48,6 +49,12 @@
 	});
 	const status = $derived(shown ? campaign.status(shown.key) : undefined);
 	const goal = $derived(shown ? campaign.isGoal(shown.key) : false);
+	/** The campaign's plan hasn't arrived yet, so the status is not known. */
+	const planPending = $derived(campaign.active !== null && campaign.plan === null);
+	/** Every requirement is marked, so marking it alone keeps the campaign consistent. */
+	const markable = $derived(
+		campaign.planCurrent && (status === 'available' || status === 'notUnlocked')
+	);
 
 	let pending = $state.raw<{ key: EntityKey; name: string; lost: string[] } | null>(null);
 
@@ -94,19 +101,30 @@
 			{#if !campaign.active}
 				<DropdownMenu.Item disabled>Choose or create a campaign to plan</DropdownMenu.Item>
 			{:else}
-				{#if status === 'done'}
+				{#if status === undefined}
+					<!-- Unknown status: offer nothing that could mark research its requirements lack. -->
+					{#if planPending}
+						<DropdownMenu.Item disabled>
+							{#if campaign.loading}<LoaderCircle class="animate-spin" /> Loading plan…{:else}Plan
+								unavailable{/if}
+						</DropdownMenu.Item>
+					{:else}
+						<DropdownMenu.Item disabled>Not part of this campaign's research</DropdownMenu.Item>
+					{/if}
+				{:else if status === 'done'}
 					<DropdownMenu.Item onSelect={() => unmark(key, name)}>
 						<Undo2 /> Un-mark
 					</DropdownMenu.Item>
 				{:else if status === 'unobtainable'}
 					<DropdownMenu.Item disabled>Not obtainable in this campaign</DropdownMenu.Item>
 				{:else}
-					<DropdownMenu.Item onSelect={() => campaign.markDone(key)}>
+					<!-- Like the detail panel: research with unmarked requirements is marked with them. -->
+					<DropdownMenu.Item disabled={!markable} onSelect={() => campaign.markDone(key)}>
 						<Check /> Mark researched
 					</DropdownMenu.Item>
-					{#if status !== 'available'}
+					{#if status === 'locked'}
 						<DropdownMenu.Item onSelect={() => campaign.markDone(key, true)}>
-							<ListChecks /> Mark researched with prerequisites
+							<CheckCheck /> Mark researched with prerequisites
 						</DropdownMenu.Item>
 					{/if}
 				{/if}
@@ -115,7 +133,7 @@
 					<DropdownMenu.Item onSelect={() => campaign.removeGoal(key)}>
 						<X /> Remove goal
 					</DropdownMenu.Item>
-				{:else if status !== 'done' && status !== 'unobtainable'}
+				{:else if status === 'available' || status === 'notUnlocked' || status === 'locked'}
 					<DropdownMenu.Separator />
 					<DropdownMenu.Item onSelect={() => campaign.addGoal(key)}>
 						<Target /> Add as goal

@@ -6,6 +6,7 @@
 	import * as Command from '#lib/components/ui/command/index.ts';
 	import { Button } from '#lib/components/ui/button/index.ts';
 	import Tip from '#lib/components/toolbar/Tip.svelte';
+	import { chipToggle } from '#lib/components/styles.ts';
 	import Search from '@lucide/svelte/icons/search';
 	import FlaskConical from '@lucide/svelte/icons/flask-conical';
 	import Wrench from '@lucide/svelte/icons/wrench';
@@ -138,28 +139,35 @@
 	<ToggleGroup.Root
 		type="single"
 		size="sm"
-		value={typeFilter}
-		onValueChange={(value) => {
-			if (value) typeFilter = value;
-		}}
+		bind:value={
+			() => typeFilter,
+			(value) => {
+				// Pressing the selected chip again keeps it selected (the filter still applies).
+				if (value) typeFilter = value;
+			}
+		}
 		aria-label="Filter search results by type"
 		class="mx-3 my-2 flex-wrap"
 		spacing={1}
 	>
 		{#each filterTypes as type (type)}
-			<ToggleGroup.Item value={type === 'All' ? 'all' : type}>{type}</ToggleGroup.Item>
+			<ToggleGroup.Item value={type === 'All' ? 'all' : type} class={chipToggle}
+				>{type}</ToggleGroup.Item
+			>
 		{/each}
 	</ToggleGroup.Root>
-	<Command.List aria-busy={loading}>
+	<Command.List aria-busy={loading} class="pb-1.5">
 		{#if error}
-			<div class="flex flex-col items-start gap-3 px-4 py-6">
+			<div class="flex flex-col items-center gap-3 px-4 py-6 text-center">
 				<p role="alert" class="text-sm text-destructive">
 					Could not search for “{query.trim()}”. Try again.
 				</p>
 				<Button variant="outline" size="sm" onclick={() => retry++}>Retry</Button>
 			</div>
 		{:else if loading}
-			<div role="status" class="px-4 py-6 text-sm text-muted-foreground">Searching…</div>
+			<div role="status" class="px-4 py-6 text-center text-sm text-muted-foreground">
+				Searching…
+			</div>
 		{:else if !hits.length}
 			<div role="status" class="px-4 py-6 text-center text-sm text-muted-foreground">
 				{#if !query.trim()}

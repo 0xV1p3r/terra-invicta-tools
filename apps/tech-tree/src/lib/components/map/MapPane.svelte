@@ -18,6 +18,7 @@
 	import * as Select from '#lib/components/ui/select/index.js';
 	import { Switch } from '#lib/components/ui/switch/index.js';
 	import { settings } from '#lib/settings.svelte.ts';
+	import { panelHeader, panelPadding, panelTitle, sectionHeading } from '#lib/components/styles.ts';
 	import { app } from '#lib/state.svelte.ts';
 	import { ITEM_TYPES, RESOURCES, mapState } from './map-state.svelte';
 	import { TYPE_COLORS, TYPE_LABELS, bodyColor, type ItemType, type MapBody } from './scene';
@@ -125,8 +126,8 @@
 </script>
 
 <aside class="flex h-full min-h-0 flex-col border-r bg-card" aria-label="Bodies">
-	<div class="flex items-center justify-between gap-2 border-b px-3 py-2">
-		<h2 class="font-semibold">Bodies</h2>
+	<div class={panelHeader}>
+		<h2 class={panelTitle}>Bodies</h2>
 		<Button
 			variant="ghost"
 			size="icon"
@@ -136,7 +137,7 @@
 		>
 	</div>
 
-	<div class="border-b p-3">
+	<div class="border-b {panelPadding} py-3">
 		<div class="relative">
 			<Search
 				class="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
@@ -153,11 +154,11 @@
 
 	<!-- Filters and list scroll together, so open filters don't squeeze the list. -->
 	<ScrollArea class="min-h-0 flex-1">
-		<Collapsible.Root bind:open={filtersOpen} class="border-b px-3 py-2">
+		<Collapsible.Root bind:open={filtersOpen} class="border-b {panelPadding} py-2">
 			<div class="flex items-center gap-1">
 				<Collapsible.Trigger>
 					{#snippet child({ props })}
-						<Button {...props} variant="ghost" size="sm" class="-ml-2 flex-1 justify-start">
+						<Button {...props} variant="ghost" size="sm" class="-ml-2.5 flex-1 justify-start">
 							<Funnel /> Filters
 							{#if activeCount}<Badge class="h-5 min-w-5 px-1">{activeCount}</Badge>{/if}
 							<ChevronDown class="ml-auto transition-transform {filtersOpen ? 'rotate-180' : ''}" />
@@ -165,13 +166,15 @@
 					{/snippet}
 				</Collapsible.Trigger>
 				{#if mapState.filtersActive}
-					<Button variant="ghost" size="sm" onclick={() => mapState.clearFilters()}>Clear</Button>
+					<Button variant="ghost" size="sm" class="-mr-3" onclick={() => mapState.clearFilters()}
+						>Clear</Button
+					>
 				{/if}
 			</div>
 			<Collapsible.Content>
 				<div class="grid gap-4 pt-2 pb-2 text-sm">
 					<div class="grid gap-2">
-						<h3 class="text-xs font-medium text-muted-foreground">Types</h3>
+						<h3 class={sectionHeading}>Types</h3>
 						<div class="grid grid-cols-2 gap-x-3 gap-y-2">
 							{#each ITEM_TYPES as type (type)}
 								<Label class="flex items-center gap-2 font-normal">
@@ -192,7 +195,7 @@
 						<Switch id="map-hab-sites" bind:checked={mapState.habSitesOnly} />
 					</div>
 					<div class="grid gap-2">
-						<h3 class="text-xs font-medium text-muted-foreground">Minimum resources</h3>
+						<h3 class={sectionHeading}>Minimum resources</h3>
 						{#each RESOURCES as res (res)}
 							<div class="flex items-center justify-between gap-4">
 								<span class="capitalize">{res}</span>
@@ -235,14 +238,14 @@
 			</Collapsible.Content>
 		</Collapsible.Root>
 
-		<p class="px-3 pt-2 text-xs text-muted-foreground" role="status">
+		<p class="{panelPadding} pt-2 text-xs text-muted-foreground" role="status">
 			{total === 1 ? '1 result' : `${total} results`}
 		</p>
 		<div bind:this={list} class="pb-3">
 			{#each groups as group (group.center.key)}
 				<section class="pt-2" aria-label="{group.center.info.entity.name} system">
-					<div class="flex items-center justify-between gap-2 px-3 py-1">
-						<h3 class="truncate text-xs font-medium text-muted-foreground">
+					<div class="flex items-center justify-between gap-2 {panelPadding} py-1">
+						<h3 class="truncate {sectionHeading}">
 							{group.center.info.entity.name} system
 						</h3>
 						{#if group.center.key !== (app.mapSystem ?? mapState.index?.root?.key)}
@@ -262,7 +265,7 @@
 									type="button"
 									data-key={row.entity.key}
 									aria-current={isSelected(row.entity.key) ? 'true' : undefined}
-									class="flex w-full items-center gap-2 px-3 py-1 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset aria-[current]:bg-primary/10 aria-[current]:font-medium"
+									class="flex w-full items-center gap-2 {panelPadding} py-1 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset aria-[current]:bg-primary/10 aria-[current]:font-medium"
 									onclick={() => app.navigate(row.entity)}
 								>
 									{@render marker(row.type, row.color)}
@@ -275,7 +278,7 @@
 					</ul>
 				</section>
 			{:else}
-				<p class="px-3 py-6 text-center text-sm text-muted-foreground">
+				<p class="{panelPadding} py-6 text-center text-sm text-muted-foreground">
 					{mapState.index ? 'No bodies match.' : 'Loading…'}
 				</p>
 			{/each}

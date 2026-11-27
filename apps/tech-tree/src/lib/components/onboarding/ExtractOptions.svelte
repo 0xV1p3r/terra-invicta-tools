@@ -20,13 +20,13 @@
 		<ChevronRight class="size-4 transition-transform group-data-[state=open]:rotate-90" />
 		Options
 	</Collapsible.Trigger>
-	<Collapsible.Content class="grid gap-4 pt-3 text-sm">
+	<Collapsible.Content class="grid gap-3 pt-3 text-sm">
 		<div class="flex items-start justify-between gap-4">
 			<Label for="{id}-large-art" class="grid gap-1 font-normal">
 				<span class="leading-snug font-medium"
 					>Include large artwork (illustrations, portraits, hab modules)</span
 				>
-				<span class="text-muted-foreground">about 1.5 GB</span>
+				<span class="text-xs leading-relaxed text-muted-foreground">About 1.5 GB.</span>
 			</Label>
 			<Switch id="{id}-large-art" {disabled} bind:checked={settings.extractLargeArt} />
 		</div>
@@ -48,10 +48,12 @@
 					<Label for="{id}-png" class="font-normal">PNG</Label>
 				</div>
 			</RadioGroup.Root>
-			<p class="text-muted-foreground">
+			<p class="text-xs leading-relaxed text-muted-foreground">
 				WebP is lossless: same quality as PNG, faster to extract and smaller.
 			</p>
 		</div>
-		<p class="text-muted-foreground">Icons, logos and flags are always extracted.</p>
+		<p class="text-xs leading-relaxed text-muted-foreground">
+			Icons, logos and flags are always extracted.
+		</p>
 	</Collapsible.Content>
 </Collapsible.Root>

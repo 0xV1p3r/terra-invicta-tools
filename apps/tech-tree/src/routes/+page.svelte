@@ -72,6 +72,9 @@
 			let before: Element | null = null;
 			for (const group of toolbar.children) {
 				if (group === utilities) continue;
+				// Not flex items (e.g. a filter's sr-only description): they take no room.
+				const { position, display } = getComputedStyle(group);
+				if (position === 'absolute' || position === 'fixed' || display === 'none') continue;
 				room -= outer(group) + gap;
 				// Half a pixel of slack for subpixel widths.
 				if (room < -0.5) {
@@ -79,7 +82,9 @@
 					break;
 				}
 			}
-			if (utilities.nextElementSibling !== before) move(before);
+			// Also when detached (a block's teardown that didn't go through `remove()`).
+			if (utilities.parentElement !== toolbar || utilities.nextElementSibling !== before)
+				move(before);
 		};
 		// moveBefore keeps focus (and tooltip state) on the moved controls; insertBefore drops
 		// focus to the body, so put it back.
@@ -100,6 +105,12 @@
 			toolbar.insertBefore(utilities, before);
 			if (refocus && document.activeElement !== focused) focused.focus({ preventScroll: true });
 		};
+		// Placed between pills, the utilities sit inside the DOM range of the block that renders
+		// them (e.g. the tree filters), and Svelte removes a block's whole range when it goes
+		// (switching to the map). Send them back to the end of the toolbar instead, which no
+		// block range reaches; the mutation observer then places them again.
+		const host = utilities as HTMLElement & { remove: () => void };
+		host.remove = () => move(null);
 		const resized = new ResizeObserver(place);
 		const observe = () => {
 			resized.disconnect();
@@ -117,6 +128,7 @@
 		return () => {
 			mutated.disconnect();
 			resized.disconnect();
+			delete (host as Partial<typeof host>).remove;
 		};
 	};
 
@@ -269,18 +281,13 @@
 						</Pill>
 					{/if}
 					<ViewBar graph={treeGraph} />
+					<!-- Scope and the filter pills are toolbar items of their own, so each wraps on its own. -->
 					<ScopeBar />
-					<div
-						role="group"
-						aria-label="Filters"
-						class="flex max-w-full flex-wrap items-center gap-x-3 gap-y-1.5"
-					>
-						{#if app.page === 'tree'}
-							<TreeFilters />
-						{:else}
-							<MapToolbar />
-						{/if}
-					</div>
+					{#if app.page === 'tree'}
+						<TreeFilters />
+					{:else}
+						<MapToolbar />
+					{/if}
 					<Pill class="ml-auto gap-0.5" aria-label="Search and settings" data-utilities>
 						<SearchPalette />
 						<WikiDialog />
@@ -299,7 +306,7 @@
 							<Button
 								variant="ghost"
 								size="icon"
-								class="{pillIcon} aria-disabled:cursor-default aria-disabled:opacity-50 aria-disabled:hover:bg-transparent"
+								class="{pillIcon} aria-disabled:cursor-default aria-disabled:opacity-40 aria-disabled:hover:bg-transparent"
 								aria-label="Details panel"
 								aria-pressed={app.panelOpen}
 								aria-disabled={!app.selected}

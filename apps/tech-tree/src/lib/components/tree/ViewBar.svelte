@@ -187,7 +187,9 @@
 			{/each}
 		</ToggleGroup.Root>
 		<Tip text="Include alternative prerequisites">
-			<div class="flex h-8 items-center gap-2 rounded-md border border-input px-2.5">
+			<div
+				class="flex h-8 items-center gap-2 rounded-md border border-input bg-white/[0.035] px-2.5 shadow-[var(--highlight)]"
+			>
 				<Switch
 					id="subtree-alternatives"
 					size="sm"

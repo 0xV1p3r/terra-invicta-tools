@@ -7,6 +7,7 @@
 	import CheckCheck from '@lucide/svelte/icons/check-check';
 	import Circle from '@lucide/svelte/icons/circle';
 	import CircleCheck from '@lucide/svelte/icons/circle-check';
+	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import Lock from '@lucide/svelte/icons/lock';
 	import Minus from '@lucide/svelte/icons/minus';
 	import Plus from '@lucide/svelte/icons/plus';
@@ -20,6 +21,7 @@
 	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { readableKey } from '#lib/format.ts';
+	import { sectionHeading } from '#lib/components/styles.ts';
 
 	let { entity, repeatable = false }: { entity: EntityRef; repeatable?: boolean } = $props();
 
@@ -40,6 +42,14 @@
 	const stepIndex = $derived(campaign.stepIndex.get(entity.key));
 	const count = $derived(campaign.completions(entity.key));
 	const goal = $derived(campaign.isGoal(entity.key));
+	/** The campaign's plan hasn't arrived yet, so the status is not known. */
+	const planPending = $derived(campaign.active !== null && campaign.plan === null);
+	/** Every requirement is marked, so marking it alone keeps the campaign consistent. */
+	const markable = $derived(
+		campaign.planCurrent && (status === 'available' || status === 'notUnlocked')
+	);
+	/** Same size as the detail panel's tree actions above, which share this 2-column grid. */
+	const action = 'h-8 w-full';
 	let busy = $state(false);
 	/** Completed research that un-marking would leave without a requirement (awaiting confirmation). */
 	let lost = $state.raw<EntityKey[] | null>(null);
@@ -75,7 +85,13 @@
 	}
 </script>
 
-<div class="mt-4 grid gap-2 rounded-lg border px-3 py-2.5" aria-label="Campaign plan" role="group">
+<section class="mt-5 grid gap-2" aria-label="Campaign plan">
+	<h3 class="flex items-baseline justify-between gap-2 {sectionHeading}">
+		Campaign plan
+		{#if stepIndex !== undefined}<span class="font-normal text-faint"
+				>Step {stepIndex + 1} of the plan</span
+			>{/if}
+	</h3>
 	<div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
 		{#if info}
 			<span class="flex items-center gap-1.5 font-medium">
@@ -86,11 +102,14 @@
 				/>
 				{info.label}
 			</span>
+		{:else if planPending && campaign.loading}
+			<span class="flex items-center gap-1.5 text-muted-foreground"
+				><LoaderCircle class="size-4 shrink-0 animate-spin" /> Loading plan…</span
+			>
+		{:else if planPending}
+			<span class="text-muted-foreground">Plan unavailable</span>
 		{:else}
 			<span class="text-muted-foreground">Not part of this campaign's research</span>
-		{/if}
-		{#if stepIndex !== undefined}
-			<span class="text-xs text-muted-foreground">Step {stepIndex + 1} of the plan</span>
 		{/if}
 		{#if goal}
 			<span class="flex items-center gap-1 text-xs text-muted-foreground"
@@ -98,41 +117,40 @@
 			>
 		{/if}
 	</div>
-	{#if status && status !== 'unobtainable'}
-		<div class="grid grid-cols-2 gap-2">
-			{#if repeatable}
-				<div
-					class="col-span-2 flex items-center justify-between gap-2 text-sm"
-					role="group"
-					aria-label="Times completed"
+	{#if status && status !== 'unobtainable' && repeatable}
+		<div
+			class="flex items-center justify-between gap-2 text-sm"
+			role="group"
+			aria-label="Times completed"
+		>
+			<span class="text-muted-foreground">Times completed</span>
+			<span class="flex items-center gap-1">
+				<Button
+					variant="outline"
+					size="icon"
+					class="size-8"
+					aria-label="One fewer"
+					disabled={busy || count === 0}
+					onclick={() => setCount(count - 1)}><Minus /></Button
 				>
-					<span class="text-muted-foreground">Times completed</span>
-					<span class="flex items-center gap-1">
-						<Button
-							variant="outline"
-							size="icon"
-							class="size-8"
-							aria-label="One fewer"
-							disabled={busy || count === 0}
-							onclick={() => setCount(count - 1)}><Minus /></Button
-						>
-						<span class="w-8 text-center font-semibold tabular-nums" aria-live="polite"
-							>{count}</span
-						>
-						<Button
-							variant="outline"
-							size="icon"
-							class="size-8"
-							aria-label="One more"
-							disabled={busy || (count === 0 && status === 'locked')}
-							onclick={() => setCount(count + 1)}><Plus /></Button
-						>
-					</span>
-				</div>
-			{/if}
+				<span class="w-8 text-center font-semibold tabular-nums" aria-live="polite">{count}</span>
+				<Button
+					variant="outline"
+					size="icon"
+					class="size-8"
+					aria-label="One more"
+					disabled={busy || (count === 0 && !markable)}
+					onclick={() => setCount(count + 1)}><Plus /></Button
+				>
+			</span>
+		</div>
+	{/if}
+	<!-- Same grid and buttons as the actions above; an odd last button takes the whole row. -->
+	<div class="grid grid-cols-2 gap-2 [&>*:last-child:nth-child(odd)]:col-span-2">
+		{#if status && status !== 'unobtainable'}
 			{#if status === 'done'}
 				{#if !repeatable}
-					<Button variant="outline" size="sm" disabled={busy} onclick={unmark}
+					<Button variant="outline" size="sm" class={action} disabled={busy} onclick={unmark}
 						><Undo2 /> Un-mark</Button
 					>
 				{/if}
@@ -141,47 +159,45 @@
 					<Button
 						variant="outline"
 						size="sm"
-						disabled={busy || status === 'locked'}
+						class={action}
+						disabled={busy || !markable}
 						title={status === 'locked' ? 'Some requirement is not marked yet' : undefined}
 						onclick={() => run(() => campaign.markDone(entity.key))}
 						><Check /> Mark researched</Button
 					>
 				{/if}
-				<Button
-					variant="outline"
-					size="sm"
-					disabled={busy}
-					title="Also mark everything this still needs"
-					onclick={() => run(() => campaign.markDone(entity.key, true))}
-					><CheckCheck /> With prerequisites</Button
-				>
+				{#if status === 'locked'}
+					<Button
+						variant="outline"
+						size="sm"
+						class={action}
+						disabled={busy}
+						title="Mark researched with prerequisites: also everything this still needs"
+						onclick={() => run(() => campaign.markDone(entity.key, true))}
+						><CheckCheck /> With prerequisites</Button
+					>
+				{/if}
 			{/if}
-			{#if goal}
-				<Button
-					variant="outline"
-					size="sm"
-					disabled={busy}
-					onclick={() => run(() => campaign.removeGoal(entity.key))}><X /> Remove goal</Button
-				>
-			{:else if status !== 'done'}
-				<Button
-					variant="outline"
-					size="sm"
-					disabled={busy}
-					onclick={() => run(() => campaign.addGoal(entity.key))}><Target /> Add goal</Button
-				>
-			{/if}
-		</div>
-	{:else if goal}
-		<Button
-			variant="outline"
-			size="sm"
-			class="w-fit"
-			disabled={busy}
-			onclick={() => run(() => campaign.removeGoal(entity.key))}><X /> Remove goal</Button
-		>
-	{/if}
-</div>
+		{/if}
+		{#if goal}
+			<Button
+				variant="outline"
+				size="sm"
+				class={action}
+				disabled={busy}
+				onclick={() => run(() => campaign.removeGoal(entity.key))}><X /> Remove goal</Button
+			>
+		{:else if status === 'available' || status === 'notUnlocked' || status === 'locked'}
+			<Button
+				variant="outline"
+				size="sm"
+				class={action}
+				disabled={busy}
+				onclick={() => run(() => campaign.addGoal(entity.key))}><Target /> Add goal</Button
+			>
+		{/if}
+	</div>
+</section>
 
 <AlertDialog.Root
 	open={lost !== null}
